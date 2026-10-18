@@ -1,0 +1,3020 @@
+{
+ "audit": "PR-history disposition audit 1..131 for odaialdajani/floww-2",
+ "scope_proof": "gh pr list --state all --limit 200 returned exactly [131..1]; repository issues are disabled",
+ "candidate_base": "97433e4bf36cb7e0b81623351116198aef535f64",
+ "merged_main_at_audit": "6716946b109e43ced81bec6f2fec9c0c46332f14",
+ "current_local_head": "f623771aaf2b44aa00ef3ed2e07452b12dd46142",
+ "current_local_branch": "fix/floww-pr-audit-finish-20261017",
+ "origin_main_at_write": "6716946b109e43ced81bec6f2fec9c0c46332f14",
+ "lanes": [
+  {
+   "lane": 0,
+   "range": [
+    1,
+    43
+   ],
+   "source": "review-0.json"
+  },
+  {
+   "lane": 1,
+   "range": [
+    44,
+    87
+   ],
+   "source": "review-1.json"
+  },
+  {
+   "lane": 2,
+   "range": [
+    88,
+    131
+   ],
+   "source": "review-2.json"
+  }
+ ],
+ "classification_counts": {
+  "unverified": 5,
+  "current intent retained": 88,
+  "superseded/declined": 18,
+  "owner-hold": 6,
+  "confirmed repair needed": 7,
+  "owner-hold-or-unverified": 7
+ },
+ "total_rows": 131,
+ "rows": [
+  {
+   "number": 1,
+   "title": "sync: merge verified floww main into floww-2",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/1",
+   "lane": 0,
+   "report": "report-0.md",
+   "source_disposition": "unverified",
+   "disposition": "unverified",
+   "merged_at": "2026-09-11T14:49:42Z",
+   "merge_sha": "8748cf4002c6cb37459adf0b69bc1acac0a5152a",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_source",
+    "historical_evidence",
+    "assessment",
+    "depth_limits"
+   ],
+   "finding_ids": []
+  },
+  {
+   "number": 2,
+   "title": "chore(floww-2): declare floww-2 canonical",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/2",
+   "lane": 0,
+   "report": "report-0.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-11T14:52:21Z",
+   "merge_sha": "aae421cf432083196e13594318ab6fa64d39b1ef",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_source",
+    "historical_evidence",
+    "assessment",
+    "depth_limits"
+   ],
+   "finding_ids": []
+  },
+  {
+   "number": 3,
+   "title": "fix(frontend): Skylit panel bugs \u2014 AlphaPod no-cors, nav a11y, lint cleanup",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/3",
+   "lane": 0,
+   "report": "report-0.md",
+   "source_disposition": "superseded/declined",
+   "disposition": "superseded/declined",
+   "merged_at": "2026-09-27T21:07:12Z",
+   "merge_sha": "2ec7fa740c8ae48ca8fe410548325872dca48084",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_source",
+    "historical_evidence",
+    "assessment",
+    "depth_limits"
+   ],
+   "finding_ids": []
+  },
+  {
+   "number": 4,
+   "title": "propagate fetched_at through options data pipeline (source \u2192 heatmap)",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/4",
+   "lane": 0,
+   "report": "report-0.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-27T21:07:12Z",
+   "merge_sha": "2ec7fa740c8ae48ca8fe410548325872dca48084",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_source",
+    "historical_evidence",
+    "assessment",
+    "depth_limits"
+   ],
+   "finding_ids": []
+  },
+  {
+   "number": 5,
+   "title": "fix(frontend): X4 stale-data indicator \u2014 lift STALE_MS + isStale exports, unblock tests",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/5",
+   "lane": 0,
+   "report": "report-0.md",
+   "source_disposition": "superseded/declined",
+   "disposition": "superseded/declined",
+   "merged_at": "2026-09-27T17:15:39Z",
+   "merge_sha": "1eefd864221ac64cba8f41009556e54ac82d2ed1",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_source",
+    "historical_evidence",
+    "assessment",
+    "depth_limits"
+   ],
+   "finding_ids": []
+  },
+  {
+   "number": 6,
+   "title": "docs: record floww-to-floww-2 migration and floww freeze",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/6",
+   "lane": 0,
+   "report": "report-0.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-11T15:09:29Z",
+   "merge_sha": "cdcf4964f195b6beb7657b535833231fe9c1907d",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_source",
+    "historical_evidence",
+    "assessment",
+    "depth_limits"
+   ],
+   "finding_ids": []
+  },
+  {
+   "number": 7,
+   "title": "docs: park ex-floww issue 8 spec until floww-2 Issues enabled",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/7",
+   "lane": 0,
+   "report": "report-0.md",
+   "source_disposition": "owner-hold",
+   "disposition": "owner-hold",
+   "merged_at": "2026-09-11T15:17:26Z",
+   "merge_sha": "7685a44b5e28c9d488642ff945393cc83a248899",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_source",
+    "historical_evidence",
+    "assessment",
+    "depth_limits"
+   ],
+   "finding_ids": []
+  },
+  {
+   "number": 8,
+   "title": "fix(frontend): remove stray < breaking AppShell.jsx compile",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/8",
+   "lane": 0,
+   "report": "report-0.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-12T02:11:20Z",
+   "merge_sha": "c0fee43baf1bfd8189dfdc8a3d9aee7aad1c7e69",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_source",
+    "historical_evidence",
+    "assessment",
+    "depth_limits"
+   ],
+   "finding_ids": []
+  },
+  {
+   "number": 9,
+   "title": "fix(tickers): restore endless ticker universe",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/9",
+   "lane": 0,
+   "report": "report-0.md",
+   "source_disposition": "superseded/declined",
+   "disposition": "superseded/declined",
+   "merged_at": "2026-09-12T02:20:09Z",
+   "merge_sha": "283394f8e9007fcd6b4d92533af929f664efcba5",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_source",
+    "historical_evidence",
+    "assessment",
+    "depth_limits"
+   ],
+   "finding_ids": []
+  },
+  {
+   "number": 10,
+   "title": "fix(scroller): endless ticker universe, kill 1/10 counter",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/10",
+   "lane": 0,
+   "report": "report-0.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-12T02:31:49Z",
+   "merge_sha": "61d17917276b92913ff64339f9824b8a19d9b36a",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_source",
+    "historical_evidence",
+    "assessment",
+    "depth_limits"
+   ],
+   "finding_ids": []
+  },
+  {
+   "number": 11,
+   "title": "fix(frontend): 404 no-options stops auto-retry with honest message",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/11",
+   "lane": 0,
+   "report": "report-0.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-23T15:57:38Z",
+   "merge_sha": "5db4971a297164023547911991c9984ed5193ef2",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_source",
+    "historical_evidence",
+    "assessment",
+    "depth_limits"
+   ],
+   "finding_ids": []
+  },
+  {
+   "number": 12,
+   "title": "feat(frontend): paged A-Z ticker scroller with active-follow",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/12",
+   "lane": 0,
+   "report": "report-0.md",
+   "source_disposition": "superseded/declined",
+   "disposition": "superseded/declined",
+   "merged_at": "2026-09-27T17:15:23Z",
+   "merge_sha": "1a368183903737a8a1caba6f7f8a8064bd59330c",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_source",
+    "historical_evidence",
+    "assessment",
+    "depth_limits"
+   ],
+   "finding_ids": []
+  },
+  {
+   "number": 13,
+   "title": "Solstice heatmap upgrade (Rev-3 T00\u2013T29, read-only)",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/13",
+   "lane": 0,
+   "report": "report-0.md",
+   "source_disposition": "owner-hold",
+   "disposition": "owner-hold",
+   "merged_at": "2026-09-23T15:57:36Z",
+   "merge_sha": "eb478417eba4b45b6bb1be49c79afb4c658c01df",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_source",
+    "historical_evidence",
+    "test_evidence",
+    "assessment",
+    "depth_limits"
+   ],
+   "finding_ids": []
+  },
+  {
+   "number": 14,
+   "title": "Solstice sweep-5: grid depth, capture scheduler, sources, reconciliation",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/14",
+   "lane": 0,
+   "report": "report-0.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-23T16:12:36Z",
+   "merge_sha": "54e4b5663c89afe271fdc151d8e5f2533b8b780b",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_source",
+    "historical_evidence",
+    "test_evidence",
+    "assessment",
+    "depth_limits"
+   ],
+   "finding_ids": []
+  },
+  {
+   "number": 15,
+   "title": "Solstice sweep-6: envelope zone bug, volume windows, compare UI, vanna check",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/15",
+   "lane": 0,
+   "report": "report-0.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-23T16:19:57Z",
+   "merge_sha": "ae2548548857a24d9245ed4c9f51d1e3337843e7",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_source",
+    "historical_evidence",
+    "test_evidence",
+    "assessment",
+    "depth_limits"
+   ],
+   "finding_ids": []
+  },
+  {
+   "number": 16,
+   "title": "Solstice sweep-7: display-scale lock + exact-spot rail chip",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/16",
+   "lane": 0,
+   "report": "report-0.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-23T16:29:00Z",
+   "merge_sha": "c351cc759c601c61f43a1671d62f919f79d3628f",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_source",
+    "historical_evidence",
+    "assessment",
+    "depth_limits"
+   ],
+   "finding_ids": []
+  },
+  {
+   "number": 17,
+   "title": "Solstice sweep-8: OI findings, comprehension harness, ablation ladder, SPX draft",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/17",
+   "lane": 0,
+   "report": "report-0.md",
+   "source_disposition": "owner-hold",
+   "disposition": "owner-hold",
+   "merged_at": "2026-09-23T16:38:30Z",
+   "merge_sha": "05ca4dc4b251b63e45704b58e241a636b33dfe59",
+   "merge_in_candidate": true,
+   "actionable": true,
+   "evidence_keys": [
+    "current_source",
+    "historical_evidence",
+    "test_evidence",
+    "assessment",
+    "depth_limits"
+   ],
+   "finding_ids": [
+    "ABLATION-LOCAL"
+   ]
+  },
+  {
+   "number": 18,
+   "title": "Solstice sweep-9: payload interactions, file-backed DuckDB, reconciliation + frozen protocol",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/18",
+   "lane": 0,
+   "report": "report-0.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-23T16:59:02Z",
+   "merge_sha": "5f325e10f40b7c23a5b75627eb4ad4933641d02c",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_source",
+    "historical_evidence",
+    "test_evidence",
+    "assessment",
+    "depth_limits"
+   ],
+   "finding_ids": []
+  },
+  {
+   "number": 19,
+   "title": "R4 P01+P02: audit reconciliation, immutable snapshots, typed quality, strict evidence",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/19",
+   "lane": 0,
+   "report": "report-0.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-24T12:58:43Z",
+   "merge_sha": "f51d3f88f4053ee82374a7fe9f2c7bd81c10125b",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_source",
+    "historical_evidence",
+    "test_evidence",
+    "assessment",
+    "depth_limits"
+   ],
+   "finding_ids": []
+  },
+  {
+   "number": 20,
+   "title": "fix(r4-p03): raw walls, dated OI, window activity, grid unavailable, regime/research",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/20",
+   "lane": 0,
+   "report": "report-0.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-24T12:59:01Z",
+   "merge_sha": "2e716b7092b5e864389cac6cf1e7e088417aa3ed",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_source",
+    "historical_evidence",
+    "test_evidence",
+    "assessment",
+    "depth_limits"
+   ],
+   "finding_ids": []
+  },
+  {
+   "number": 21,
+   "title": "fix(r4-p04): interaction continuity, dwell clocks, scoped history",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/21",
+   "lane": 0,
+   "report": "report-0.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-24T12:59:15Z",
+   "merge_sha": "edc2a3ea15dad5e9257ad005d542acb5ec8d43f3",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_source",
+    "historical_evidence",
+    "test_evidence",
+    "assessment",
+    "depth_limits"
+   ],
+   "finding_ids": []
+  },
+  {
+   "number": 22,
+   "title": "fix(r4-p05): identity selection, scoped scenarios, honest labels",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/22",
+   "lane": 0,
+   "report": "report-0.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-24T12:59:15Z",
+   "merge_sha": "4ba436e27ab5d4097afa59f83952f2c456bf4db4",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_source",
+    "historical_evidence",
+    "test_evidence",
+    "assessment",
+    "depth_limits"
+   ],
+   "finding_ids": []
+  },
+  {
+   "number": 23,
+   "title": "fix(r4-p06): 0DTE eligibility, weekend and quality gates",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/23",
+   "lane": 0,
+   "report": "report-0.md",
+   "source_disposition": "confirmed repair needed",
+   "disposition": "confirmed repair needed",
+   "merged_at": "2026-09-24T12:59:15Z",
+   "merge_sha": "e9709d8ac5809775a871a9b362f458ee41cb5e82",
+   "merge_in_candidate": true,
+   "actionable": true,
+   "evidence_keys": [
+    "current_source",
+    "historical_evidence",
+    "test_evidence",
+    "assessment",
+    "depth_limits"
+   ],
+   "finding_ids": [
+    "SCOUT-BOUNDARY"
+   ]
+  },
+  {
+   "number": 24,
+   "title": "fix(r4-p07): atomic capture, gaps, capability writer",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/24",
+   "lane": 0,
+   "report": "report-0.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-24T12:59:15Z",
+   "merge_sha": "2f4f4d2710965ffbe1f3721c0fcb9f979668034c",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_source",
+    "historical_evidence",
+    "test_evidence",
+    "assessment",
+    "depth_limits"
+   ],
+   "finding_ids": []
+  },
+  {
+   "number": 25,
+   "title": "fix(r4-p08): tool boundary, scope-aligned evidence routes",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/25",
+   "lane": 0,
+   "report": "report-0.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-24T12:59:16Z",
+   "merge_sha": "fb8704f1b5bec74e06148c94bb2eba6f35145de1",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_source",
+    "historical_evidence",
+    "test_evidence",
+    "assessment",
+    "depth_limits"
+   ],
+   "finding_ids": []
+  },
+  {
+   "number": 26,
+   "title": "fix(r4-p09): actual guided replay in mounted grid",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/26",
+   "lane": 0,
+   "report": "report-0.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-24T12:59:15Z",
+   "merge_sha": "63c6b7dfc0cca55d35beb99b4284c8d1b6821f8c",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_source",
+    "historical_evidence",
+    "test_evidence",
+    "assessment",
+    "depth_limits"
+   ],
+   "finding_ids": []
+  },
+  {
+   "number": 27,
+   "title": "fix(r4-p10): encounter-first labels, wall-local ablation",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/27",
+   "lane": 0,
+   "report": "report-0.md",
+   "source_disposition": "confirmed repair needed",
+   "disposition": "confirmed repair needed",
+   "merged_at": "2026-09-24T12:59:15Z",
+   "merge_sha": "64d1ffd601b832e06649c6199f536d36a1e89b92",
+   "merge_in_candidate": true,
+   "actionable": true,
+   "evidence_keys": [
+    "current_source",
+    "historical_evidence",
+    "test_evidence",
+    "assessment",
+    "depth_limits"
+   ],
+   "finding_ids": [
+    "ABLATION-LOCAL"
+   ]
+  },
+  {
+   "number": 28,
+   "title": "fix(r4-p11): capability classification, disarmed boundary",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/28",
+   "lane": 0,
+   "report": "report-0.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-24T12:59:15Z",
+   "merge_sha": "41b2c42a8e53ffe607dba7795a95a8e1f53679a8",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_source",
+    "historical_evidence",
+    "test_evidence",
+    "assessment",
+    "depth_limits"
+   ],
+   "finding_ids": []
+  },
+  {
+   "number": 29,
+   "title": "fix(r4-p12): pattern evidence, experimental centroid",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/29",
+   "lane": 0,
+   "report": "report-0.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-24T12:59:15Z",
+   "merge_sha": "283f6cfe80bc155e73df94b0a771d57e0a28e9aa",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_source",
+    "historical_evidence",
+    "test_evidence",
+    "assessment",
+    "depth_limits"
+   ],
+   "finding_ids": []
+  },
+  {
+   "number": 30,
+   "title": "fix(r4-p13): resweep \u2014 CI justifications, full scope/payload, live window",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/30",
+   "lane": 0,
+   "report": "report-0.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-24T12:59:13Z",
+   "merge_sha": "0340de86789694e69d8cc28de8d85ffd42976013",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_source",
+    "historical_evidence",
+    "test_evidence",
+    "assessment",
+    "depth_limits"
+   ],
+   "finding_ids": []
+  },
+  {
+   "number": 31,
+   "title": "fix(r5-a): mounted observation contract",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/31",
+   "lane": 0,
+   "report": "report-0.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-24T13:29:37Z",
+   "merge_sha": "58f2e478ce16e0da14b93fe94959919df84fd991",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_source",
+    "historical_evidence",
+    "test_evidence",
+    "assessment",
+    "depth_limits"
+   ],
+   "finding_ids": []
+  },
+  {
+   "number": 32,
+   "title": "fix(r5-b): complete recording, truthful transactions, replay isolation",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/32",
+   "lane": 0,
+   "report": "report-0.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-24T13:41:55Z",
+   "merge_sha": "a660180d7a271330c81f91018c511d58e26ec9e1",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_source",
+    "historical_evidence",
+    "test_evidence",
+    "assessment",
+    "depth_limits"
+   ],
+   "finding_ids": []
+  },
+  {
+   "number": 33,
+   "title": "fix(r5-c): causal wall lifecycle",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/33",
+   "lane": 0,
+   "report": "report-0.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-24T13:50:10Z",
+   "merge_sha": "fc58edbf7d0d7bfb42ac8a6b5aad4ca5d547754c",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_source",
+    "historical_evidence",
+    "test_evidence",
+    "assessment",
+    "depth_limits"
+   ],
+   "finding_ids": []
+  },
+  {
+   "number": 34,
+   "title": "fix(r5-d): strict 0DTE production context",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/34",
+   "lane": 0,
+   "report": "report-0.md",
+   "source_disposition": "confirmed repair needed",
+   "disposition": "confirmed repair needed",
+   "merged_at": "2026-09-24T13:53:47Z",
+   "merge_sha": "6b94c3aaa113d93949725a822c53a3f7b3093120",
+   "merge_in_candidate": true,
+   "actionable": true,
+   "evidence_keys": [
+    "current_source",
+    "historical_evidence",
+    "test_evidence",
+    "assessment",
+    "depth_limits"
+   ],
+   "finding_ids": [
+    "SCOUT-BOUNDARY"
+   ]
+  },
+  {
+   "number": 35,
+   "title": "fix(r5-e): evidence-bound explanation and study scoring",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/35",
+   "lane": 0,
+   "report": "report-0.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-24T14:01:27Z",
+   "merge_sha": "72e067729d37d110d9c613cb665c71076955b049",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_source",
+    "historical_evidence",
+    "test_evidence",
+    "assessment",
+    "depth_limits"
+   ],
+   "finding_ids": []
+  },
+  {
+   "number": 36,
+   "title": "fix(r5-f): encounter horizons, linked producers, readiness package",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/36",
+   "lane": 0,
+   "report": "report-0.md",
+   "source_disposition": "owner-hold",
+   "disposition": "owner-hold",
+   "merged_at": "2026-09-24T14:09:40Z",
+   "merge_sha": "25cb1f72ba42335ddad88e04be0765356fc7d99b",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_source",
+    "historical_evidence",
+    "test_evidence",
+    "assessment",
+    "depth_limits"
+   ],
+   "finding_ids": []
+  },
+  {
+   "number": 37,
+   "title": "fix(r5-followup): replay-spot scope, restart parity, suite evidence",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/37",
+   "lane": 0,
+   "report": "report-0.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-24T14:49:02Z",
+   "merge_sha": "49ec78749b32d75f87d3d4576288b857df309878",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_source",
+    "historical_evidence",
+    "test_evidence",
+    "assessment",
+    "depth_limits"
+   ],
+   "finding_ids": []
+  },
+  {
+   "number": 38,
+   "title": "fix(r5-gaps2): replay endpoint tests, expand-close clearing, live-spot scope",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/38",
+   "lane": 0,
+   "report": "report-0.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-24T15:03:07Z",
+   "merge_sha": "c65ccab7cb883f8832a36523d37af9f5ccbd947c",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_source",
+    "historical_evidence",
+    "assessment",
+    "depth_limits"
+   ],
+   "finding_ids": []
+  },
+  {
+   "number": 39,
+   "title": "fix(r5-holes): canonical keys, scout strictness, wall staleness, contract matrix",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/39",
+   "lane": 0,
+   "report": "report-0.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-24T15:11:47Z",
+   "merge_sha": "30491b945a2352a78e65440d9d687d96299a9c4f",
+   "merge_in_candidate": true,
+   "actionable": true,
+   "evidence_keys": [
+    "current_source",
+    "historical_evidence",
+    "test_evidence",
+    "assessment",
+    "depth_limits"
+   ],
+   "finding_ids": [
+    "SCOUT-BOUNDARY"
+   ]
+  },
+  {
+   "number": 40,
+   "title": "fix(r5-holes2): per-wall OI dates, study coverage, sighting honesty",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/40",
+   "lane": 0,
+   "report": "report-0.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-24T15:23:24Z",
+   "merge_sha": "93fcd4b7705299575ad252de8f3e7880c5d6fafa",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_source",
+    "historical_evidence",
+    "test_evidence",
+    "assessment",
+    "depth_limits"
+   ],
+   "finding_ids": []
+  },
+  {
+   "number": 41,
+   "title": "fix(r6-1): canonical display contract, stable grid, replay hydration",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/41",
+   "lane": 0,
+   "report": "report-0.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-25T00:29:25Z",
+   "merge_sha": "f24d050dd45474a43f894a9762e441d41a149a40",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_source",
+    "historical_evidence",
+    "test_evidence",
+    "assessment",
+    "depth_limits"
+   ],
+   "finding_ids": []
+  },
+  {
+   "number": 42,
+   "title": "fix(r6-2): wall-local comparison, true local window, location chips",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/42",
+   "lane": 0,
+   "report": "report-0.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-25T00:29:35Z",
+   "merge_sha": "d4939e8a29fd636d4f595fecc27bdc5643413266",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_source",
+    "historical_evidence",
+    "test_evidence",
+    "assessment",
+    "depth_limits"
+   ],
+   "finding_ids": []
+  },
+  {
+   "number": 43,
+   "title": "fix(r6-3): calendar sessions, actual health, visible context",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/43",
+   "lane": 0,
+   "report": "report-0.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-25T00:29:41Z",
+   "merge_sha": "d314572645d68f89c968f216c089e37cab992e39",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_source",
+    "historical_evidence",
+    "test_evidence",
+    "assessment",
+    "depth_limits"
+   ],
+   "finding_ids": []
+  },
+  {
+   "number": 44,
+   "title": "fix(r6-4): semantic explainer binding, mounted deterministic explainer",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/44",
+   "lane": 1,
+   "report": "report-1.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-25T00:29:47Z",
+   "merge_sha": "6d4a7a7052d76135c46e9b315756036f3a514f61",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_evidence",
+    "historical_evidence",
+    "analysis",
+    "file_scope",
+    "review_depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 45,
+   "title": "fix(r6-5): prefix-stable outcomes, study mode, outcome job",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/45",
+   "lane": 1,
+   "report": "report-1.md",
+   "source_disposition": "owner-hold or unverified",
+   "disposition": "owner-hold-or-unverified",
+   "merged_at": "2026-09-25T00:29:59Z",
+   "merge_sha": "2dbc5a58b284e7e31273f3abaf4f373532bb00ba",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_evidence",
+    "historical_evidence",
+    "analysis",
+    "file_scope",
+    "review_depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 46,
+   "title": "docs(r6): merge receipt for PRs #41-45; CLAUDE.md environment note",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/46",
+   "lane": 1,
+   "report": "report-1.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-25T00:31:28Z",
+   "merge_sha": "e26aae2772d6f1b1bdd4f1a0f411164b5e12ac99",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_evidence",
+    "historical_evidence",
+    "analysis",
+    "file_scope",
+    "review_depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 47,
+   "title": "fix(r6-holes): outcome job fail-closed + production route, wall linkage, keyboard test",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/47",
+   "lane": 1,
+   "report": "report-1.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-25T00:48:49Z",
+   "merge_sha": "7fed60128b98da5335eb949e07b25ea71b6ca4e1",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_evidence",
+    "historical_evidence",
+    "analysis",
+    "file_scope",
+    "review_depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 48,
+   "title": "feat(r8): review journal routes, frontend pill, outcome attach tests",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/48",
+   "lane": 1,
+   "report": "report-1.md",
+   "source_disposition": "owner-hold or unverified",
+   "disposition": "owner-hold-or-unverified",
+   "merged_at": "2026-09-26T02:48:27Z",
+   "merge_sha": "79b28ec25d4f9c3cedd983ecd14a27e88b2f8948",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_evidence",
+    "historical_evidence",
+    "analysis",
+    "file_scope",
+    "review_depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 49,
+   "title": "fix(vex-sidebar): label structural anchors honestly in VEX/Charm views",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/49",
+   "lane": 1,
+   "report": "report-1.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-27T02:48:20Z",
+   "merge_sha": "2516e9c7187f7f959a5b38537b00faf8ca564dbb",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_evidence",
+    "historical_evidence",
+    "analysis",
+    "file_scope",
+    "review_depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 50,
+   "title": "style(r8-ui-blend): make R8 additions look like the heatmap",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/50",
+   "lane": 1,
+   "report": "report-1.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-27T02:48:23Z",
+   "merge_sha": "c7f34885a470f9d516f664efef27f702ff8c4778",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_evidence",
+    "historical_evidence",
+    "analysis",
+    "file_scope",
+    "review_depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 51,
+   "title": "fix(r8-audit-v2): close audit-V2 criticals + align dishonest math",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/51",
+   "lane": 1,
+   "report": "report-1.md",
+   "source_disposition": "owner-hold or unverified",
+   "disposition": "owner-hold-or-unverified",
+   "merged_at": "2026-09-27T02:48:26Z",
+   "merge_sha": "dbbc66f441e7dcc93b8a903e93311ef8321f484a",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_evidence",
+    "historical_evidence",
+    "analysis",
+    "file_scope",
+    "review_depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 52,
+   "title": "fix(r8-finish): green the frontend suite + record post-R8 merges",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/52",
+   "lane": 1,
+   "report": "report-1.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-27T02:57:19Z",
+   "merge_sha": "3e24a6231b443863ab09e0921187f7f1519ab97e",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_evidence",
+    "historical_evidence",
+    "analysis",
+    "file_scope",
+    "review_depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 53,
+   "title": "fix(v3-budget-honesty): budget-exhaustion 429s + kill the contract flake",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/53",
+   "lane": 1,
+   "report": "report-1.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-27T03:46:12Z",
+   "merge_sha": "71f83625acef8532ac2b20760524b7b241335568",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_evidence",
+    "historical_evidence",
+    "analysis",
+    "file_scope",
+    "review_depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 54,
+   "title": "fix(trade-ready-wires): alerts overlay on SSE, drop dead hook + stale docs",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/54",
+   "lane": 1,
+   "report": "report-1.md",
+   "source_disposition": "superseded/declined",
+   "disposition": "superseded/declined",
+   "merged_at": "2026-09-27T18:01:45Z",
+   "merge_sha": "2333c5bf4e3d58503f4cd311896e5c62a22906d7",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_evidence",
+    "historical_evidence",
+    "analysis",
+    "file_scope",
+    "review_depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 55,
+   "title": "feat(trade-ready): lifecycle persistence + universe scan + conviction rank",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/55",
+   "lane": 1,
+   "report": "report-1.md",
+   "source_disposition": "confirmed repair needed",
+   "disposition": "confirmed repair needed",
+   "merged_at": "2026-09-27T17:11:10Z",
+   "merge_sha": "b9fd5eee21725ace5d53e4dbb8f563fc51452edf",
+   "merge_in_candidate": true,
+   "actionable": true,
+   "evidence_keys": [
+    "current_evidence",
+    "historical_evidence",
+    "analysis",
+    "file_scope",
+    "review_depth",
+    "limits"
+   ],
+   "actionable_gaps": [
+    {
+     "id": "FLOW-FUSION-LOSS",
+     "severity": "medium",
+     "call_path": "GET /api/flowseeker/universe/scan -> scan_batch(conviction_fn=_universe_scan_conviction) -> rank_one -> rank_many -> record_leaderboard",
+     "reproduction": {
+      "method": "Exact candidate _universe_scan_conviction AST executed with in-memory fake alert feed and pure rank_one module, then exact candidate universe_scan fused-assignment AST executed. No server, broker, store or real feed imported.",
+      "producer_conviction": 35.0,
+      "producer_flow_status": "ok",
+      "producer_flow_key": "fixture-flow",
+      "consumer_flow_status": "missing",
+      "consumer_flow_key": null,
+      "preservation_assertion": false,
+      "consumer_before_persistence_conviction": 0.0
+     },
+     "safe_failing_test_proposal": "Offline test with mocked read_alert_feed=[{conviction:100,key:fixture-flow}], opportunity_score=0 and injected heatmap; exercise scan_batch plus the exact route fusion stage. Assert resulting conviction remains 35.0 and evidence.flow_alert_key survives; current code produces 0.0/missing. Include two-ticker case to prove stronger measured flow can affect ordering. Preserve reject-ambiguous-fused-blob guards: do not reinterpret an aggregate score as raw flow; either sort already-fused rows or pass genuine scorer inputs explicitly."
+    }
+   ]
+  },
+  {
+   "number": 56,
+   "title": "feat(roadmap): per-strike node confluence overlay + /ws/signals producer + flow-at-node route",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/56",
+   "lane": 1,
+   "report": "report-1.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-27T16:52:59Z",
+   "merge_sha": "51da6f3b3faa5d08a0f558cea2060545c0255585",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_evidence",
+    "historical_evidence",
+    "analysis",
+    "file_scope",
+    "review_depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 57,
+   "title": "fix(ci+docs): repair the silent-except gate that never ran, and the API docs nobody could use",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/57",
+   "lane": 1,
+   "report": "report-1.md",
+   "source_disposition": "owner-hold or unverified",
+   "disposition": "owner-hold-or-unverified",
+   "merged_at": "2026-09-27T20:05:04Z",
+   "merge_sha": "365a9616dfb889d86466c5dfb4ce6f5f912cc38f",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_evidence",
+    "historical_evidence",
+    "analysis",
+    "file_scope",
+    "review_depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 58,
+   "title": "docs(solstice): record post-merge state and per-PR merge decisions",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/58",
+   "lane": 1,
+   "report": "report-1.md",
+   "source_disposition": "superseded/declined",
+   "disposition": "superseded/declined",
+   "merged_at": "2026-09-27T17:39:39Z",
+   "merge_sha": "d6ed0e0b2695be15b26b3a4c6723508452e34e72",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_evidence",
+    "historical_evidence",
+    "analysis",
+    "file_scope",
+    "review_depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 59,
+   "title": "docs(solstice): record verified conflict counts and the #54 rebase",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/59",
+   "lane": 1,
+   "report": "report-1.md",
+   "source_disposition": "superseded/declined",
+   "disposition": "superseded/declined",
+   "merged_at": "2026-09-27T18:26:11Z",
+   "merge_sha": "5d92ae012d07903bf1d503e7bada42e7a6940ec1",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_evidence",
+    "historical_evidence",
+    "analysis",
+    "file_scope",
+    "review_depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 60,
+   "title": "docs(audit): record unverified artifacts the CI truth audit does not surface",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/60",
+   "lane": 1,
+   "report": "report-1.md",
+   "source_disposition": "owner-hold or unverified",
+   "disposition": "owner-hold-or-unverified",
+   "merged_at": "2026-09-27T19:28:25Z",
+   "merge_sha": "89fb61b0d8aed1eda879870bcc8c7d8e180604b1",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_evidence",
+    "historical_evidence",
+    "analysis",
+    "file_scope",
+    "review_depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 61,
+   "title": "fix(qc): audit the *_manifest.json descriptors the truth audit was blind to",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/61",
+   "lane": 1,
+   "report": "report-1.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-27T19:37:13Z",
+   "merge_sha": "b46e9af037da6377a03f5a19e5032896de0b6e83",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_evidence",
+    "historical_evidence",
+    "analysis",
+    "file_scope",
+    "review_depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 62,
+   "title": "test(qc): self-test for the truth-audit gate widened in #61",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/62",
+   "lane": 1,
+   "report": "report-1.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-27T20:05:04Z",
+   "merge_sha": "0eda3d394e68e0328283674e499738fd9a1baffd",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_evidence",
+    "historical_evidence",
+    "analysis",
+    "file_scope",
+    "review_depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 63,
+   "title": "fix(agent,compose,api): unblock CI on three independent failures",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/63",
+   "lane": 1,
+   "report": "report-1.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-27T20:51:34Z",
+   "merge_sha": "ba84569927bf1776d628d43c5e33b3aadc4725c3",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_evidence",
+    "historical_evidence",
+    "analysis",
+    "file_scope",
+    "review_depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 64,
+   "title": "docs(solstice): refresh the header to ba845699 and record two retractions",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/64",
+   "lane": 1,
+   "report": "report-1.md",
+   "source_disposition": "superseded/declined",
+   "disposition": "superseded/declined",
+   "merged_at": "2026-09-27T21:07:12Z",
+   "merge_sha": "37488ddb4eb015e81c4dc39eae4ee8e2d39dbf51",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_evidence",
+    "historical_evidence",
+    "analysis",
+    "file_scope",
+    "review_depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 65,
+   "title": "docs: restore the CLAUDE.md venv fix that a side-branch recovery reverted",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/65",
+   "lane": 1,
+   "report": "report-1.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-27T21:34:52Z",
+   "merge_sha": "ac2b8ef9dcbaa06d38ef00fb39109f4a38e6e5fa",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_evidence",
+    "historical_evidence",
+    "analysis",
+    "file_scope",
+    "review_depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 66,
+   "title": "docs(solstice): mark #3, #4 and #57 resolved, and correct three stale counts",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/66",
+   "lane": 1,
+   "report": "report-1.md",
+   "source_disposition": "superseded/declined",
+   "disposition": "superseded/declined",
+   "merged_at": "2026-09-27T21:54:19Z",
+   "merge_sha": "f77b87dd97cf3a87c3e7c12ed16087ebd079b3ed",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_evidence",
+    "historical_evidence",
+    "analysis",
+    "file_scope",
+    "review_depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 67,
+   "title": "chore(gitignore): cover the SQLite runtime stores the duckdb rules missed",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/67",
+   "lane": 1,
+   "report": "report-1.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-27T22:14:01Z",
+   "merge_sha": "69d73c958d40a245a9fe89ca816b9ee9e5500bd2",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_evidence",
+    "historical_evidence",
+    "analysis",
+    "file_scope",
+    "review_depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 68,
+   "title": "fix(requirements,test): make @pytest.mark.flaky functional and seed the test that flaked",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/68",
+   "lane": 1,
+   "report": "report-1.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-27T22:51:26Z",
+   "merge_sha": "29bddf85a320cf364c458493503f5787ee542784",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_evidence",
+    "historical_evidence",
+    "analysis",
+    "file_scope",
+    "review_depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 69,
+   "title": "docs(solstice): correct three stale STATUS claims, including a metric that had no fixed value",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/69",
+   "lane": 1,
+   "report": "report-1.md",
+   "source_disposition": "superseded/declined",
+   "disposition": "superseded/declined",
+   "merged_at": "2026-09-27T23:46:42Z",
+   "merge_sha": "5dcb8774eb96fe18f179805e89498ddc884d9caf",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_evidence",
+    "historical_evidence",
+    "analysis",
+    "file_scope",
+    "review_depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 70,
+   "title": "test(market-data): pin the positivity and volume halves of the completed-session bar guard",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/70",
+   "lane": 1,
+   "report": "report-1.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-27T23:33:06Z",
+   "merge_sha": "70265385dd2bc9f0edb0f7a574b5566f6a60a3ec",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_evidence",
+    "historical_evidence",
+    "analysis",
+    "file_scope",
+    "review_depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 71,
+   "title": "docs(solstice): point the STATUS header at the final main SHA and record #69",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/71",
+   "lane": 1,
+   "report": "report-1.md",
+   "source_disposition": "superseded/declined",
+   "disposition": "superseded/declined",
+   "merged_at": "2026-09-28T00:00:23Z",
+   "merge_sha": "95173000a15cd0234d12a5a7bc48d1c071799993",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_evidence",
+    "historical_evidence",
+    "analysis",
+    "file_scope",
+    "review_depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 72,
+   "title": "docs(solstice): stop pinning a SHA that the document own merge invalidates",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/72",
+   "lane": 1,
+   "report": "report-1.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-28T00:15:53Z",
+   "merge_sha": "d905c9d238cc958eefdbb495c0831f723ca29de4",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_evidence",
+    "historical_evidence",
+    "analysis",
+    "file_scope",
+    "review_depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 73,
+   "title": "fix: fail closed and correct time/DST handling across 9 sites",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/73",
+   "lane": 1,
+   "report": "report-1.md",
+   "source_disposition": "confirmed repair needed",
+   "disposition": "confirmed repair needed",
+   "merged_at": "2026-09-28T15:52:48Z",
+   "merge_sha": "433d99abf01917e6bd56db08a78665fb976ab22f",
+   "merge_in_candidate": true,
+   "actionable": true,
+   "evidence_keys": [
+    "current_evidence",
+    "historical_evidence",
+    "analysis",
+    "file_scope",
+    "review_depth",
+    "limits"
+   ],
+   "actionable_gaps": [
+    {
+     "id": "FLOW-FUSION-LOSS",
+     "duplicate_of_pr": 55,
+     "reproduction": {
+      "method": "Exact candidate _universe_scan_conviction AST executed with in-memory fake alert feed and pure rank_one module, then exact candidate universe_scan fused-assignment AST executed. No server, broker, store or real feed imported.",
+      "producer_conviction": 35.0,
+      "producer_flow_status": "ok",
+      "producer_flow_key": "fixture-flow",
+      "consumer_flow_status": "missing",
+      "consumer_flow_key": null,
+      "preservation_assertion": false,
+      "consumer_before_persistence_conviction": 0.0
+     },
+     "safe_failing_test_proposal": "Offline test with mocked read_alert_feed=[{conviction:100,key:fixture-flow}], opportunity_score=0 and injected heatmap; exercise scan_batch plus the exact route fusion stage. Assert resulting conviction remains 35.0 and evidence.flow_alert_key survives; current code produces 0.0/missing. Include two-ticker case to prove stronger measured flow can affect ordering. Preserve reject-ambiguous-fused-blob guards: do not reinterpret an aggregate score as raw flow; either sort already-fused rows or pass genuine scorer inputs explicitly."
+    }
+   ]
+  },
+  {
+   "number": 74,
+   "title": "feat(solstice-o1o2+triad-o4): layout ownership, Solstice simplify, contract-driven Triad",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/74",
+   "lane": 1,
+   "report": "report-1.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-28T15:37:36Z",
+   "merge_sha": "29f74d8a4f1946e9a5d70fabb12a7108c84375f8",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_evidence",
+    "historical_evidence",
+    "analysis",
+    "file_scope",
+    "review_depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 75,
+   "title": "fix(solstice-o2): remove duplicate family tabs from App filter panel",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/75",
+   "lane": 1,
+   "report": "report-1.md",
+   "source_disposition": "superseded/declined",
+   "disposition": "superseded/declined",
+   "merged_at": "2026-09-28T16:25:55Z",
+   "merge_sha": "b2e7faec16fc65b445d5c219d7488d1cf1938706",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_evidence",
+    "historical_evidence",
+    "analysis",
+    "file_scope",
+    "review_depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 76,
+   "title": "docs(planning): record PR #73 as merged",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/76",
+   "lane": 1,
+   "report": "report-1.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-28T16:13:59Z",
+   "merge_sha": "b9c5db59bc9548750e29147a12df6c1c344b1ce8",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_evidence",
+    "historical_evidence",
+    "analysis",
+    "file_scope",
+    "review_depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 77,
+   "title": "fix(truth-audit): match the subject line, not the whole commit message",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/77",
+   "lane": 1,
+   "report": "report-1.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-28T16:26:21Z",
+   "merge_sha": "e5195331711313c9c868b37e6e5051c07c5a28e0",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_evidence",
+    "historical_evidence",
+    "analysis",
+    "file_scope",
+    "review_depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 78,
+   "title": "docs(planning): close out H2-H6; all merged, main green",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/78",
+   "lane": 1,
+   "report": "report-1.md",
+   "source_disposition": "owner-hold or unverified",
+   "disposition": "owner-hold-or-unverified",
+   "merged_at": "2026-09-28T17:02:32Z",
+   "merge_sha": "45b418f22ef524cf9bb485ec06af72783a63408b",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_evidence",
+    "historical_evidence",
+    "analysis",
+    "file_scope",
+    "review_depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 79,
+   "title": "fix(alerts): a boolean was broadcast as a bearish momentum alert",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/79",
+   "lane": 1,
+   "report": "report-1.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-28T17:37:55Z",
+   "merge_sha": "0cc9b6c906dff18a2ee6c008a5b40a1a25f98f3c",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_evidence",
+    "historical_evidence",
+    "analysis",
+    "file_scope",
+    "review_depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 80,
+   "title": "docs(planning): record the #79 bool-coercion alert fix",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/80",
+   "lane": 1,
+   "report": "report-1.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-28T23:24:39Z",
+   "merge_sha": "39b83354bad7c64321a1dbe2726f83ac26f6c9b5",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_evidence",
+    "historical_evidence",
+    "analysis",
+    "file_scope",
+    "review_depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 81,
+   "title": "fix(triad-o5): drawer focus ownership on open and restore on close",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/81",
+   "lane": 1,
+   "report": "report-1.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-29T00:28:31Z",
+   "merge_sha": "ff879f3a3e52ba7708c14e11a0d4db8f9155fb45",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_evidence",
+    "historical_evidence",
+    "analysis",
+    "file_scope",
+    "review_depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 82,
+   "title": "fix(observability): the health endpoint 500'd during exactly the outages it exists to report",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/82",
+   "lane": 1,
+   "report": "report-1.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-29T00:20:45Z",
+   "merge_sha": "79bf91900db8898fba6081d3f4db81038ecbadb5",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_evidence",
+    "historical_evidence",
+    "analysis",
+    "file_scope",
+    "review_depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 83,
+   "title": "test(movers): fix a fixture that failed ~70% of calendar days",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/83",
+   "lane": 1,
+   "report": "report-1.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-29T00:36:16Z",
+   "merge_sha": "f4ced19aabd6acd26ec3feb000f014e099b2233d",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_evidence",
+    "historical_evidence",
+    "analysis",
+    "file_scope",
+    "review_depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 84,
+   "title": "feat(cmd-takeover): port verified backend work + wire C3 exposure",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/84",
+   "lane": 1,
+   "report": "report-1.md",
+   "source_disposition": "owner-hold or unverified",
+   "disposition": "owner-hold-or-unverified",
+   "merged_at": "2026-09-29T01:59:50Z",
+   "merge_sha": "53d8237afa7c4410444e6fde76f1a76c19378ab7",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_evidence",
+    "historical_evidence",
+    "analysis",
+    "file_scope",
+    "review_depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 85,
+   "title": "fix(eastern-clock): US DST rule for all four ET gates (rebased on #84)",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/85",
+   "lane": 1,
+   "report": "report-1.md",
+   "source_disposition": "superseded/declined",
+   "disposition": "superseded/declined",
+   "merged_at": null,
+   "merge_sha": "5aa5b0c3eee7b1b74ad19e6437239a98c51aa6e5",
+   "merge_in_candidate": false,
+   "actionable": false,
+   "evidence_keys": [
+    "current_evidence",
+    "historical_evidence",
+    "analysis",
+    "file_scope",
+    "review_depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 86,
+   "title": "fix(eastern-clock): US DST rule for all four ET gates (rebased on #84)",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/86",
+   "lane": 1,
+   "report": "report-1.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-29T12:34:16Z",
+   "merge_sha": "605aca8a0c9dedaae3b9441ff008cc607eff2659",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_evidence",
+    "historical_evidence",
+    "analysis",
+    "file_scope",
+    "review_depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 87,
+   "title": "feat(visual-finish): replay Play+scrubber, Triad position strip, S3 geometry proof",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/87",
+   "lane": 1,
+   "report": "report-1.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-29T03:52:06Z",
+   "merge_sha": "b338c10d691065a0f42bf03e67c43205be7f23e0",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "current_evidence",
+    "historical_evidence",
+    "analysis",
+    "file_scope",
+    "review_depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 88,
+   "title": "Spark S0-S9: backend completion \u2014 canonical exposure boundary, activity family, desk/window/recorder lineage, scan-rank boundary, exact contract identity",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/88",
+   "lane": 2,
+   "report": "report-2.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-30T00:25:09Z",
+   "merge_sha": "5312fe569f876be5ad05920218742424348234ce",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "evidence",
+    "historical_commit_inventory",
+    "reviewed_current_paths",
+    "file_scope_inventory",
+    "depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 89,
+   "title": "Fix Solstice activity bases, window validation and replay/review controls",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/89",
+   "lane": 2,
+   "report": "report-2.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-09-30T12:18:56Z",
+   "merge_sha": "ca3dd8b5ccad5668cf433e8383d2f84e68b269ed",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "evidence",
+    "historical_commit_inventory",
+    "reviewed_current_paths",
+    "file_scope_inventory",
+    "depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 90,
+   "title": "Solstice/Triad R11: recovered contracts, layouts and review workflow",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/90",
+   "lane": 2,
+   "report": "report-2.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-10-01T13:22:00Z",
+   "merge_sha": "9a6c02954557922e9b0d73d6011daf7430f72c16",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "evidence",
+    "historical_commit_inventory",
+    "reviewed_current_paths",
+    "file_scope_inventory",
+    "depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 91,
+   "title": "feat(solstice-r13): authoritative next-listed and same-wall replay research",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/91",
+   "lane": 2,
+   "report": "report-2.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-10-01T21:03:29Z",
+   "merge_sha": "3d39ca0975ab9e4758fa694e75adb25b7dbadac0",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "evidence",
+    "historical_commit_inventory",
+    "reviewed_current_paths",
+    "file_scope_inventory",
+    "depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 92,
+   "title": "Solstice R14: authoritative contract, stored-window and metric replay admission",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/92",
+   "lane": 2,
+   "report": "report-2.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-10-02T03:12:24Z",
+   "merge_sha": "1530ccd7f52a0de03512f383283463525a44134b",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "evidence",
+    "historical_commit_inventory",
+    "reviewed_current_paths",
+    "file_scope_inventory",
+    "depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 93,
+   "title": "docs(spark-closeout): post-R14 closeout lane + resweep receipt (no merge without gates)",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/93",
+   "lane": 2,
+   "report": "report-2.md",
+   "source_disposition": "owner-hold",
+   "disposition": "owner-hold",
+   "merged_at": "2026-10-06T11:39:50Z",
+   "merge_sha": "2430fd27a04e89587d75e04faf166b64766d2a3e",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "evidence",
+    "historical_commit_inventory",
+    "reviewed_current_paths",
+    "depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 94,
+   "title": "feat(solstice-r15): default-off price-path producer + deterministic execution lifecycle (no merge without gates)",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/94",
+   "lane": 2,
+   "report": "report-2.md",
+   "source_disposition": "superseded/declined",
+   "disposition": "superseded/declined",
+   "merged_at": "2026-10-03T01:35:09Z",
+   "merge_sha": "36617281d720921827667097908807937ef3389b",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "evidence",
+    "historical_commit_inventory",
+    "reviewed_current_paths",
+    "file_scope_inventory",
+    "depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 95,
+   "title": "feat(solstice-r15): grounded frontend and disarmed Public handoff",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/95",
+   "lane": 2,
+   "report": "report-2.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-10-06T11:39:50Z",
+   "merge_sha": "94b47addaa073276d1ebbcabad290ef5d08cf860",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "evidence",
+    "historical_commit_inventory",
+    "reviewed_current_paths",
+    "file_scope_inventory",
+    "depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 96,
+   "title": "integration(solstice-r15): exact combined candidate \u2014 acceptance HOLD",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/96",
+   "lane": 2,
+   "report": "report-2.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-10-03T01:35:07Z",
+   "merge_sha": "df1bf1cea8396be7fa5fcff6a2666a67e7984992",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "evidence",
+    "historical_commit_inventory",
+    "reviewed_current_paths",
+    "file_scope_inventory",
+    "depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 97,
+   "title": "fix(solstice-r15): terminal-cancel guard + durable-write failure paths",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/97",
+   "lane": 2,
+   "report": "report-2.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-10-03T02:06:22Z",
+   "merge_sha": "3b96c38c9dc81c976b39dc7cbc23bb37eddef133",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "evidence",
+    "historical_commit_inventory",
+    "reviewed_current_paths",
+    "file_scope_inventory",
+    "depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 98,
+   "title": "docs(solstice-r15): correct collected test counts (597 / 19+35+8+5)",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/98",
+   "lane": 2,
+   "report": "report-2.md",
+   "source_disposition": "superseded/declined",
+   "disposition": "superseded/declined",
+   "merged_at": "2026-10-03T03:03:05Z",
+   "merge_sha": "08f3793c242d943ab3b61b84e5394ce4602daa0a",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "evidence",
+    "historical_commit_inventory",
+    "reviewed_current_paths",
+    "depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 99,
+   "title": "feat(solstice-r16): cross-process guard, affordability, fills, drafts, brief rows",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/99",
+   "lane": 2,
+   "report": "report-2.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-10-03T03:46:35Z",
+   "merge_sha": "aea1ed95ad02fe43a06df6a81fb7cf91e6079242",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "evidence",
+    "historical_commit_inventory",
+    "reviewed_current_paths",
+    "file_scope_inventory",
+    "depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 100,
+   "title": "fix(solstice-r16): owning replay identity and current-main acceptance",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/100",
+   "lane": 2,
+   "report": "report-2.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-10-06T11:39:50Z",
+   "merge_sha": "2249c914f717cae2da1db5a2f37fa91b4dd14be4",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "evidence",
+    "historical_commit_inventory",
+    "reviewed_current_paths",
+    "file_scope_inventory",
+    "depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 101,
+   "title": "test(solstice-r16): combined Zed replay and Spark lifecycle candidate",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/101",
+   "lane": 2,
+   "report": "report-2.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-10-06T11:39:50Z",
+   "merge_sha": "2a7120c8c36c14e548081a981e684ac37d3806c4",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "evidence",
+    "historical_commit_inventory",
+    "reviewed_current_paths",
+    "file_scope_inventory",
+    "depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 102,
+   "title": "fix(solstice-r16): disarmed supersede cancels nothing",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/102",
+   "lane": 2,
+   "report": "report-2.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-10-03T04:23:55Z",
+   "merge_sha": "6eaa3343655a30fd38c40abaa6a903e8d3814530",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "evidence",
+    "historical_commit_inventory",
+    "reviewed_current_paths",
+    "file_scope_inventory",
+    "depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 103,
+   "title": "feat(solstice-r18): required admission + commissioned controls (review-only)",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/103",
+   "lane": 2,
+   "report": "report-2.md",
+   "source_disposition": "owner-hold",
+   "disposition": "owner-hold",
+   "merged_at": "2026-10-06T11:39:49Z",
+   "merge_sha": "ba95e11872ca52ab7f9f163c6c90869cedba96d0",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "evidence",
+    "historical_commit_inventory",
+    "reviewed_current_paths",
+    "file_scope_inventory",
+    "depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 104,
+   "title": "R18 combined: stored range replay + Lodestar, disarmed Public review \u2014 HOLD",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/104",
+   "lane": 2,
+   "report": "report-2.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-10-06T11:39:49Z",
+   "merge_sha": "cb483298fe9936f7f0bd64a394450c52c1906c1f",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "evidence",
+    "historical_commit_inventory",
+    "reviewed_current_paths",
+    "file_scope_inventory",
+    "depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 105,
+   "title": "test(solstice-r17): combined Spark execution-controls + Zed lifecycle-review candidate",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/105",
+   "lane": 2,
+   "report": "report-2.md",
+   "source_disposition": "superseded/declined",
+   "disposition": "superseded/declined",
+   "merged_at": "2026-10-06T11:39:49Z",
+   "merge_sha": "19c48f7f98a1893a2259b0ac9c672bc1e8b4e25f",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "evidence",
+    "historical_commit_inventory",
+    "reviewed_current_paths",
+    "file_scope_inventory",
+    "depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 106,
+   "title": "feat(solstice-r18): Cline analytical-data lane \u2014 range-analytics.v1 producer + replay proof + inspector",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/106",
+   "lane": 2,
+   "report": "report-2.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-10-06T11:39:49Z",
+   "merge_sha": "cda689730384d6edd2cd92e7093d6819008d8aa1",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "evidence",
+    "historical_commit_inventory",
+    "reviewed_current_paths",
+    "file_scope_inventory",
+    "depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 107,
+   "title": "test(solstice-r19): combined final candidate \u2014 Cline analytical + Spark execution + I03 v3 consumer migration",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/107",
+   "lane": 2,
+   "report": "report-2.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-10-06T11:39:49Z",
+   "merge_sha": "c033a5e5678c96d58a416e1dd065cad39cb50605",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "evidence",
+    "historical_commit_inventory",
+    "reviewed_current_paths",
+    "file_scope_inventory",
+    "depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 108,
+   "title": "fix(round-19): transport fixture provenance resync + regen import hygiene (post-PR107 follow-up)",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/108",
+   "lane": 2,
+   "report": "report-2.md",
+   "source_disposition": "superseded/declined",
+   "disposition": "superseded/declined",
+   "merged_at": "2026-10-07T04:09:52Z",
+   "merge_sha": "afb0c07a6e3587d609c6856e29154afeb6ff5e6e",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "evidence",
+    "historical_commit_inventory",
+    "reviewed_current_paths",
+    "file_scope_inventory",
+    "depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 109,
+   "title": "feat(solstice-r19): single-use order-approval consumption at the mounted entry (closes r19 residual #1)",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/109",
+   "lane": 2,
+   "report": "report-2.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-10-07T04:10:21Z",
+   "merge_sha": "ecff52ba1dfcecd01b059c3854656e2c12c41cc6",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "evidence",
+    "historical_commit_inventory",
+    "reviewed_current_paths",
+    "file_scope_inventory",
+    "depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 110,
+   "title": "feat(solstice-r19): per-contract identity population persisted and restituted (C10 closure)",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/110",
+   "lane": 2,
+   "report": "report-2.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-10-07T04:10:35Z",
+   "merge_sha": "a74cab7ab39d6ebd1f30c269844ed32bef5f36c1",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "evidence",
+    "historical_commit_inventory",
+    "reviewed_current_paths",
+    "file_scope_inventory",
+    "depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 111,
+   "title": "feat(solstice-r19): range review actions from the Triad preview slice (approach/handoff/copy/review)",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/111",
+   "lane": 2,
+   "report": "report-2.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-10-07T04:11:03Z",
+   "merge_sha": "edaa1cc86567edcf127a1040ffea8764d9f69f7e",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "evidence",
+    "historical_commit_inventory",
+    "reviewed_current_paths",
+    "file_scope_inventory",
+    "depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 112,
+   "title": "fix(round-19): I18 frontend range fixture reseal at the merged head (edaa1cc8)",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/112",
+   "lane": 2,
+   "report": "report-2.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-10-07T05:01:03Z",
+   "merge_sha": "3e532c512fcd2828e9511138954d8db77157b65b",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "evidence",
+    "historical_commit_inventory",
+    "reviewed_current_paths",
+    "depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 113,
+   "title": "fix(solstice-r19): regenerate transport copy at the PR110 re-seal",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/113",
+   "lane": 2,
+   "report": "report-2.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": null,
+   "merge_sha": "28444a9bad622b3bc689db4a414bee8702651cd2",
+   "merge_in_candidate": false,
+   "actionable": false,
+   "evidence_keys": [
+    "evidence",
+    "historical_commit_inventory",
+    "reviewed_current_paths",
+    "depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 114,
+   "title": "feat(solstice-r19): range compare mode Raw vs Adjusted (Triad slice 2)",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/114",
+   "lane": 2,
+   "report": "report-2.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-10-07T04:46:23Z",
+   "merge_sha": "1200372d3b2bdf52d20e7600c0e25c7da63b8cb0",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "evidence",
+    "historical_commit_inventory",
+    "reviewed_current_paths",
+    "file_scope_inventory",
+    "depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 115,
+   "title": "feat(solstice-r19): Triad same-day wall desk (preview end-state: scope/exposure/chain/rail)",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/115",
+   "lane": 2,
+   "report": "report-2.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-10-08T00:40:21Z",
+   "merge_sha": "f1e76e82f86def6e869116911aafbb18d6c69ae6",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "evidence",
+    "historical_commit_inventory",
+    "reviewed_current_paths",
+    "file_scope_inventory",
+    "depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 116,
+   "title": "compose(unified-candidate): reviewed theme, backend slices, probes and dossiers",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/116",
+   "lane": 2,
+   "report": "report-2.md",
+   "source_disposition": "unverified",
+   "disposition": "unverified",
+   "merged_at": "2026-10-08T03:25:08Z",
+   "merge_sha": "2a293b6ec9b7d98a114243523a8d3ba726b8ad9d",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "evidence",
+    "historical_commit_inventory",
+    "reviewed_current_paths",
+    "file_scope_inventory",
+    "depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 117,
+   "title": "Unify FLOWW exposure evidence and shared dark Solstice/Triad grids",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/117",
+   "lane": 2,
+   "report": "report-2.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-10-09T21:00:17Z",
+   "merge_sha": "95a17b478d9a1a035f9c44e782613e239d3d7c1c",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "evidence",
+    "historical_commit_inventory",
+    "reviewed_current_paths",
+    "file_scope_inventory",
+    "depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 118,
+   "title": "FLOWW successor: exposure identity, data honesty, shutdown bounds (Spark builder)",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/118",
+   "lane": 2,
+   "report": "report-2.md",
+   "source_disposition": "unverified",
+   "disposition": "unverified",
+   "merged_at": "2026-10-09T21:00:15Z",
+   "merge_sha": "61742b87f48a7a303667c1da0944458a003f2970",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "evidence",
+    "historical_commit_inventory",
+    "reviewed_current_paths",
+    "file_scope_inventory",
+    "depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 119,
+   "title": "Shutdown chain bounds + Atlas chart blocks B04-B30 (Spark builder follow-up)",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/119",
+   "lane": 2,
+   "report": "report-2.md",
+   "source_disposition": "unverified",
+   "disposition": "unverified",
+   "merged_at": "2026-10-10T13:30:36Z",
+   "merge_sha": "ac87e38e8db3f9d0837e70f84ad3a5384dfb3981",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "evidence",
+    "historical_commit_inventory",
+    "reviewed_current_paths",
+    "file_scope_inventory",
+    "depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 120,
+   "title": "Atlas chart completion: harden, G1/G5/G7/G6/TPO, scope honesty (Spark builder loop)",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/120",
+   "lane": 2,
+   "report": "report-2.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-10-10T23:17:15Z",
+   "merge_sha": "20004a394ac1eb0888bce4810ed348bdbc2927e8",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "evidence",
+    "historical_commit_inventory",
+    "reviewed_current_paths",
+    "file_scope_inventory",
+    "depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 121,
+   "title": "VWAP bands with real values (Spark chart loop)",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/121",
+   "lane": 2,
+   "report": "report-2.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-10-10T23:51:15Z",
+   "merge_sha": "c129ddd3293bd52ea4cc264dcae970bafb02d511",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "evidence",
+    "historical_commit_inventory",
+    "reviewed_current_paths",
+    "file_scope_inventory",
+    "depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 122,
+   "title": "Atlas loop: exposure bands, rail/alerts, envelopes, record-now, scope echo, registry (Spark builder)",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/122",
+   "lane": 2,
+   "report": "report-2.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-10-11T01:15:02Z",
+   "merge_sha": "8cbef0fbbfaa33f708184d98ad81014cbded5521",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "evidence",
+    "historical_commit_inventory",
+    "reviewed_current_paths",
+    "file_scope_inventory",
+    "depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 123,
+   "title": "Muse 2.1 chart lane: CVD pane + drawings mount + contract premium path",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/123",
+   "lane": 2,
+   "report": "report-2.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-10-11T03:08:48Z",
+   "merge_sha": "3b3d07bba20e18cc2002d27f9062a6a0c53cc9c1",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "evidence",
+    "historical_commit_inventory",
+    "reviewed_current_paths",
+    "file_scope_inventory",
+    "depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 124,
+   "title": "Next chart lane: node velocity + skew per expiry",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/124",
+   "lane": 2,
+   "report": "report-2.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-10-11T03:34:18Z",
+   "merge_sha": "a33120cfae10567bdfc91b7b5cd3f5cfb65c1765",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "evidence",
+    "historical_commit_inventory",
+    "reviewed_current_paths",
+    "file_scope_inventory",
+    "depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 125,
+   "title": "Velocity strip on chart page",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/125",
+   "lane": 2,
+   "report": "report-2.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-10-11T04:07:44Z",
+   "merge_sha": "7b8133e177c51140d57675c7243d27b85eeafae2",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "evidence",
+    "historical_commit_inventory",
+    "reviewed_current_paths",
+    "file_scope_inventory",
+    "depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 126,
+   "title": "Exposure-basis badge + scalp pin",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/126",
+   "lane": 2,
+   "report": "report-2.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-10-11T04:35:03Z",
+   "merge_sha": "589352b68651cf5f9d370d23f489c54f9018c439",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "evidence",
+    "historical_commit_inventory",
+    "reviewed_current_paths",
+    "file_scope_inventory",
+    "depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 127,
+   "title": "Daily chart bars up to ten years",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/127",
+   "lane": 2,
+   "report": "report-2.md",
+   "source_disposition": "superseded/declined",
+   "disposition": "superseded/declined",
+   "merged_at": "2026-10-11T05:01:08Z",
+   "merge_sha": "abc745c55deeffda1eede7e1b4c47cd382277633",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "evidence",
+    "historical_commit_inventory",
+    "reviewed_current_paths",
+    "file_scope_inventory",
+    "depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 128,
+   "title": "Bars-v2 honesty: overnight buckets, leadingFill, toggle passthrough",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/128",
+   "lane": 2,
+   "report": "report-2.md",
+   "source_disposition": "confirmed repair needed",
+   "disposition": "confirmed repair needed",
+   "merged_at": "2026-10-12T03:09:13Z",
+   "merge_sha": "878489e8d58767488618be8c23dbf905c826c8c7",
+   "merge_in_candidate": true,
+   "actionable": true,
+   "evidence_keys": [
+    "evidence",
+    "historical_commit_inventory",
+    "reviewed_current_paths",
+    "file_scope_inventory",
+    "depth",
+    "limits"
+   ],
+   "actionable_gaps": [
+    {
+     "id": "VOLUME-UNKNOWN-TO-ZERO",
+     "severity": "P2 data integrity",
+     "pr_number": 128,
+     "related_prs": [
+      120,
+      129,
+      131
+     ],
+     "title": "Missing/null/boolean provider volume becomes measured zero",
+     "status": "confirmed repair needed",
+     "source": {
+      "path": "backend/services/public_api_adapter.py",
+      "lines": [
+       1300
+      ],
+      "url": "https://github.com/odaialdajani/floww-2/blob/6716946b109e43ced81bec6f2fec9c0c46332f14/backend/services/public_api_adapter.py#L1300",
+      "observation": "_extract_bars numeric coercion at 1299\u20131308"
+     },
+     "call_path": [
+      "routes.price_history._history_bars",
+      "services.public_api_adapter.fetch_bars_by_interval",
+      "services.public_api_adapter._extract_bars",
+      "services.price_node_history.build_history",
+      "recordedPriceChartData.checkedCandles",
+      "RecordedPriceChart volume/VWAP panes"
+     ],
+     "reproduction": {
+      "method": "Exact-HEAD _extract_bars AST executed in memory; no app import or I/O",
+      "input": {
+       "regularMarket": {
+        "bars": [
+         {
+          "t": "2026-10-16T14:00:00Z",
+          "o": 100,
+          "h": 101,
+          "l": 99,
+          "c": 100
+         }
+        ]
+       }
+      },
+      "observed": "v=0.0 for missing volume, v=None and v=False alike; control explicit v=0 stays0; positive12 stays12",
+      "downstream": "build_history accepts numeric0 as measured, checkedCandles keeps0; absent status irrecoverably lost before chart guard",
+      "raw_receipt": "executed_checks: exact-HEAD adapter missing-volume reproduction"
+     },
+     "safe_failing_test_proposal": {
+      "path": "backend/tests/services/test_public_api_adapter_regressions.py",
+      "name": "test_extract_bars_preserves_unknown_volume_without_dropping_valid_prices",
+      "arrange": "Use regularMarket vendor-shaped OHLC bars; parametrize absent v/volume, None, False, True, blank, negative, NaN; include genuine0 and positive controls. No broker or network.",
+      "assert": "Unknown cases preserve valid OHLC/time/session but volume remains absent/None; real0 andpositive remain measured. Feed results through isolated build_history and assert unknown frame lacks volume, real0 frame has0. Existing code fails at least absent/None/False expectations.",
+      "repair_scope": "Canonical bar normalization only; do not fabricate replacement volume, alter provider state, frozen scale constants or trading gates."
+     },
+     "limits": "Synthetic vendor-shaped bars prove code behavior and downstream contract break, not that a specific live market bar lacked volume."
+    }
+   ]
+  },
+  {
+   "number": 129,
+   "title": "Regular/all-sessions coverage toggle",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/129",
+   "lane": 2,
+   "report": "report-2.md",
+   "source_disposition": "current intent retained",
+   "disposition": "current intent retained",
+   "merged_at": "2026-10-11T18:19:41Z",
+   "merge_sha": "0fbedc19c35080054b367ee845de56927ccaaa9c",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "evidence",
+    "historical_commit_inventory",
+    "reviewed_current_paths",
+    "file_scope_inventory",
+    "depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  },
+  {
+   "number": 130,
+   "title": "Public Agents draft handoff button",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/130",
+   "lane": 2,
+   "report": "report-2.md",
+   "source_disposition": "confirmed repair needed",
+   "disposition": "confirmed repair needed",
+   "merged_at": "2026-10-12T07:56:21Z",
+   "merge_sha": "4d911d3045809cab28ffe240855f77159c6bf7a2",
+   "merge_in_candidate": true,
+   "actionable": true,
+   "evidence_keys": [
+    "evidence",
+    "historical_commit_inventory",
+    "reviewed_current_paths",
+    "file_scope_inventory",
+    "depth",
+    "limits"
+   ],
+   "actionable_gaps": [
+    {
+     "id": "BRIEF-CROSS-TICKER-EXPORT",
+     "severity": "P2 research provenance",
+     "pr_number": 130,
+     "title": "New ticker can export previous ticker briefing",
+     "status": "confirmed repair needed",
+     "source": {
+      "path": "frontend/src/components/heatseeker/BriefingStrip.jsx",
+      "lines": [
+       50
+      ],
+      "url": "https://github.com/odaialdajani/floww-2/blob/6716946b109e43ced81bec6f2fec9c0c46332f14/frontend/src/components/heatseeker/BriefingStrip.jsx#L50",
+      "observation": "New prop ticker/spot combined with old retained data; effect does not clear or bind source identity."
+     },
+     "call_path": [
+      "App Zenith/skylit view HeatseekerDashboard (no ticker key)",
+      "StudyFamily keeps visited study mounted",
+      "BriefingStrip effect on ticker",
+      "exportBrief uses current props + retained data"
+     ],
+     "reproduction": {
+      "method": "Exact-HEAD component Babel-transformed in memory; actual React/ReactDOM/jsdom, deferred synthetic fetch, synthetic clipboard",
+      "observed": {
+       "requests": [
+        "http://inert.invalid/api/briefing/SPY",
+        "http://inert.invalid/api/briefing/QQQ"
+       ],
+       "second_response_pending": true,
+       "export_button_present": true,
+       "copied": {
+        "brief": "floww-agent-brief.v1",
+        "ticker": "QQQ",
+        "asof": "2026-10-16T14:00:00Z",
+        "spot": 600,
+        "executes_nothing": true,
+        "note": "Research draft for Public Agents (user paste + sign-off). Not an order.",
+        "metrics": {
+         "net_gex": 123456789
+        },
+        "regime": "SPY_OLD"
+       }
+      },
+      "raw_receipt": "executed_checks: exact-HEAD React component with deferred synthetic fetch"
+     },
+     "safe_failing_test_proposal": {
+      "path": "frontend/src/components/heatseeker/chart/__tests__/b41_brief_export.test.jsx",
+      "name": "test_ticker_change_cannot_export_previous_brief_or_late_clipboard_status",
+      "arrange": "Render SPY, resolve its briefing; rerender QQQ and leave new request pending (then separately reject it). Spy clipboard; do not invoke real HTTP or broker.",
+      "assert": "Old export unavailable or explicitly bound to SPY, never QQQ with SPY metrics. After matching QQQ response, export must carry QQQ-owned values. Include ignored-abort late SPY response and deferred old clipboard completion after ticker change; those cannot restore stale data/status.",
+      "repair_scope": "Bind briefing data/export state to owning ticker/request generation and reset or gate on ticker/loading/error. Preserve executes_nothing, manual fallback and no-order contract."
+     },
+     "limits": "Current mounted component and static caller path proved; not a production browser or remote Public delivery test."
+    }
+   ]
+  },
+  {
+   "number": 131,
+   "title": "Complete Solstice/Triad review, Public-only reads and bounded history admission",
+   "pr_url": "https://github.com/odaialdajani/floww-2/pull/131",
+   "lane": 2,
+   "report": "report-2.md",
+   "source_disposition": "unverified",
+   "disposition": "unverified",
+   "merged_at": "2026-10-16T23:25:58Z",
+   "merge_sha": "6716946b109e43ced81bec6f2fec9c0c46332f14",
+   "merge_in_candidate": true,
+   "actionable": false,
+   "evidence_keys": [
+    "evidence",
+    "historical_commit_inventory",
+    "reviewed_current_paths",
+    "file_scope_inventory",
+    "depth",
+    "limits"
+   ],
+   "actionable_gaps": []
+  }
+ ]
+}
