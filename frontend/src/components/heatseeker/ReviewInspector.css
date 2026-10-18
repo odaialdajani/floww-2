@@ -66,3 +66,24 @@
 .wall-details-section:first-of-type { border-top: 0; margin-top: 4px; }
 .wall-details-heading { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: #f2d795; margin: 0 0 4px; }
 .wall-identity-line { font-size: 11px; color: #b9cbd3; font-variant-numeric: tabular-nums; margin: 2px 0 6px; overflow-wrap: anywhere; }
+
+/* ══ 2026-10-18 visible refresh: restrained inspector chrome ══
+   Underline-style tabs, tighter panels and metric rows, the four-chip
+   same-wall summary as a flat inline strip (no card boxes), compact
+   readiness/notes. No truth, control or testid was removed. */
+.review-inspector-tabs { gap: 0; padding: 0 0 7px; border-bottom: 1px solid #29454d; }
+.review-inspector-tabs [role="tab"] { min-height: 28px; padding: 3px 10px; background: transparent; border: 0; border-bottom: 2px solid transparent; border-radius: 4px 4px 0 0; color: #7d97a5; font-size: 11.5px; }
+.review-inspector-tabs [aria-selected="true"] { color: #f2d795; background: transparent; border-bottom-color: #f2d795; }
+.review-inspector-panel { padding: 9px 0; }
+.review-inspector-panel .skylit-metric-row { grid-template-columns: 74px minmax(0, 1fr); gap: 8px; padding: 3px 0; }
+.review-selection-summary { padding: 0 0 6px; margin-bottom: 6px; }
+.review-selection-summary strong { font-size: 13px; }
+.skylit-section-title { font-size: 11.5px; }
+.skylit-inspector-note { font-size: 11px; padding: 2px 0; line-height: 1.5; }
+.wall-focused-context { display: flex; flex-wrap: wrap; gap: 3px 16px; margin: 4px 0 6px; padding: 4px 7px; background: transparent; border: 0; border-left: 2px solid #2b4652; border-radius: 0; }
+.wall-focused-heading { display: none; }
+.wall-focused-chip { display: inline-flex; align-items: baseline; gap: 4px; }
+.wall-focused-label { font-size: 9.5px; }
+.wall-focused-value { font-size: 11.5px; color: #dce8f2; }
+.wall-focused-meta { font-size: 9px; color: #6f8896; }
+.wall-identity-line { margin: 1px 0 4px; }

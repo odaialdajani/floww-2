@@ -111,3 +111,81 @@
  .recorded-chart-actions>[data-testid="saved-chart-readings"]:has(>div){position:static;flex:0 0 auto;width:100%;min-width:0;box-sizing:border-box;}
  .recorded-chart-actions>[data-testid="saved-chart-readings"]:has(>div)>div{position:static;width:100%;max-width:100%;box-sizing:border-box;}
 }
+
+/* ══ 2026-10-18 visible refresh: one compact primary toolbar band ══
+   The price/time readout now lives IN the toolbar row (flex:1 middle
+   segment), so the chart header is a single banded row + the replay row.
+   Chart surface stays dominant; no control or truth was removed. */
+.recorded-chart-tools{align-items:center;gap:8px;padding:4px 0 8px;border-bottom:1px solid #232c36;margin-bottom:4px;}
+.recorded-chart-tools .recorded-chart-readout{flex:1 1 200px;order:2;min-height:0;padding:0;}
+.recorded-chart-tools .recorded-chart-scale{order:3;}
+.recorded-chart-tools .recorded-chart-popover{order:4;}
+.recorded-chart-tools .recorded-chart-actions{order:5;}
+.recorded-chart-readout{gap:6px 14px;line-height:1.4;}
+.recorded-chart-readout strong{font-size:11.5px;}
+.price-chart-symbol{font-size:13px;color:#f2d795;}
+.price-history-summary{background:#0d1822;border:1px solid #2b3a47;border-radius:4px;padding:2px 8px;color:#9fc7d4;}
+.recorded-chart-replay-row{border-bottom:1px solid #1a232c;padding-bottom:5px;margin-bottom:4px;}
+.recorded-chart-popover-content .recorded-chart-overlays{margin-top:2px;}
+.recorded-chart-popover-content .recorded-chart-overlays legend{color:#9fc7d4;}
+@media (max-width:700px){ .recorded-chart-tools .recorded-chart-readout{order:6;flex-basis:100%;} }
+
+/* P0-2 (UX review): Tools panel density — a two-column section grid on panes
+   wide enough, and a capped height with internal scrolling in BOTH anchored
+   and static modes, so opening Tools can never explode the chart pane. */
+.recorded-chart-popover-content { max-height: 56dvh; }
+@container (min-width: 430px) {
+  .recorded-chart-popover-content { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 16px; align-items: start; }
+  .recorded-chart-popover-content > * { margin: 0; }
+  .recorded-chart-popover-content > .recorded-chart-period { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; padding-bottom: 6px; margin-bottom: 4px; }
+  .recorded-chart-popover-content > fieldset { margin: 0; }
+  .recorded-chart-popover-content > small, .recorded-chart-popover-content > p[role="alert"] { grid-column: 1 / -1; }
+  .recorded-chart-popover-content .recorded-chart-layers, .recorded-chart-popover-content .recorded-chart-overlays { gap: 4px; padding: 4px 0; }
+  .recorded-chart-popover-content .recorded-chart-history { flex-wrap: wrap; }
+}
+
+/* P0-2 growth bound (UX review): in static-row mode (narrow panes) the open
+   panel is capped tighter so opening Tools cannot explode the pane; wide
+   panes keep the roomier absolute-mode cap. */
+@container (max-width: 760px) {
+  .recorded-chart-popover[open] .recorded-chart-popover-content { max-height: 36dvh; }
+}
+/* Grid-row alignment (P0-2): the legacy per-child margins (fieldset 8px,
+   labels 6px) outrank the generic grid reset by specificity and offset
+   paired cells; zero them inside the two-column grid so paired sections
+   share their row exactly. */
+.recorded-chart-popover-content > fieldset { margin: 0; padding: 4px 0; }
+.recorded-chart-popover-content > label, .recorded-chart-popover-content > button,
+.recorded-chart-popover-content > span { margin: 0; }
+.recorded-chart-popover-content > button { align-self: start; }
+/* Grid-row alignment, round 2: legacy rules with equal-or-higher specificity
+   (`.recorded-chart-layers` margin 8px, contract-label 10px, help small
+   10px, overlays 2px) still offset paired cells. Same selectors, later in
+   the file — margins zero inside the Tools grid. */
+.recorded-chart-popover-content .recorded-chart-layers { margin: 0; }
+.recorded-chart-popover-content .recorded-chart-overlays { margin: 0; }
+.recorded-chart-popover-content label.price-history-contract { margin: 0; }
+.recorded-chart-popover-content small { margin: 0; }
+
+/* P1-5 (UX review): slim below-chart secondary rows. Drawings collapse
+   behind a one-line disclosure; velocity becomes an inline hairline row
+   (rows stay inside the velocity-strip testid — no data or test moved). */
+.price-history-drawings { margin: 6px 0 2px; border-top: 1px solid #1a232c; padding-top: 4px; }
+.price-history-drawings > summary { cursor: pointer; list-style: none; font-size: 11px; color: #8fa3b0; padding: 2px 0; white-space: nowrap; }
+.price-history-drawings > summary::-webkit-details-marker { display: none; }
+.price-history-drawings > summary::before { content: "▸ "; color: #6f8896; }
+.price-history-drawings[open] > summary::before { content: "▾ "; }
+.price-history-drawings > summary:focus-visible { outline: 2px solid #e3c16a; outline-offset: 2px; }
+.price-history-velocity { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; margin: 4px 0 2px; padding: 4px 0 0; border-top: 1px solid #1a232c; font-size: 11px; color: #9db3c4; }
+.price-history-velocity strong { font-size: 11px; color: #c6d7df; }
+.price-history-velocity small { font-size: 10px; color: #6f8896; }
+.price-history-velocity ul { display: flex; flex-wrap: wrap; gap: 2px 14px; margin: 0; padding: 0; list-style: none; min-width: 0; }
+.price-history-velocity li { font-size: 10.5px; white-space: nowrap; color: #b9cbd3; }
+.price-history-velocity-empty { margin: 2px 0; }
+.price-history-velocity-empty small { font-size: 10.5px; color: #6f8896; }
+.recorded-chart-nodes { font-size: 11px; gap: 6px 14px; margin: 4px 0 2px; padding-top: 4px; }
+.recorded-chart-footer small { font-size: 10.5px; color: #6f8896; }
+/* P1-5: merged footer + node-legend line below the chart. */
+.recorded-chart-below { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 18px; margin: 4px 0 2px; padding-top: 4px; border-top: 1px solid #1a232c; font-size: 11px; min-height: 0; }
+.recorded-chart-below small { font-size: 10.5px; color: #6f8896; }
+.recorded-chart-below .recorded-chart-nodes { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; padding: 0; border: 0; font-size: 11px; }

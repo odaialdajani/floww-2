@@ -174,6 +174,7 @@ function WallInspector({ wall = null, interaction = null, metrics = null, grids 
         {wall.low}–{wall.high} · basis {wall.exposure_basis || "OI"}
         {" · "}Formula {wall.formula_version || "unavailable"}
         {" · "}OI date {(Array.isArray(wall.oi_effective_dates) && wall.oi_effective_dates.length) ? wall.oi_effective_dates.join(", ") : "unavailable"}
+        {" · "}values are gross / net
       </div>
       <FocusSummary wall={wall} wb={wb} wallWin={wallWin} metrics={metrics} />
       {/* Always visible: readiness, confirmation, invalidation and explicit
