@@ -295,6 +295,51 @@ def test_provider_last_success_gauge():
     assert 'floww_provider_last_success_seconds_ago{provider="finnhub"} 45.2' in output
 
 
+def test_update_prometheus_updates_every_provider_age_gauge(monitor):
+    # Regression for the historic update_prometheus loop-defect: the age
+    # gauge set sat outside the provider loop, so only the final provider
+    # was emitted. Both providers with distinct success times must appear.
+    from services.observability import get_metrics_bytes
+    monitor.record("alpha_feed", True)
+    time.sleep(0.01)
+    monitor.record("beta_feed", True)
+    monitor.update_prometheus()
+    output = get_metrics_bytes().decode()
+    AgeLine = "floww_provider_last_success_seconds_ago"
+    assert f'{AgeLine}{{provider="alpha_feed"}}' in output
+    assert f'{AgeLine}{{provider="beta_feed"}}' in output
+    # And the two ages must be distinct lines, not one overwriting the other.
+    age_lines = [line for line in output.splitlines()
+                 if line.startswith(AgeLine + "{provider=")
+                 and ("alpha_feed" in line or "beta_feed" in line)]
+    assert len(age_lines) >= 2
+
+
+def test_update_prometheus_never_succeeded_sets_inf(monitor):
+    # A provider that never succeeded must stay distinct from one that
+    # just succeeded: the gauge holds +Inf, not 0.
+    from services.observability import get_metrics_bytes
+    monitor.record("cold_feed", False)
+    monitor.update_prometheus()
+    output = get_metrics_bytes().decode()
+    age_lines = [line for line in output.splitlines()
+                 if line.startswith("floww_provider_last_success_seconds_ago")
+                 and 'provider="cold_feed"' in line]
+    assert age_lines, "never-succeeded provider must still be emitted"
+    assert any("+Inf" in line for line in age_lines)
+
+
+def test_update_prometheus_empty_monitor_does_not_raise():
+    # The historic defect also swallowed an unbound-local error raised on
+    # an empty monitor; updating with no provider must be a no-op.
+    from services.meta_observability import DataProviderMonitor
+    fresh = DataProviderMonitor()
+    try:
+        fresh.update_prometheus()
+    except Exception as exc:  # pragma: no cover — assertion path
+        pytest.fail(f"update_prometheus raised on empty monitor: {exc}")
+
+
 def test_provider_alerts_fired_counter():
     from services.observability import get_metrics_bytes, provider_alerts_fired_total
     provider_alerts_fired_total.labels(provider="yfinance", alert_type="low_success_rate").inc()
