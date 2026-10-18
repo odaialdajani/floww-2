@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import re
+import time
 from datetime import UTC, datetime, timedelta
 
 from services.agent.access.horizon import horizon_window
@@ -166,7 +167,7 @@ class ResearchService:
 
     async def _run(self, owner, turn_id, spec, budget):
         try:
-            async with asyncio.timeout(self.timeout):
+            async with asyncio.timeout(max(0, budget.deadline - time.monotonic())):
                 async with self._slots:
                     if not await self.repository.progress(owner, turn_id, "Reading available market observations"):
                         return
@@ -174,6 +175,8 @@ class ResearchService:
                         answer = await self.reads.market_snapshot(limit=spec["market_limit"])
                         if "parent_context" in spec:
                             answer = {**answer, "parent_context": spec["parent_context"]}
+                        if time.monotonic() >= budget.deadline:
+                            raise TimeoutError("Research deadline reached")
                         await self.repository.finish(owner, turn_id, "completed", answer=answer,
                                                      read_activity=budget.close())
                         return
@@ -251,6 +254,10 @@ class ResearchService:
                             answer["model_status"] = "Interpretation unavailable; showing saved market readings"
                     if not spec.get("price_only"):
                         answer["plan_draft"] = build_plan_draft(answer, turn_id)
+                    # Read expiry may be handled as a missing observation,
+                    # but expiry of the whole admitted turn cannot publish.
+                    if time.monotonic() >= budget.deadline:
+                        raise TimeoutError("Research deadline reached")
                     await self.repository.finish(owner, turn_id, "completed", answer=answer,
                                                  read_activity=budget.close())
         except asyncio.CancelledError:
