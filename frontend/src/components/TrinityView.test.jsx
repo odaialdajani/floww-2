@@ -67,7 +67,7 @@ test("shared stock choice removes only the duplicate input, retaining comparison
   for (const ticker of ["SPX","SPY","QQQ"]) expect(screen.getByTestId(`triad-context-${ticker}`)).toBeVisible();
   expect(screen.getByTestId("triad-coverage-note")).toHaveTextContent("2/3 observed");
   expect(screen.getByTestId("triad-source")).toHaveTextContent("snap-triad-1");
-  expect(screen.getByLabelText("Triad expiry scope")).toBeVisible();
+  expect(screen.getByLabelText("Market view expiry scope")).toBeVisible();
 });
 
 test("standalone market view retains its stock control", async () => {

@@ -27,8 +27,9 @@ afterEach(() => jest.restoreAllMocks());
 test('CVD pane renders honest gaps and mandatory label', () => {
   render(<RecordedPriceChart ticker="SPY" frames={frames} cvdLine={cvdLine} />);
   expect(screen.getByText(/CVD estimated via bulk volume classification/)).toBeInTheDocument();
-  expect(screen.getByText(/80%.*equities/)).toBeInTheDocument();
-  expect(screen.getByText(/directional, not exact/)).toBeInTheDocument();
+  expect(screen.getByText(/bar-volume estimate, not classified trade-by-trade CVD/)).toBeInTheDocument();
+  expect(screen.queryByText(/80%.*equities/)).not.toBeInTheDocument();
+  expect(screen.getByText(/Unknown ≠ zero; gaps are honest/)).toBeInTheDocument();
 });
 
 test('CVD line shows gaps for unknown bars (first, sigma-zero, absent volume)', () => {

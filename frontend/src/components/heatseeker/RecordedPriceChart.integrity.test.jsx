@@ -67,3 +67,50 @@ test('panning changes premium time scope with underlying candles', () => {
   fireEvent.keyDown(screen.getByRole('region',{name:'SPY candle chart'}),{key:'Home'});
   expect(screen.getByTestId('contract-premium-pane')).toHaveTextContent('Range $0.00–$79.00');
 });
+
+test.each([
+  ['future', {known_at:'2026-10-06T13:31:00Z',age_seconds:1}],
+  ['stale', {known_at:'2026-10-06T13:00:00Z',age_seconds:1800}],
+  ['unknown time', {known_at:null,age_seconds:1}],
+  ['unknown age', {known_at:frame(0).time,age_seconds:null}],
+])('%s nodes cannot reappear as orbs after saved-line admission rejects them', (_, timing) => {
+  render(<RecordedPriceChart ticker="SPY" frames={[{...frame(0),nodes:[
+    {id:'bad',metric:'gex',level:100,signed_value:100,...timing},
+  ]}]} />);
+  expect(screen.getAllByTestId('price-candle')).toHaveLength(1);
+  expect(screen.queryByTestId('saved-node-line')).not.toBeInTheDocument();
+  expect(screen.queryByTestId('chart-orb')).not.toBeInTheDocument();
+});
+
+test('valid legacy nodes remain visible without an invented exposure rank', () => {
+  render(<RecordedPriceChart ticker="SPY" frames={[{...frame(0),nodes_known_at:frame(0).time,node_age_seconds:5,
+    nodes:[{id:'legacy',level:100}]}]} />);
+  expect(screen.getByTestId('saved-node-line')).toBeInTheDocument();
+  expect(screen.getByTestId('chart-orb')).not.toHaveTextContent('King Node');
+  expect(screen.getByTestId('chart-orb')).toHaveTextContent(/exposure unavailable/i);
+});
+
+test('measured zero has no dominant node and unrelated metric units do not compete for King', () => {
+  const nodes = [
+    {id:'zero',metric:'gex',level:100,signed_value:0},
+    {id:'vex',metric:'vex',level:101,signed_value:1000000},
+  ].map(node=>({...node,known_at:frame(0).time,age_seconds:1}));
+  render(<RecordedPriceChart ticker="SPY" frames={[{...frame(0),nodes}]} />);
+  const orbs=screen.getAllByTestId('chart-orb');
+  expect(orbs[0]).not.toHaveTextContent('King Node');
+  expect(orbs[1]).toHaveTextContent(/King Node.*VEX.*observed saved subset/i);
+});
+
+test('each measured metric ranks only its own observed saved subset', () => {
+  const nodes = [
+    {id:'gex-king',metric:'gex',level:100,signed_value:-100},
+    {id:'gex-other',metric:'gex',level:101,signed_value:25},
+    {id:'vex-king',metric:'vex',level:101.5,signed_value:1000000},
+  ].map(node=>({...node,known_at:frame(0).time,age_seconds:1}));
+  render(<RecordedPriceChart ticker="SPY" frames={[{...frame(0),nodes}]} />);
+  const orbs=screen.getAllByTestId('chart-orb');
+  expect(orbs[0]).toHaveTextContent(/King Node.*GEX.*observed saved subset/i);
+  expect(orbs[1]).not.toHaveTextContent('King Node');
+  expect(Number(orbs[0].getAttribute('r'))).toBeGreaterThan(Number(orbs[1].getAttribute('r')));
+  expect(orbs[2]).toHaveTextContent(/King Node.*VEX.*observed saved subset/i);
+});

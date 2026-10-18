@@ -87,21 +87,64 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
     }).catch(() => { if (active) setStatus("error"); });
     return () => { active = false; controller.abort(); };
   }, [ticker, days, minutes, sessions, scope, forcedScope, usingMapScope, open, reload, contract]);
+  const frames = payload?.ticker === ticker.toUpperCase() ? payload.frames || [] : [];
+  const comparisonScope = typeof payload?.query_key === "string" ? payload.query_key : "";
+  const comparisonTime = frames[position]?.time;
+  const awareTime = value => typeof value === "string" && /(?:Z|[+-]\d{2}:\d{2})$/.test(value)
+    ? Date.parse(value) : NaN;
+  const cutoff = awareTime(comparisonTime);
+  // Include view controls so the old result disappears on the first render
+  // of a new request, before effects can clear the old history payload.
+  const velocityRequestKey = JSON.stringify([ticker, comparisonScope, comparisonTime,
+    days, minutes, sessions, scope, forcedScope, usingMapScope, reload, contract]);
+  const comparable = !playing && status === "ready" && !!comparisonScope && Number.isFinite(cutoff);
   useEffect(() => {
-    if (!open) return undefined;
+    if (!open || !comparable) return undefined;
     const controller = new AbortController();
     let active = true;
     setVelocity(null);
-    // Promise.resolve: the strip must never crash the chart on transport
-    // oddities (a bare undefined answer still lands as unavailable).
-    Promise.resolve(axios.get(`${API}/solstice/attribute/${encodeURIComponent(ticker)}`, {
-      timeout: 15000, signal: controller.signal,
-    })).then(({ data }) => {
-      if (active) setVelocity(data && typeof data === "object" ? data : null);
-    }).catch(() => { if (active) setVelocity({ status: "unavailable" }); });
-    return () => { active = false; controller.abort(); };
-  }, [ticker, open]);
-  const frames = payload?.ticker === ticker.toUpperCase() ? payload.frames || [] : [];
+    // A scrub or replay must not send an attribute request per animation tick.
+    const timer = setTimeout(() => {
+      Promise.resolve(axios.get(`${API}/solstice/attribute/${encodeURIComponent(ticker)}`, {
+        params: { query_key: comparisonScope, as_of: comparisonTime },
+        timeout: 15000, signal: controller.signal,
+      })).then(({ data }) => {
+        if (active) setVelocity({ requestKey: velocityRequestKey, data });
+      }).catch(() => { if (active) setVelocity({ requestKey: velocityRequestKey, data: { status: "unavailable" } }); });
+    }, 150);
+    return () => { active = false; clearTimeout(timer); controller.abort(); };
+  }, [ticker, open, comparable, comparisonScope, comparisonTime, velocityRequestKey]);
+  const comparison = comparable && velocity?.requestKey === velocityRequestKey ? velocity.data : null;
+  const pair = [comparison?.from, comparison?.to];
+  const pairMatches = comparison?.ticker === ticker.toUpperCase()
+    && comparison?.query_key === comparisonScope
+    && pair.every(observation => typeof observation?.id === "string" && observation.id
+      && observation.query_key === comparisonScope
+      && Number.isFinite(awareTime(observation.asof)) && awareTime(observation.asof) <= cutoff
+      && Number.isFinite(awareTime(observation.received_at)) && awareTime(observation.received_at) <= cutoff)
+    && pair[0].id !== pair[1].id && awareTime(pair[0].asof) < awareTime(pair[1].asof)
+    && typeof comparison.velocity_dt_seconds === "number" && Number.isFinite(comparison.velocity_dt_seconds)
+    && comparison.velocity_dt_seconds > 0;
+  const velocityRows = pairMatches && comparison?.status === "ok" && Array.isArray(comparison.velocities)
+    ? comparison.velocities.filter(row => row?.status === "retained"
+      && typeof row.strike === "number" && Number.isFinite(row.strike) && row.strike > 0
+      && typeof row.velocity === "number" && Number.isFinite(row.velocity)).slice(0, 5) : [];
+  const velocityReasons = {
+    CUTOFF_INVALID: "the candle time could not be verified.",
+    DAY_INVALID: "the recorded comparison day could not be verified.",
+    DAY_MISMATCH: "comparison day does not match the candle time.",
+    SCOPE_UNVERIFIED: "saved scope or source details could not be verified.",
+    NO_MATCHING_OBSERVATIONS: "no recorded observations match this saved view at this candle.",
+    OBSERVATION_STALE: "the latest recorded observation is older than 15 minutes.",
+    COMPARABLE_PAIR_MISSING: "need 2+ comparable recorded snapshots at this candle.",
+  };
+  const velocityNote = playing ? "paused during replay."
+    : !comparable ? "saved scope or candle time is unavailable."
+    : !comparison ? "checking this saved view and candle time."
+    : comparison.status === "history_unavailable"
+      ? velocityReasons[comparison.reason_code] || velocityReasons.COMPARABLE_PAIR_MISSING
+    : pairMatches && comparison.status === "ok" ? "no comparable nodes in this recorded window."
+    : "no verified comparison matches this saved view and candle time.";
   useEffect(() => {
     if (!playing || !open || frames.length < 2) return undefined;
     const id = setInterval(() => setPosition(p => {
@@ -150,17 +193,18 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
       onDelete={id => { if (selectedDrawing === id) setSelectedDrawing(null); persistDrawings(reduceDrawings(drawings, { type: "delete", id })); }}
       onToggleLock={id => persistDrawings(drawings.map(d => d.id === id ? { ...d, locked: !d.locked } : d))}
       onToggleHide={id => persistDrawings(drawings.map(d => d.id === id ? { ...d, visible: d.visible === false } : d))} />}
-    {open&&velocity?.status==="ok"&&Array.isArray(velocity.velocities)&&velocity.velocities.length>0&&(
+    {open&&velocityRows.length>0&&(
       <div className="price-history-velocity" data-testid="velocity-strip" aria-label="Fastest-moving nodes">
-        <strong>Node velocity</strong><span> over {velocityDtText(velocity.velocity_dt_seconds)}</span>
-        <ul>{velocity.velocities.slice(0,5).map(row=>{
+        <strong>Node velocity</strong><span> over {velocityDtText(comparison.velocity_dt_seconds)}</span>
+        <small> · {chartTime(comparison.from.asof,true)} to {chartTime(comparison.to.asof,true)} New York · same saved scope</small>
+        <ul>{velocityRows.map(row=>{
           const rate = typeof row.velocity==="number"&&Number.isFinite(row.velocity)
             ? (row.velocity>=0?"+":"")+row.velocity.toLocaleString("en-US",{maximumFractionDigits:1})+"/s" : "n/a";
           const growth = typeof row.growth==="number"&&Number.isFinite(row.growth)
             ? `${(row.growth*100).toFixed(1)}%` : "n/a";
           return <li key={row.strike} data-testid="velocity-row">strike {row.strike}: {rate} ({growth})</li>;})}</ul>
       </div>)}
-    {open&&velocity&&velocity.status!=="ok"&&(
-      <div className="price-history-velocity-empty" data-testid="velocity-unavailable"><small>Node velocity unavailable — need 2+ recorded snapshots.</small></div>)}
+    {open&&status==="ready"&&!velocityRows.length&&(
+      <div className="price-history-velocity-empty" data-testid="velocity-unavailable"><small>Node velocity unavailable — {velocityNote}</small></div>)}
   </section>;
 }

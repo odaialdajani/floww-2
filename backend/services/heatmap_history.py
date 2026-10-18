@@ -950,24 +950,58 @@ def replay_snapshot(conn, snapshot_id: str) -> dict[str, Any] | None:
 
 
 @guarded_connection
-def compare_snapshots(conn, ticker: str, day: str) -> dict[str, Any]:
-    """Coarse wall-level change between the last two snapshots of a ticker/day.
+def compare_snapshots(conn, ticker: str, day: str = "", *,
+                      query_key: str | None = None, as_of: str | None = None) -> dict[str, Any]:
+    """Coarse change between two comparable recorded observations.
 
-    Per-strike gross deltas + added/removed/retained wall identities. This is a
-    descriptive comparison, NOT the full spot/IV/time/OI counterfactual
-    (solstice_provenance.attribute_change) — that needs contract-level history.
-    Fewer than 2 snapshots → history_unavailable (never a one-point trend).
+    Chart requests bind the canonical price-history scope and an aware candle
+    cutoff. Legacy callers select the newest observation's full scope first.
+    Neither path mixes expiry sets, providers, formulas, or exposure bases.
+    This remains descriptive, not a spot/IV/time/OI counterfactual.
     """
+    def unavailable(reason, reason_code):
+        return {"ticker": ticker.upper(), "day": day, "status": "history_unavailable",
+                "query_key": query_key, "as_of": as_of,
+                "reason": reason, "reason_code": reason_code}
+
+    def aware_time(value):
+        try:
+            parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+            return parsed.astimezone(UTC) if parsed.tzinfo is not None else None
+        except (ValueError, TypeError, OverflowError):
+            return None
+
+    cutoff = aware_time(as_of) if as_of is not None else None
+    if (as_of is not None and cutoff is None) or (query_key is not None and cutoff is None):
+        return unavailable("valid timezone-aware as_of required for scoped comparison", "CUTOFF_INVALID")
+    if cutoff is not None:
+        cutoff_day = cutoff.date().isoformat()
+        if day and day != cutoff_day:
+            return unavailable("day does not match as_of UTC day", "DAY_MISMATCH")
+        day = cutoff_day
     try:
+        start = datetime.fromisoformat(day).replace(tzinfo=UTC)
+        if start.date().isoformat() != day:
+            return unavailable("valid day required for comparison", "DAY_INVALID")
+    except (ValueError, TypeError):
+        return unavailable("valid day required for comparison", "DAY_INVALID")
+    if query_key is not None and not query_key.strip():
+        return unavailable("complete canonical query_key scope required", "SCOPE_UNVERIFIED")
+    try:
+        from datetime import timedelta
+
+        from services.price_node_history import MAX_NODE_AGE_SECONDS, scope_id
+
         ensure_tables(conn)
+        columns = ("snapshot_id", "asof_ts", "spot", "strikes_json", "walls_json",
+                   "query_key", "expiries", "data_source", "formula_version",
+                   "exposure_basis", "received_at")
         rows = conn.execute(
-            "SELECT snapshot_id, asof_ts, spot, strikes_json, walls_json "
-            "FROM heatmap_snapshots_v2 WHERE ticker = " + _esc(ticker.upper())
-            + " AND asof_ts LIKE " + _esc(day + "%")
-            + " ORDER BY asof_ts").fetchall()
-        if len(rows or []) < 2:
-            return {"ticker": ticker.upper(), "day": day, "status": "history_unavailable",
-                    "reason": "need 2+ recorded snapshots for comparison"}
+            "SELECT " + ", ".join(columns) + " FROM heatmap_snapshots_v2 WHERE ticker = "
+            + _esc(ticker.upper()) + " AND TRY_CAST(asof_ts AS TIMESTAMPTZ) >= "
+            + _esc(start.isoformat()) + "::TIMESTAMPTZ"
+            + " AND TRY_CAST(asof_ts AS TIMESTAMPTZ) < "
+            + _esc((start + timedelta(days=1)).isoformat()) + "::TIMESTAMPTZ").fetchall()
 
         def _parse(v: Any) -> Any:
             try:
@@ -975,15 +1009,62 @@ def compare_snapshots(conn, ticker: str, day: str) -> dict[str, Any]:
             except (TypeError, ValueError):
                 return None
 
-        (_id0, _asof0, _spot0, sj0, wj0) = rows[-2]
-        (_id1, _asof1, _spot1, sj1, wj1) = rows[-1]
-        s0 = {float(s.get("strike")): float(s.get("gex", 0) or 0)
-              for s in (_parse(sj0) or []) if isinstance(s, dict) and s.get("strike") is not None}
-        s1 = {float(s.get("strike")): float(s.get("gex", 0) or 0)
-              for s in (_parse(sj1) or []) if isinstance(s, dict) and s.get("strike") is not None}
-        deltas = [{"strike": k, "before": s0.get(k, 0.0), "after": v,
-                   "delta": v - s0.get(k, 0.0)}
-                  for k, v in sorted(s1.items()) if abs(v - s0.get(k, 0.0)) > 0]
+        def complete_scope(row):
+            required = ("query_key", "data_source", "formula_version", "exposure_basis")
+            expiries = _parse(row["expiries"])
+            if (any(not isinstance(row[key], str) or not row[key].strip() for key in required)
+                    or not isinstance(expiries, list) or not expiries):
+                return False
+            try:
+                return all(isinstance(expiry, str)
+                           and datetime.strptime(expiry, "%Y-%m-%d").date().isoformat() == expiry
+                           for expiry in expiries)
+            except ValueError:
+                return False
+
+        known = []
+        for values in rows or []:
+            row = dict(zip(columns, values, strict=True))
+            observed, received = aware_time(row["asof_ts"]), aware_time(row["received_at"])
+            if observed is None or received is None:
+                continue
+            if cutoff is not None and max(observed, received) > cutoff:
+                continue
+            row["scope_id"] = scope_id(row)
+            if query_key is None or row["scope_id"] == query_key:
+                known.append((observed, received, row))
+        known.sort(key=lambda item: (item[0], item[1], str(item[2]["snapshot_id"])))
+        if not known:
+            return unavailable("no recorded observations known at cutoff for scope", "NO_MATCHING_OBSERVATIONS")
+        t1, _, latest = known[-1]
+        if not complete_scope(latest):
+            return unavailable("complete recorded scope and provenance required", "SCOPE_UNVERIFIED")
+        # A delayed receipt cannot refresh an old reading. The earlier baseline
+        # may be older: its age is disclosed by the exact comparison interval.
+        if cutoff is not None and (cutoff - t1).total_seconds() > MAX_NODE_AGE_SECONDS:
+            return unavailable("latest recorded observation is stale at as_of", "OBSERVATION_STALE")
+        # Scope identity includes the expiry list, formula and basis. Provider
+        # identity is separate, so a provider switch cannot masquerade as flow.
+        prior = [item for item in known[:-1]
+                 if item[0] < t1 and complete_scope(item[2])
+                 and item[2]["scope_id"] == latest["scope_id"]
+                 and all(item[2][key] == latest[key]
+                         for key in ("data_source", "formula_version", "exposure_basis"))]
+        if not prior:
+            return unavailable("need 2+ recorded snapshots in the same scope and source with positive interval", "COMPARABLE_PAIR_MISSING")
+        t0, _, before = prior[-1]
+        dt = (t1 - t0).total_seconds()
+        sj0, wj0 = before["strikes_json"], before["walls_json"]
+        sj1, wj1 = latest["strikes_json"], latest["walls_json"]
+        from services.chart_velocity import node_velocity
+
+        # Reuse the strict per-strike admission for both displays. An absent
+        # or invalid exposure is not a measured zero on either side.
+        comparisons = node_velocity(_parse(sj0) or [], _parse(sj1) or [], dt)
+        retained = [row for row in comparisons if row["status"] == "retained"
+                    and row["delta"] is not None and math.isfinite(row["delta"])]
+        deltas = [{key: row[key] for key in ("strike", "before", "after", "delta")}
+                  for row in retained if row["delta"] != 0]
         # Window volume deltas per strike (cumulative-volume differences with
         # rebase quarantine — a negative step invalidates the window, it is
         # never negative flow).
@@ -1009,23 +1090,21 @@ def compare_snapshots(conn, ticker: str, day: str) -> dict[str, Any]:
         w0 = {w.get("wall_id") for w in (_parse(wj0) or []) if isinstance(w, dict)}
         w1 = {w.get("wall_id") for w in (_parse(wj1) or []) if isinstance(w, dict)}
         # Node velocity (P2): per-strike d(GEX)/dt over this exact pair.
-        # Added/removed strikes keep unknown rates; unparseable clocks give
-        # dt None instead of a fabricated rate. Additive — existing keys kept.
-        from services.chart_velocity import node_velocity
-        try:
-            t0 = datetime.fromisoformat(str(_asof0).replace("Z", "+00:00"))
-            t1 = datetime.fromisoformat(str(_asof1).replace("Z", "+00:00"))
-            dt = (t1 - t0).total_seconds() if t0.tzinfo and t1.tzinfo else None
-        except (ValueError, TypeError):
-            dt = None
+        # Added/removed strikes keep unknown rates; the selected pair already
+        # has a positive interval and validated known-at clocks.
         velocities = sorted(
-            (r for r in node_velocity(_parse(sj0) or [], _parse(sj1) or [],
-                                      dt if dt else float("nan"))
-             if r["status"] == "retained" and r["velocity"] is not None),
-            key=lambda r: abs(r["velocity"]), reverse=True)[:20]
+            (row for row in retained if row["velocity"] is not None
+             and math.isfinite(row["velocity"])),
+            key=lambda row: abs(row["velocity"]), reverse=True)[:20]
+        def identity(row):
+            return {"id": row["snapshot_id"], "asof": row["asof_ts"], "spot": row["spot"],
+                    "query_key": row["scope_id"], "received_at": row["received_at"],
+                    "data_source": row["data_source"], "formula_version": row["formula_version"],
+                    "exposure_basis": row["exposure_basis"]}
+
         return {"ticker": ticker.upper(), "day": day, "status": "ok",
-                "from": {"id": _id0, "asof": _asof0, "spot": _spot0},
-                "to": {"id": _id1, "asof": _asof1, "spot": _spot1},
+                "query_key": latest["scope_id"], "as_of": as_of,
+                "from": identity(before), "to": identity(latest),
                 "velocity_dt_seconds": dt,
                 "velocities": velocities,
                 "strike_deltas": sorted(deltas, key=lambda d: abs(d["delta"]), reverse=True)[:20],
