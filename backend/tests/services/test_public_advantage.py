@@ -21,6 +21,20 @@ import pytest
 
 
 @pytest.fixture(autouse=True)
+def _pin_alternates_provider_env(monkeypatch):
+    """This module covers the paid-Public-first advantage orders: Public
+    adapter quote truth, scanner honesty, PRIME/CLUSTER rules, and the chain
+    route's Public → CVForge → yfinance ladder. ADR-0002 keeps that ladder
+    reachable only when ``FLOWW_MARKET_DATA_PROVIDER != "public"`` — then a
+    Public-empty result is an honest 503 refusal instead of a fallback. Host
+    checkouts may set the variable to ``public`` through ``.env``; pin the
+    documented mode so these ordering contracts stay hermetic regardless of
+    host ``.env`` state. The Public-only refusal itself has its own dedicated
+    policy tests and is not re-hidden here."""
+    monkeypatch.delenv("FLOWW_MARKET_DATA_PROVIDER", raising=False)
+
+
+@pytest.fixture(autouse=True)
 def _h2_isolated_public_budget(monkeypatch):
     """H2: adapter-level acquire debits the shared singleton even behind fake
     brokers. Isolate every test with a fresh high-capacity budget so file

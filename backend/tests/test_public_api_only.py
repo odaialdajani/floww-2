@@ -23,9 +23,72 @@ from tests.offline_network import deny_external_network  # noqa: F401
 client = TestClient(app)
 
 
-def test_public_only_income_refusal_keeps_typed_reason_on_the_wire(monkeypatch):
+def test_public_only_income_serves_from_public_chain(monkeypatch):
+    """2026-10-17: the Wheel screener HAS a Public-only producer (live probe
+    settled that Public chains populate per-strike OI + vendor greeks +
+    NBBO mids), so public mode must SERVE ranked rows — with INCOME-04
+    discipline: absent IV/volume stay unknown, never zero."""
+    from datetime import date, timedelta
+
+    import routes.steal_three as st
+
+    st._income_cache.clear()
+    future_exp = (date.today() + timedelta(days=21)).isoformat()
+    put_row = {"strike": 95.0, "expiry": future_exp, "oi": 500, "volume": 40,
+               "bid": 1.0, "ask": 1.2, "mid": 1.1, "iv": 0.25, "type": "put"}
+    put_row_unknown = {"strike": 96.0, "expiry": future_exp, "oi": 10,
+                       "volume": None, "bid": 1.0, "ask": 1.2, "iv": None,
+                       "type": "put"}
+    call_row = {"strike": 105.0, "expiry": future_exp, "oi": 300, "volume": 30,
+                "bid": 0.9, "ask": 1.1, "mid": 1.0, "iv": 0.22, "type": "call"}
+
+    async def fake_public_window(symbol, min_dte, max_dte, cap=8):
+        return 100.0, [call_row], [put_row, put_row_unknown]
+
     monkeypatch.setenv("FLOWW_MARKET_DATA_PROVIDER", "public")
+    monkeypatch.setattr("routes.steal_three._load_chain_window_public", fake_public_window)
+
     response = client.get("/api/screener/income", params={"symbol": "SPY"})
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["provider"] == "public-option-chain"
+    assert data["oi_basis"] == "daily"
+    strikes = [p["strike"] for p in data["puts"]]
+    assert 95.0 in strikes and 96.0 in strikes
+    unknown = next(p for p in data["puts"] if p["strike"] == 96.0)
+    assert unknown["iv_unknown"] is True and unknown["volume_unknown"] is True
+    st._income_cache.clear()
+
+
+def test_public_only_income_chain_failure_keeps_typed_reason_on_the_wire(monkeypatch):
+    """When the Public chain itself cannot be read (offline here), the
+    screener must refuse with a typed reason on the wire — never a bare
+    500, never an alternate-source fallback."""
+    import routes.steal_three as st
+    import services.public_api_adapter as adapter
+
+    st._income_cache.clear()
+    adapter._CHAIN_CACHE.clear()
+    monkeypatch.setenv("FLOWW_MARKET_DATA_PROVIDER", "public")
+    monkeypatch.setattr(
+        adapter,
+        "fetch_option_expiry_listing",
+        AsyncMock(return_value=None),
+    )
+    response = client.get("/api/screener/income", params={"symbol": "SPY"})
+    assert response.status_code == 503
+    error = response.json()["error"]
+    assert error["status"] == "unavailable"
+    assert error["reason"] == "PUBLIC_CHAIN_UNAVAILABLE"
+    st._income_cache.clear()
+
+
+def test_public_only_dual_gex_refusal_keeps_typed_reason_on_the_wire(monkeypatch):
+    """Doctrine guard for a study that still has NO Public-only producer:
+    dual_gex must keep refusing with the typed reason on the wire — the
+    income producer change must not weaken the other studies' refusals."""
+    monkeypatch.setenv("FLOWW_MARKET_DATA_PROVIDER", "public")
+    response = client.get("/api/dual_gex/SPY")
     assert response.status_code == 503
     assert response.json()["error"] == {
         "status": "unavailable",

@@ -36,6 +36,9 @@ def _future_exp(days: int = 21) -> str:
 # ---------------------------------------------------------------------------
 
 def test_dual_gex_uses_numba_gamma_not_flat(monkeypatch):
+    # Legacy yfinance-loader test: pin the provider env so a public-mode
+    # ambient pin can't divert the route to a refusal.
+    monkeypatch.delenv("FLOWW_MARKET_DATA_PROVIDER", raising=False)
     calls = [{"strike": 100.0, "openInterest": 10, "volume": 5.0,
               "bid": 1.0, "ask": 1.2, "impliedVolatility": 0.25,
               "expiry": _future_exp()}]
@@ -56,6 +59,8 @@ def test_dual_gex_uses_numba_gamma_not_flat(monkeypatch):
 
 
 def test_dual_gex_survives_rows_without_iv(monkeypatch):
+    # Legacy yfinance-loader test: pin the provider env (same reasoning).
+    monkeypatch.delenv("FLOWW_MARKET_DATA_PROVIDER", raising=False)
     # Bare rows (no IV, no parseable expiry) fall back to IV=0.2 / T=30d
     # inside the gamma computation — never a 500.
     calls = [{"strike": 100.0, "openInterest": 10, "volume": 5.0,
@@ -125,6 +130,9 @@ def test_iv_row_short_dated_can_solve_with_t_floor():
 def test_wheel_screener_caches_identical_calls(monkeypatch):
     import routes.steal_three as st
 
+    # Legacy-loader test: pin the provider env so a public-mode ambient
+    # pin (.env) can't divert this cache test to the Public-only producer.
+    monkeypatch.delenv("FLOWW_MARKET_DATA_PROVIDER", raising=False)
     st._income_cache.clear()
     future_exp = _future_exp()
     put_row = {"strike": 95.0, "expiry": future_exp, "openInterest": 500,

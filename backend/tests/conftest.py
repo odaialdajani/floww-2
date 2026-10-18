@@ -1,5 +1,6 @@
 """Shared test fixtures."""
 import asyncio
+import contextlib
 import os
 import sys
 
@@ -33,6 +34,21 @@ async def aclient():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test", headers={"X-API-Key": "test-secret-key"}) as client:
         yield client
+
+
+@pytest.fixture(autouse=True)
+def _hermetic_market_data_env(monkeypatch):
+    """Offline default for every test: host .env market-data policy must not
+    leak into test behavior. The canonical checkout runs the service with
+    FLOWW_MARKET_DATA_PROVIDER=public and a real PUBLIC_API_KEY; tests written
+    against the legacy contract (or the key-less short-circuit those runs
+    relied on) then attempt real Public reads mid-suite and the session
+    offline guardian records missed-provider attempts. Tests that need the
+    public-only policy keys — the dedicated policy tests — set them
+    explicitly, and a test-level monkeypatch.setenv still overrides this
+    pin. .env values are for the running service, never the test suite."""
+    monkeypatch.delenv("FLOWW_MARKET_DATA_PROVIDER", raising=False)
+    monkeypatch.delenv("PUBLIC_API_KEY", raising=False)
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -78,10 +94,8 @@ async def _reset_event_loop_and_motor(aclient, monkeypatch):
         pass
 
     # Step 5: Reset live policy to safe defaults
-    try:
+    with contextlib.suppress(Exception):
         await aclient.post("/api/live/policy", json={"paid_tickers": ["SPY"]})
-    except Exception:
-        pass
 
     # Step 6: close any DuckDBEngine instances created during this test.
     # Each live DuckDB connection holds ~ncores spinning scheduler threads;
@@ -100,17 +114,13 @@ async def _reset_event_loop_and_motor(aclient, monkeypatch):
         yield
     finally:
         fresh.close()
-        try:
+        with contextlib.suppress(Exception):
             new_loop.close()
-        except Exception:
-            pass
         # Teardown-side sweep too (engines created inside the test body).
-        try:
-            from services.duckdb_engine import DuckDBEngine
-            for eng in list(getattr(DuckDBEngine, "_live_instances", [])):
+        with contextlib.suppress(Exception):
+            from services.duckdb_engine import DuckDBEngine as _DuckDBEngine
+            for eng in list(getattr(_DuckDBEngine, "_live_instances", [])):
                 closer = getattr(eng, "close", None)
                 if callable(closer):
                     closer()
-            DuckDBEngine._live_instances.clear()
-        except Exception:
-            pass
+            _DuckDBEngine._live_instances.clear()

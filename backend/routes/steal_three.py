@@ -19,9 +19,9 @@ Endpoints:
 Sidecar-only ``/health`` lives in ``steal_three_server.py`` (server.py already
 has its own root-level probes; we don't double them up).
 
-Routes are intentionally synchronous (``def`` not ``async def``) so FastAPI
-runs the yfinance-bound handlers in its threadpool — ``yfinance.Ticker``
-synchronously scrapes HTTP and would otherwise block the event loop.
+Legacy-only routes run synchronous yfinance reads in FastAPI's threadpool.
+The income routes await the Public adapter; their legacy loader is offloaded
+to a thread so it cannot block the event loop.
 
 Audit: ``docs/reports/2026-07-11-steal-list-integration-roadmap.md`` #1, #3, #5
        ``backend/tests/routes/test_steal_three_routes.py`` (smoke)
@@ -29,6 +29,7 @@ Audit: ``docs/reports/2026-07-11-steal-list-integration-roadmap.md`` #1, #3, #5
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import math
 import os
@@ -472,6 +473,80 @@ def _load_chain_window(
 
 
 # ----------------------------------------------------------------------
+# Public-only Wheel chain producer (2026-10-17).
+#
+# Live probe settled that Public.com option-chains populate per-strike
+# openInterest, vendor greeks (gamma/IV/delta), NBBO bid/ask and daily
+# volume on equity chains, so the Wheel screener HAS a Public-only
+# producer. Rows keep the adapter's floww shape; missing cells stay
+# None so INCOME-04 unknown flags ride through the rankers. Read-only
+# market data — no account actions, no orders, no substitute source.
+# ----------------------------------------------------------------------
+def _is_public_provider() -> bool:
+    return os.getenv("FLOWW_MARKET_DATA_PROVIDER") == "public"
+
+
+async def _load_chain_window_public(
+    symbol: str, min_dte: int, max_dte: int, cap: int = 8
+) -> tuple[float, list[dict], list[dict], dict]:
+    """Read the exact Public expiry window, then cap and disclose coverage.
+
+    The first N listed expiries are not a superset of a requested DTE window.
+    This path never substitutes a legacy provider or accepts a stale chain.
+    """
+    from services.public_api_adapter import fetch_chain_for_expiries, fetch_option_expiry_listing
+
+    def refuse(message, reason="PUBLIC_CHAIN_UNAVAILABLE"):
+        raise HTTPException(status_code=503, detail={
+            "status": "unavailable", "reason": reason,
+            "message": message + "; no alternate source is substituted",
+        })
+
+    listing = await fetch_option_expiry_listing(symbol.upper())
+    if not listing or listing.get("data_source") != "public_api":
+        refuse("The Public.com expiry listing could not be read for this symbol")
+    listed = listing.get("expiries") or []
+    requested = sorted(set(_select_expiries_in_window(
+        sorted(set(listed)), min_dte, max_dte, cap=len(listed) + 1)))
+    if not requested:
+        refuse("No listed Public.com expiry is inside the requested DTE window",
+               "PUBLIC_WINDOW_UNAVAILABLE")
+    selected = requested[:max(1, min(cap, 8))]
+    data = await fetch_chain_for_expiries(symbol.upper(), selected)
+    if not data:
+        refuse("The Public.com chain could not be read for this symbol")
+    if data.get("stale"):
+        refuse("The Public.com chain is stale", "PUBLIC_CHAIN_STALE")
+    if data.get("data_source") != "public_api":
+        refuse("The chain has no verified Public.com source")
+    spot = data.get("spot")
+    if (isinstance(spot, bool) or not isinstance(spot, (int, float))
+            or not math.isfinite(spot) or spot <= 0):
+        refuse("The Public.com chain returned no usable spot reference")
+    calls: list[dict] = []
+    puts: list[dict] = []
+    invalid = 0
+    for row in data.get("contracts") or []:
+        if (not isinstance(row, dict) or row.get("type") not in ("call", "put")
+                or row.get("expiry") not in selected):
+            invalid += 1
+            continue
+        (calls if row["type"] == "call" else puts).append(row)
+    returned = sorted({row["expiry"] for row in calls + puts})
+    skipped = data.get("skipped") or []
+    coverage = {
+        "requested_expiries": requested, "selected_expiries": selected,
+        "returned_expiries": returned, "skipped_expiries": skipped,
+        "cap_truncated": len(selected) < len(requested),
+        "invalid_contract_count": invalid,
+        "listing_capped": bool(listing.get("listing_capped")),
+    }
+    coverage["status"] = "partial" if (coverage["cap_truncated"] or skipped or invalid
+        or coverage["listing_capped"] or set(returned) != set(selected)) else "complete"
+    return float(spot), calls, puts, coverage
+
+
+# ----------------------------------------------------------------------
 # Shared income-screener runner (steal-list triage 2026-07-15)
 #
 # Extracted from the prior monolithic screener_income body so that
@@ -480,7 +555,7 @@ def _load_chain_window(
 # steal-list routes (max_pain + max_pain_drift, consensus_pricing +
 # consensus_drift) where the route is a thin wrapper.
 # ----------------------------------------------------------------------
-def _run_income_screener(
+async def _run_income_screener(
     symbol: str,
     side: str,
     min_iv: float,
@@ -493,82 +568,114 @@ def _run_income_screener(
     backwards-compat ``/api/wheel_income/{ticker}`` alias. Validates
     DTE bounds + dispatches to the canonical rank_*_to_sell helpers.
 
-    30s TTL cache (2026-09-03): the loader scrapes 1 + up-to-8 Yahoo
-    pages per call and the dashboard mounts this panel on every view —
-    without coalescing, panel polling Yahoo-429s itself. Cache key covers
-    every filter so distinct screens never share rows.
+    Provider doctrine (2026-10-17): public mode serves from the Public-only
+    Wheel producer (vendor greeks/OI/mids); every other mode keeps the
+    legacy yfinance loader, which the _require_legacy_market_data guard
+    still refuses for studies with no Public producer. This study now has
+    one, so the old PUBLIC_ONLY_STUDY_UNAVAILABLE refusal no longer fires
+    here in public mode.
+
+    30s TTL cache (2026-09-03): the loader fetches 1 + up-to-8 upstream
+    chain pages per call and the dashboard mounts this panel on every
+    view — without coalescing, panel polling self-throttles upstream.
+    Cache key covers every filter so distinct screens never share rows.
     """
     if max_dte < min_dte:
         raise HTTPException(
             status_code=400, detail="max_dte must be >= min_dte",
         )
-    _require_legacy_market_data()
     import time as _time
 
-    _key = (symbol.upper(), side, min_iv, min_volume, min_dte, max_dte, top)
-    _now = _time.time()
-    _hit = _income_cache.get(_key)
-    if _hit is not None and _now - _hit[0] < _INCOME_CACHE_TTL:
-        _cached = dict(_hit[1])
-        _cached["cached"] = True
-        return _cached
-    spot, calls, puts = _load_chain_window(symbol, min_dte, max_dte)
+    public_source = _is_public_provider()
+    provider = "public" if public_source else "legacy"
+    _key = (provider, symbol.upper(), side, min_iv, min_volume, min_dte, max_dte, top)
+    flight_key = (asyncio.get_running_loop(), _key)
+    entry = _income_inflight.setdefault(flight_key, [asyncio.Lock(), 0])
+    entry[1] += 1
+    try:
+        async with entry[0]:
+            _now = _time.time()
+            _hit = _income_cache.get(_key)
+            if _hit is not None and _now - _hit[0] < _INCOME_CACHE_TTL:
+                _cached = dict(_hit[1])
+                _cached["cached"] = True
+                return _cached
+            if public_source:
+                window = await _load_chain_window_public(symbol, min_dte, max_dte)
+                spot, calls, puts = window[:3]
+                coverage = window[3] if len(window) > 3 else {"status": "unknown"}
+            else:
+                _require_legacy_market_data()
+                spot, calls, puts = await asyncio.to_thread(
+                    _load_chain_window, symbol, min_dte, max_dte
+                )
 
-    def _keep(c: dict) -> bool:
-        exp = c.get("expiry")
-        if not exp:
-            return True
-        try:
-            dte = (datetime.strptime(exp, "%Y-%m-%d").date() - datetime.now(UTC).date()).days
-        except ValueError:
-            return True
-        return min_dte <= dte <= max_dte
+            def _keep(c: dict) -> bool:
+                exp = c.get("expiry")
+                if not exp:
+                    return True
+                try:
+                    dte = (datetime.strptime(exp, "%Y-%m-%d").date() - datetime.now(UTC).date()).days
+                except ValueError:
+                    return True
+                return min_dte <= dte <= max_dte
 
-    filtered_calls = [c for c in calls if _keep(c)]
-    filtered_puts = [c for c in puts if _keep(c)]
+            filtered_calls = [c for c in calls if _keep(c)]
+            filtered_puts = [c for c in puts if _keep(c)]
 
-    res: dict[str, list[dict]] = {"puts": [], "calls": []}
-    if side in ("both", "put"):
-        res["puts"] = rank_puts_to_sell(
-            filtered_puts, spot,
-            min_iv=min_iv, min_volume=min_volume,
-            min_dte=min_dte, max_dte=max_dte, top=top,
-        )
-    if side in ("both", "call"):
-        res["calls"] = rank_calls_to_sell(
-            filtered_calls, spot,
-            min_iv=min_iv, min_volume=min_volume,
-            min_dte=min_dte, max_dte=max_dte, top=top,
-        )
+            res: dict[str, list[dict]] = {"puts": [], "calls": []}
+            if side in ("both", "put"):
+                res["puts"] = rank_puts_to_sell(
+                    filtered_puts, spot,
+                    min_iv=min_iv, min_volume=min_volume,
+                    min_dte=min_dte, max_dte=max_dte, top=top,
+                )
+            if side in ("both", "call"):
+                res["calls"] = rank_calls_to_sell(
+                    filtered_calls, spot,
+                    min_iv=min_iv, min_volume=min_volume,
+                    min_dte=min_dte, max_dte=max_dte, top=top,
+                )
 
-    result = {
-        "symbol": symbol.upper(),
-        "spot": round(spot, 4),
-        "filters": {
-            "min_iv": min_iv,
-            "min_volume": min_volume,
-            "min_dte": min_dte,
-            "max_dte": max_dte,
-            "top": top,
-        },
-        "puts": res["puts"],
-        "calls": res["calls"],
-        "source": "steal-three-router",
-        "cached": False,
-    }
-    if len(_income_cache) > 256:
-        _income_cache.clear()
-    _income_cache[_key] = (_now, result)
-    return result
+            result = {
+                "symbol": symbol.upper(),
+                "spot": round(spot, 4),
+                "filters": {
+                    "min_iv": min_iv,
+                    "min_volume": min_volume,
+                    "min_dte": min_dte,
+                    "max_dte": max_dte,
+                    "top": top,
+                },
+                "puts": res["puts"],
+                "calls": res["calls"],
+                "source": "steal-three-router",
+                "cached": False,
+            }
+            if public_source:
+                # Honest provenance: vendor greeks, daily (T+1) OI, NBBO mids,
+                # snapshot-only — no history implied.
+                result["provider"] = "public-option-chain"
+                result["oi_basis"] = "daily"
+                result["coverage"] = coverage
+            if len(_income_cache) > 256:
+                _income_cache.clear()
+            _income_cache[_key] = (_time.time(), result)
+            return result
+    finally:
+        entry[1] -= 1
+        if entry[1] == 0:
+            _income_inflight.pop(flight_key, None)
 
 
 # TTL cache for _run_income_screener (key -> (timestamp, result)).
 _income_cache: dict[tuple, tuple[float, dict[str, Any]]] = {}
+_income_inflight: dict[tuple, list] = {}
 _INCOME_CACHE_TTL: float = 30.0
 
 
 @router.get("/api/screener/income")
-def screener_income(
+async def screener_income(
     symbol: str = Query(..., min_length=1, max_length=10),
     side: str = Query("both", pattern="^(both|put|call)$"),
     min_iv: float = Query(0.0, ge=0.0, le=3.0),
@@ -585,7 +692,7 @@ def screener_income(
     helper below, so behavior is identical apart from the ticker
     argument name (``symbol`` vs ``ticker``).
     """
-    return _run_income_screener(
+    return await _run_income_screener(
         symbol=symbol, side=side,
         min_iv=min_iv, min_volume=min_volume,
         min_dte=min_dte, max_dte=max_dte, top=top,
@@ -601,7 +708,7 @@ def screener_income(
 # ``{ticker}``-shaped alias — same semantics, ticker is the symbol.
 # ----------------------------------------------------------------------
 @router.get("/api/wheel_income/{ticker}")
-def wheel_income_alias(
+async def wheel_income_alias(
     ticker: str,
     side: str = Query("both", pattern="^(both|put|call)$"),
     min_iv: float = Query(0.0, ge=0.0, le=3.0),
@@ -610,7 +717,7 @@ def wheel_income_alias(
     max_dte: int = Query(45, ge=1, le=730),
     top: int = Query(25, ge=1, le=100),
 ) -> dict[str, Any]:
-    return _run_income_screener(
+    return await _run_income_screener(
         symbol=ticker, side=side,
         min_iv=min_iv, min_volume=min_volume,
         min_dte=min_dte, max_dte=max_dte, top=top,
