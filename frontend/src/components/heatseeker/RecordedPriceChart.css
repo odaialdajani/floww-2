@@ -218,3 +218,10 @@
  .recorded-chart-readout strong{flex-basis:100%;}
  .recorded-chart-popover-content{grid-template-columns:1fr;}
 }
+/* B16 drawing geometry layer: projected logical anchors, touch-friendly. */
+.price-history-drawings .drawing-layer { display: block; max-width: 100%; margin: 6px 0; border-radius: 4px; touch-action: none; }
+.price-history-drawings .drawing-layer[data-arbitration="drawing-drag"] { outline: 1px solid #e3c16a; outline-offset: -1px; }
+.price-history-drawings .rail-tools { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0; }
+.price-history-drawings .rail-tools button { font: inherit; font-size: 11px; border: 1px solid #435260; border-radius: 4px; background: #16212b; color: #dce8f2; padding: 4px 10px; min-height: 28px; cursor: pointer; }
+.price-history-drawings .rail-tools button[aria-pressed="true"] { border-color: #e3c16a; color: #f2d795; }
+.price-history-drawings .rail-tools button:focus-visible { outline: 2px solid #e3c16a; outline-offset: 2px; }

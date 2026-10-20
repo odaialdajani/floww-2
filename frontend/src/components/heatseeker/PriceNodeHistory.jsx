@@ -4,7 +4,9 @@ import { API } from "../../config/api";
 import RecordedPriceChart from "./RecordedPriceChart";
 import DrawingRail from "./chart/drawings/DrawingRail";
 import { loadDrawings, saveDrawings } from "./chart/drawings/drawingPersistence";
-import { reduceDrawings } from "./chart/drawings/drawingReducer";
+import { reduceDrawings, createDrawing, geometryFor, magnetPoint, nudgeDrawing, canEdit, suppressesPan, unprojectPoint, viewportFor, TOOLS as DRAWING_TOOLS_6 } from "./chart/drawings/drawingReducer";
+import { anchorsFor } from "./chart/drawings/toolRegistry";
+import { shouldHandleShortcut } from "./chart/ChartShortcuts";
 import { chartTime } from "./recordedPriceChartData";
 
 
@@ -65,6 +67,13 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
   // Rail manages list/select/delete/lock/hide only — no canvas editing.
   const [drawings, setDrawings] = useState(() => loadDrawings(ticker));
   const [selectedDrawing, setSelectedDrawing] = useState(null);
+  // B16 creation/drag/keyboard geometry state: a draft collects logical
+  // anchors from pointer events; a drag carries the selected drawing with
+  // pan-arbitration; arrow keys nudge. Anchors stay logical {t,p} —
+  // projection is derived, so they survive zoom/resize.
+  const [draftTool, setDraftTool] = useState(null);
+  const [draftAnchors, setDraftAnchors] = useState([]);
+  const [dragState, setDragState] = useState(null);
   const persistDrawings = next => {
     setDrawings(next);
     try { saveDrawings(ticker, next); } catch { /* quota: in-memory only */ }
@@ -99,6 +108,79 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
     return () => { active = false; controller.abort(); };
   }, [ticker, days, minutes, sessions, scope, forcedScope, usingMapScope, open, reload, contract]);
   const frames = payload?.ticker === ticker.toUpperCase() ? payload.frames || [] : [];
+  // B16 pointer/keyboard geometry: the drawing layer projects LOGICAL anchors
+  // through the real loaded frames' time/price domain. Zoom/resize changes
+  // pixels, never anchor meaning.
+  const drawingViewport = viewportFor(frames, 600, 320);
+  const nudgeStep = drawingViewport
+    ? { dt: (drawingViewport.tMax - drawingViewport.tMin) / 100, dp: (drawingViewport.pMax - drawingViewport.pMin) / 100 }
+    : { dt: 60000, dp: 0.5 };
+  const layerPoint = event => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    // jsdom reports zero rects; fall back to viewBox coords so the geometry
+    // path stays testable. Real browsers always have non-zero rects.
+    const x = rect.width ? event.clientX - rect.left : event.clientX;
+    const y = rect.height ? event.clientY - rect.top : event.clientY;
+    return unprojectPoint({ x, y }, drawingViewport);
+  };
+  const commitDraft = point => {
+    const nextAnchors = [...draftAnchors, point];
+    if (nextAnchors.length >= anchorsFor(draftTool)) {
+      persistDrawings(reduceDrawings(drawings, { type: "add", drawing: createDrawing(draftTool, nextAnchors) }));
+      setDraftTool(null); setDraftAnchors([]);
+    } else setDraftAnchors(nextAnchors);
+  };
+  const onDrawingLayerPointerDown = event => {
+    if (!drawingViewport) return;
+    // While dragging a selected drawing, pointer events never start a pan:
+    // the layer owns the gesture (arbitration contract: suppressesPan).
+    if (dragState) { event.stopPropagation(); return; }
+    const raw = layerPoint(event);
+    if (!raw) return;
+    const point = magnetPoint(raw, frames, 0.25, drawingViewport);
+    if (draftTool) { event.stopPropagation(); commitDraft(point); }
+  };
+  const onDrawingElementPointerDown = (event, drawing) => {
+    if (!drawingViewport || !canEdit(drawing)) { if (drawing) setSelectedDrawing(drawing.id); return; }
+    event.stopPropagation();
+    setSelectedDrawing(drawing.id);
+    const start = layerPoint(event);
+    if (!start) return;
+    setDragState({ id: drawing.id, anchors: drawing.anchors.map(a => ({ ...a })), start, suppressPan: true });
+  };
+  const onDrawingLayerPointerMove = event => {
+    if (!dragState || !drawingViewport) return;
+    event.stopPropagation();
+    const now = layerPoint(event);
+    if (!now) return;
+    const dt = now.t - dragState.start.t, dp = now.p - dragState.start.p;
+    persistDrawings(reduceDrawings(drawings, { type: "update", id: dragState.id,
+      anchors: dragState.anchors.map(a => ({ t: a.t + dt, p: a.p + dp })) }));
+  };
+  const onDrawingLayerPointerUp = event => {
+    if (!dragState) return;
+    event.stopPropagation();
+    setDragState(null);
+  };
+  // Keyboard geometry: Escape cancels an active draft; arrows nudge the
+  // selected (unlocked) drawing by one logical step. Typing fields never
+  // trigger drawing keys.
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = event => {
+      if (!shouldHandleShortcut(event)) return;
+      if (event.key === "Escape" && draftTool) { setDraftTool(null); setDraftAnchors([]); return; }
+      if (!selectedDrawing) return;
+      const drawing = drawings.find(d => d.id === selectedDrawing);
+      if (!canEdit(drawing)) return;
+      const dir = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, 1], ArrowDown: [0, -1] }[event.key];
+      if (!dir) return;
+      event.preventDefault();
+      persistDrawings(reduceDrawings(drawings, { type: "nudge", id: selectedDrawing, dt: dir[0] * nudgeStep.dt, dp: dir[1] * nudgeStep.dp }));
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, drawings, selectedDrawing, draftTool, nudgeStep]);
   const comparisonScope = typeof payload?.query_key === "string" ? payload.query_key : "";
   // B06 workspace quality contract (inert without a listener): the pane
   // reports its own data-quality truth — latest observed reading time,
@@ -232,7 +314,29 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
         hairline row. Rail testids and interactions are unchanged. */}
     {open&&<details className="price-history-drawings" data-testid="drawings-disclosure">
       <summary role="button" aria-label="Drawings">Drawings{drawings.length ? ` · ${drawings.length}` : ""}</summary>
+      {/* B16: real coordinate conversion + pointer/keyboard geometry. The
+          layer renders every visible drawing through the live frames'
+          time/price domain; creation picks a tool then places anchors
+          (OHLC-magnet); a selected drawing drags with pan suppressed;
+          arrows nudge; Escape cancels; Undo pops. */}
+      {drawingViewport&&<svg className="drawing-layer" data-testid="drawing-layer" viewBox="0 0 600 320" width="600" height="320"
+        data-arbitration={dragState ? "drawing-drag" : "idle"} role="img" aria-label="Drawing layer"
+        onPointerDown={onDrawingLayerPointerDown} onPointerMove={onDrawingLayerPointerMove} onPointerUp={onDrawingLayerPointerUp} onPointerLeave={onDrawingLayerPointerUp}>
+        <rect x="0" y="0" width="600" height="320" fill="#0d151d" stroke="#232c36" />
+        {drawings.filter(d=>d.visible!==false).map(d=>{const g=geometryFor(d.tool,d.anchors,drawingViewport);
+          if(!g)return null;
+          const common={"data-testid":"drawing-shape","data-drawing-id":d.id,"data-selected":d.id===selectedDrawing,stroke:d.id===selectedDrawing?"#e3c16a":"#7fa6c0",strokeWidth:d.id===selectedDrawing?2:1.2,fill:"none",onPointerDown:e=>onDrawingElementPointerDown(e,d)};
+          if(g.kind==="rect")return <rect key={d.id} {...common} x={g.x} y={g.y} width={Math.max(g.width,2)} height={Math.max(g.height,2)} />;
+          if(g.kind==="label")return <text key={d.id} {...common} x={g.x} y={g.y} fontSize="12" fill="#dce8f2">{d.text||"text"}</text>;
+          return <polyline key={d.id} {...common} points={g.points.map(pt=>`${pt.x},${pt.y}`).join(" ")} />;})}
+        {draftAnchors.map((a,i)=>{const pt=geometryFor("text",[a],drawingViewport);
+          return pt?<circle key={"draft-"+i} data-testid="draft-anchor" cx={pt.x} cy={pt.y} r="4" fill="#e3c16a" />:null;})}
+      </svg>}
       <DrawingRail drawings={drawings} selectedId={selectedDrawing}
+      tools={DRAWING_TOOLS_6.map(id=>({id,anchors:anchorsFor(id)}))} draftTool={draftTool}
+      onToolPick={id=>{setDraftTool(draftTool===id?null:id);setDraftAnchors([]);}}
+      onUndo={()=>persistDrawings(reduceDrawings(drawings,{type:"undo"}))}
+      onCancelDraft={()=>{setDraftTool(null);setDraftAnchors([]);}}
       onSelect={setSelectedDrawing}
       onDelete={id => { if (selectedDrawing === id) setSelectedDrawing(null); persistDrawings(reduceDrawings(drawings, { type: "delete", id })); }}
       onToggleLock={id => persistDrawings(drawings.map(d => d.id === id ? { ...d, locked: !d.locked } : d))}
