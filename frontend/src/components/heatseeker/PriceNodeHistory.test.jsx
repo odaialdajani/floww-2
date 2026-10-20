@@ -25,7 +25,7 @@ test("chart opens on demand and replay position changes the visible candles", as
   await waitFor(()=>expect(screen.getByTestId("recorded-price-chart")).toHaveAttribute("data-candles","3"));
   fireEvent.click(screen.getByRole("button",{name:"Chart tools"}));fireEvent.change(screen.getByLabelText("Replay position"), { target: { value: "0" } });
   expect(screen.getByTestId("recorded-price-chart")).toHaveAttribute("data-candles", "1");
-  fireEvent.click(screen.getByRole("button", { name: "Show all" }));
+  fireEvent.click(screen.getByRole("button", { name: "Latest candle" }));
   expect(screen.getByTestId("recorded-price-chart")).toHaveAttribute("data-candles", "3");
   expect(screen.getByText(/Gaps mean no recent saved reading/)).toBeInTheDocument();
 });

@@ -22,6 +22,9 @@ test('explicit recorder scope wins over the different request echo without clien
 test('a missing forced scope is explained and is never silently replaced by another view',async()=>{
   render(<PriceNodeHistory ticker="SPY" open forcedScope="request"/>);
   await waitFor(()=>expect(screen.getByTestId('recorded-price-chart')).toHaveAttribute('data-candles','1'));
+  expect(screen.getByRole('button',{name:'Chart data details'})).toHaveTextContent('Saved map scope missing');
+  expect(screen.getByText(/No saved readings match the map scope/)).not.toBeVisible();
+  fireEvent.click(screen.getByRole('button',{name:'Chart data details'}));
   expect(screen.getByText(/No saved readings match the map scope/)).toBeVisible();
   expect(requests().every(([,config])=>config.params.query_key==='request')).toBe(true);
 });

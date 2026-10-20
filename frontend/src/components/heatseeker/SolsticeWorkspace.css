@@ -298,9 +298,41 @@
 .skylit-drawer-title { font-size: 12px; color: #f2d795; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .skylit-drawer-close { margin-left: auto; min-height: 26px; min-width: 26px; padding: 2px 8px; font-size: 12px; border-radius: 4px; }
 .tri-adrawer-note, .triad-band-note button { min-height: 28px; }
-@media (max-width: 640px) {
+@media (max-width:640px) {
   .triad-band-controls select { min-height: 32px; font-size: 12px; }
   .triad-band-note button { min-height: 32px; padding: 5px 12px; }
   .triad-mobile-switch button { min-height: 32px; min-width: 44px; }
   .triad-empty-desk-action { min-height: 38px; }
+}
+/* Visible-desk pass 2026-10-18: narrow workspace economy + triad compact band + inspector hierarchy. */
+@media(max-width:620px){
+ .skylit-selection-strip{font-size:11px;}
+ .skylit-price-study,.skylit-options-study{padding:6px 8px;font-size:12px;}
+ .skylit-price-study .chart-map-level-note,.skylit-options-study .chart-map-level-note{font-size:11px;}
+ .heatmap-landmarks{font-size:12px;padding:7px 10px;}
+ .heatmap-landmarks-heading > span{font-size:11px;}
+ .heatmap-landmarks-levels{gap:6px 10px;}
+ .heatmap-landmarks-levels dd{font-size:14px;}
+ .heatmap-landmarks p{margin:5px 0 0;font-size:11px;}
+ .heatmap-landmarks details p{font-size:11px;padding:3px 0;}
+ .skylit-control-bar .skylit-mode-btn,.skylit-control-bar .skylit-tf-select{font-size:12px;padding:6px 8px;}
+ .skylit-control-bar .skylit-tf-select{max-width:110px;}
+ .skylit-control-bar .skylit-nav-arrow{padding:4px 6px;}
+ .skylit-control-bar .skylit-price-display .skylit-spot-price{font-size:14px;}
+ .skylit-control-bar .skylit-control-sep{height:6px;}
+ .skylit-replay-strip span{font-size:11px;}
+ .skylit-replay-strip select{font-size:12px;}
+ .skylit-control-right .skylit-trade-btn{padding:6px 8px;font-size:12px;}
+ .skylit-drawer{width:min(360px,100%);}
+ .triad-desk-toolbar{font-size:11px;}
+ .triad-band-note{font-size:11px;}
+ .triad-scope-notice p{font-size:11px;}
+ .context-mini{font-size:12px;}
+ .context-mini button{padding:5px 9px;font-size:11px;}
+ .triad-desk-error{font-size:12px;}
+ .triad-layout .lodestar-ask{font-size:11px;}
+ .triad-drawer .review-inspector-tabs{font-size:12px;}
+ .triad-drawer .review-inspector-panel{font-size:12px;}
+ .triad-drawer .review-inspector-panel .skylit-metric-value{font-size:12px;}
+ .triad-drawer .review-inspector-tabs [role="tab"]{min-height:32px;padding:5px 3px;font-size:12px;}
 }

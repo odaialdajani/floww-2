@@ -2,20 +2,30 @@ const METRICS = {gex: 'GEX', vex: 'VEX / Vanna', charm: 'Charm'};
 export const NODE_COLORS = {gex:'#e8bd65',vex:'#72d7df',charm:'#c4a1ef'};
 export const NODE_LABELS = METRICS;
 const positive = value => typeof value === 'number' && Number.isFinite(value) && value > 0;
+// B01 canonical ingress (chartContract mirror): the mounted price-history
+// consumer normalizes through the strict grammar so booleans, blanks and
+// nonfinite payloads can never become chart prices, and explicit numeric
+// strings become numbers (the canonical grammar). Volume keeps the stricter
+// TYPED rule: only real finite numbers >= 0 are readings — a string volume
+// stays unavailable rather than becoming a bar (pinned by the accepted
+// RecordedPriceChart.integrity fixture "keeps '10' unavailable rather than
+// inventing a zero bar"). Legacy frames semantics unchanged.
+import {parsePrice} from './chart/chartContract';
 
 export function checkedCandles(frames = []) {
   const seen = new Set();
-  return (Array.isArray(frames) ? frames : []).filter(frame => {
-    if (!frame || typeof frame.time !== 'string' || !/(?:Z|[+-]\d{2}:\d{2})$/.test(frame.time)) return false;
+  return (Array.isArray(frames) ? frames : []).map(frame => {
+    if (!frame || typeof frame.time !== 'string' || !/(?:Z|[+-]\d{2}:\d{2})$/.test(frame.time)) return null;
     const at = Date.parse(frame.time);
-    if (!Number.isFinite(at) || seen.has(at) || !['open','high','low','close'].every(key=>positive(frame[key])) ||
-        frame.high < Math.max(frame.open,frame.close,frame.low) || frame.low > Math.min(frame.open,frame.close,frame.high)) return false;
-    seen.add(at);return true;
-  }).map(frame => {
-    if (typeof frame.volume === 'number' && Number.isFinite(frame.volume) && frame.volume >= 0) return frame;
-    const {volume, ...withoutVolume} = frame;
-    return withoutVolume;
-  }).slice().sort((a,b)=>Date.parse(a.time)-Date.parse(b.time));
+    if (!Number.isFinite(at) || seen.has(at)) return null;
+    const open = parsePrice(frame.open), high = parsePrice(frame.high), low = parsePrice(frame.low), close = parsePrice(frame.close);
+    if (open === null || high === null || low === null || close === null) return null;
+    if (high < Math.max(open, close, low) || low > Math.min(open, close, high)) return null;
+    seen.add(at);
+    const volume = typeof frame.volume === 'number' && Number.isFinite(frame.volume) && frame.volume >= 0 ? frame.volume : null;
+    if (volume === null) { const withoutVolume = {...frame}; delete withoutVolume.volume; return {...withoutVolume, open, high, low, close}; }
+    return {...frame, open, high, low, close, volume};
+  }).filter(Boolean).slice().sort((a,b)=>Date.parse(a.time)-Date.parse(b.time));
 }
 
 // Match only observed contract closes at the same instant as each candle.

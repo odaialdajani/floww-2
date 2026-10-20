@@ -1,44 +1,63 @@
-.review-inspector { min-width: 0; color: #e2e8f0; font-size: 13px; line-height: 1.55; }
-.review-inspector-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(94px, 1.35fr); gap: 3px; padding: 0 0 12px; border-bottom: 1px solid #29454d; }
-.review-inspector-tabs [role="tab"] { min-height: 36px; padding: 6px 3px; background: #10232b; color: #b9cbd3; border: 1px solid transparent; border-radius: 4px; font-size: 12px; white-space: nowrap; }
-.review-inspector-tabs [aria-selected="true"] { color: #f2d795; background: #302b20; border-color: #9b824b; }
+.review-inspector { min-width: 0; color: #e2e8f0; font-size: 13px; line-height: 1.5; container: review-inspector / inline-size; }
+.review-inspector-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(94px, 1.35fr); gap: 0; padding: 0; border-bottom: 1px solid #29454d; position: sticky; top: 0; z-index: 2; background: #0d222a; }
+.review-inspector-tabs [role="tab"] { min-width: 0; min-height: 38px; padding: 7px 5px; background: transparent; border: 0; border-bottom: 2px solid transparent; border-radius: 0; color: #b9cbd3; font-size: 13px; white-space: normal; }
+.review-inspector-tabs [aria-selected="true"] { color: #f2d795; border-bottom-color: #f2d795; }
 .review-inspector :focus-visible { outline: 2px solid #e5bc62; outline-offset: 2px; }
-.review-inspector-panel { padding: 14px 0; overflow-wrap: anywhere; }
+.review-inspector-panel { min-width: 0; padding: 12px 0; overflow-wrap: anywhere; }
 .review-inspector-panel[hidden] { display: none; }
-.review-inspector-panel .skylit-metric-label { font-size: 11px; text-transform: none; }
-.review-inspector-panel .skylit-metric-value { font-size: 12px; line-height: 1.5; }
-.review-inspector-panel p { margin: 0 0 12px; }
-.review-selection-summary { display: grid; gap: 4px; padding: 0 0 9px; margin-bottom: 8px; border-bottom: 1px solid #29454d; font-size: 12px; overflow-wrap: anywhere; }
-.review-selection-summary strong { color: #f2d795; font-size: 16px; font-variant-numeric: tabular-nums; }
+.review-inspector-panel h3 { font-size: 15px; margin: 0 0 10px; }
+.review-inspector-panel p { margin: 0 0 10px; }
+.review-inspector-panel .skylit-section-title { font-size: 14px; }
+.review-inspector-panel .skylit-inspector-note { font-size: 13px; line-height: 1.5; padding: 5px 0; }
+.review-selection-summary { display: grid; gap: 4px; padding: 0 0 10px; margin-bottom: 6px; border-bottom: 1px solid #29454d; font-size: 13px; overflow-wrap: anywhere; }
+.review-selection-summary strong { color: #f2d795; font-size: 18px; font-variant-numeric: tabular-nums; }
 .review-selection-summary span { color: #b9cbd3; }
-.review-selection-summary details { color: #a8bdc8; font-size: 11px; }
+.review-selection-summary details { color: #b9cbd3; font-size: 12px; }
 .review-selection-summary details p { margin: 6px 0; }
-.review-inspector summary { cursor: pointer; color: #c6d7df; padding: 5px 0; }
-.review-inspector-panel .skylit-metric-row { display: grid; grid-template-columns: 86px minmax(0, 1fr); gap: 10px; align-items: start; padding: 5px 0; }
-.review-inspector-panel .skylit-metric-value { min-width: 0; text-align: left; white-space: normal; overflow-wrap: anywhere; }
-.review-inspector-panel .skylit-compare-table { width: 100%; table-layout: fixed; }
+.review-inspector summary { cursor: pointer; color: #c6d7df; padding: 6px 0; min-height: 32px; box-sizing: border-box; }
+.review-inspector-panel .skylit-metric-row { display: grid; grid-template-columns: minmax(72px, 0.8fr) minmax(0, 2fr); gap: 10px; align-items: start; padding: 5px 0; }
+.review-inspector-panel .skylit-metric-label { color: #b9cbd3; font-size: 13px; text-transform: none; }
+.review-inspector-panel .skylit-metric-value { min-width: 0; font-size: 14px; line-height: 1.5; text-align: left; white-space: normal; overflow-wrap: anywhere; }
+.review-inspector-panel .skylit-compare-table { width: 100%; table-layout: fixed; font-size: 13px; }
+.review-inspector-panel .skylit-compare-table th, .review-inspector-panel .skylit-compare-table td { padding: 7px 5px; white-space: normal; overflow-wrap: anywhere; vertical-align: top; }
+.review-inspector-panel .skylit-compare-basis { display: block; margin-top: 3px; font-size: 12px; color: #b9cbd3; }
+.wall-identity-line { font-size: 12px; line-height: 1.5; color: #b9cbd3; font-variant-numeric: tabular-nums; margin: 4px 0 7px; overflow-wrap: anywhere; }
+.wall-current-heading { font-size: 13px; color: #c6d7df; font-weight: 600; }
+.wall-focused-context { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr)); gap: 10px 16px; min-width: 0; margin: 10px 0 12px; padding: 0; font-variant-numeric: tabular-nums; }
+.wall-focused-heading { grid-column: 1 / -1; font-size: 12px; color: #b9cbd3; }
+.wall-focused-chip { min-width: 0; display: flex; flex-direction: column; align-items: stretch; gap: 4px; padding: 0 0 8px; border-bottom: 1px solid #29454d; }
+.wall-focused-label { font-size: 13px; font-weight: 600; color: #f2d795; overflow-wrap: anywhere; }
+.wall-focused-value { font-size: 15px; color: #e2e8f0; overflow-wrap: anywhere; }
+.wall-focused-meta { font-size: 12px; color: #b9cbd3; overflow-wrap: anywhere; }
+.wall-focused-amounts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; }
+.wall-focused-amounts dt { font-size: 12px; color: #b9cbd3; }
+.wall-focused-amounts dd { margin: 1px 0 0; font-size: 16px; color: #e2e8f0; overflow-wrap: anywhere; }
 .wall-exposure-details { margin: 12px 0; padding-top: 6px; border-top: 1px solid #29454d; }
+.wall-exposure-details > summary { cursor: pointer; font-size: 13px; color: #c6d7df; padding: 7px 0; min-height: 34px; }
+.wall-details-section { margin: 10px 0 4px; padding-top: 10px; border-top: 1px solid #29454d; }
+.wall-details-section:first-of-type { border-top: 0; margin-top: 4px; }
+.wall-details-heading { font-size: 13px; font-weight: 600; color: #f2d795; margin: 0 0 6px; }
 .contract-candidates-scroll { max-width: 100%; overflow-x: auto; margin-bottom: 12px; }
+.contract-scroll-hint { color: #b9cbd3; font-size: 12px; }
 .review-inspector .exact-contract-review { min-width: 0; }
+.review-inspector .exact-contract-review .triad-contract-table { font-size: 13px; white-space: nowrap; }
 .review-inspector .exact-contract-review form { display: grid; gap: 10px; }
+.review-inspector .exact-contract-review fieldset { min-width: 0; display: grid; gap: 10px; border: 1px solid #29454d; padding: 10px; margin: 0; }
+.review-inspector .exact-contract-review legend { font-size: 13px; color: #f2d795; padding: 0 4px; }
 .review-inspector .exact-contract-review form label { display: grid; gap: 4px; }
-.review-inspector .exact-contract-review input,
-.review-inspector .exact-contract-review select { width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; min-height: 34px; padding: 5px 8px; color: #e2e8f0; background: #10232b; border: 1px solid #456272; border-radius: 4px; }
-.review-inspector .exact-contract-review button { min-height: 34px; padding: 5px 8px; }
-.review-inspector-tabs { position: sticky; top: 0; z-index: 2; background: #0d222a; }
-@media (max-width: 700px) { .review-inspector-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-
-.review-inspector-panel h3 { font-size: 14px; margin: 0 0 8px; }
-.review-inspector-context { display: grid; gap: 6px; margin: 0 0 14px; padding-bottom: 12px; border-bottom: 1px solid #29454d; font-variant-numeric: tabular-nums; }
-.review-inspector-context dt { color: #a4bac7; }
-.review-inspector-context dd { margin: 0 0 6px; }
+.review-inspector .exact-contract-review input, .review-inspector .exact-contract-review select { width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; min-height: 38px; padding: 7px 8px; font: inherit; color: #e2e8f0; background: #10232b; border: 1px solid #456272; border-radius: 4px; }
+.review-inspector .exact-contract-review button { min-height: 38px; padding: 7px 10px; font-size: 13px; }
+.review-inspector .exact-contract-review button[type="submit"] { min-height: 44px; }
+.review-inspector-context, .exact-contract-review dl { display: grid; gap: 5px; margin: 0 0 14px; padding-bottom: 10px; border-bottom: 1px solid #29454d; font-variant-numeric: tabular-nums; }
+.review-inspector-context dt, .exact-contract-review dl dt { color: #b9cbd3; }
+.review-inspector-context dd, .exact-contract-review dl dd { margin: 0 0 6px; }
 .review-inspector-panel .lodestar-ask { font-size: 13px; }
-.review-inspector-panel .lodestar-ask-btn { min-height: 34px; }
-.review-inspector-panel .lodestar-ask-menu { right: auto; left: 0; }
+.review-inspector-panel .lodestar-ask-btn { min-height: 38px; }
+.review-inspector-panel .lodestar-ask-menu { right: auto; left: 0; max-width: 100%; }
+@container review-inspector (max-width: 310px) { .review-inspector-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .skylit-full-dashboard[data-expanded="true"] .skylit-main-area > .skylit-drawer { position: fixed; top: 70px; right: 12px; bottom: 12px; left: auto; width: min(380px, calc(100vw - 24px)); z-index: 10100; box-shadow: -8px 0 24px #0009; }
 .skylit-full-dashboard[data-expanded="true"]:has(.skylit-drawer) .skylit-expanded-sidebar { display: none; }
-/* Selected review replaces, rather than covers, the metrics rail on desktop.
-   The original drawer/close/selection ownership remains intact below it. */
+/* Keep existing drawer/close/focus ownership; dock selection beside the map. */
 @media (min-width: 1280px) {
   .skylit-full-dashboard .skylit-main-area[data-inspector-open="true"] > .skylit-sidebar-area { display: none; }
   .skylit-full-dashboard .skylit-main-area > .skylit-drawer { position: relative; inset: auto; width: 340px; flex: 0 0 340px; box-shadow: none; }
@@ -46,44 +65,3 @@
   .trinity-layout .triad-review-analysis { min-width: 0; }
   .trinity-layout .triad-review-workspace > .triad-drawer { position: sticky; top: 0; bottom: auto; width: auto; max-height: 80dvh; box-shadow: none; border: 1px solid #29454d; border-radius: 6px; }
 }
-
-/* Wall focused context — compact always-visible same-wall summary
-   (2026-10-17). Restrained dark chips on the inspector's existing
-   palette; chips wrap so narrow viewports never clip or overflow. */
-.wall-focused-context { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 6px 0 8px; padding: 7px 9px; background: #10232b; border: 1px solid #29454d; border-radius: 5px; font-variant-numeric: tabular-nums; min-width: 0; max-width: 100%; }
-.wall-focused-chip { display: flex; flex-wrap: wrap; align-items: baseline; gap: 3px 6px; min-width: 0; max-width: 100%; }
-.wall-focused-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: #f2d795; white-space: nowrap; }
-.wall-focused-value { font-size: 12px; color: #e2e8f0; min-width: 0; overflow-wrap: anywhere; }
-.wall-focused-meta { font-size: 10px; color: #8ba3b0; min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
-@media (max-width: 420px) { .wall-focused-context { gap: 6px 8px; } .wall-focused-chip { flex-basis: 100%; } }
-
-.wall-focused-heading { flex-basis: 100%; font-size: 11px; color: #b9cbd3; }
-/* Exposure details and coverage — named sections (2026-10-18): repeated
-   supporting facts and interaction history stay one disclosure-open away,
-   visually grouped instead of one unstructured list. */
-.wall-exposure-details > summary { cursor: pointer; font-size: 11px; color: #b9cbd3; padding: 4px 0; }
-.wall-details-section { margin: 8px 0 4px; padding-top: 8px; border-top: 1px solid #233a44; }
-.wall-details-section:first-of-type { border-top: 0; margin-top: 4px; }
-.wall-details-heading { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: #f2d795; margin: 0 0 4px; }
-.wall-identity-line { font-size: 11px; color: #b9cbd3; font-variant-numeric: tabular-nums; margin: 2px 0 6px; overflow-wrap: anywhere; }
-
-/* ══ 2026-10-18 visible refresh: restrained inspector chrome ══
-   Underline-style tabs, tighter panels and metric rows, the four-chip
-   same-wall summary as a flat inline strip (no card boxes), compact
-   readiness/notes. No truth, control or testid was removed. */
-.review-inspector-tabs { gap: 0; padding: 0 0 7px; border-bottom: 1px solid #29454d; }
-.review-inspector-tabs [role="tab"] { min-height: 28px; padding: 3px 10px; background: transparent; border: 0; border-bottom: 2px solid transparent; border-radius: 4px 4px 0 0; color: #7d97a5; font-size: 11.5px; }
-.review-inspector-tabs [aria-selected="true"] { color: #f2d795; background: transparent; border-bottom-color: #f2d795; }
-.review-inspector-panel { padding: 9px 0; }
-.review-inspector-panel .skylit-metric-row { grid-template-columns: 74px minmax(0, 1fr); gap: 8px; padding: 3px 0; }
-.review-selection-summary { padding: 0 0 6px; margin-bottom: 6px; }
-.review-selection-summary strong { font-size: 13px; }
-.skylit-section-title { font-size: 11.5px; }
-.skylit-inspector-note { font-size: 11px; padding: 2px 0; line-height: 1.5; }
-.wall-focused-context { display: flex; flex-wrap: wrap; gap: 3px 16px; margin: 4px 0 6px; padding: 4px 7px; background: transparent; border: 0; border-left: 2px solid #2b4652; border-radius: 0; }
-.wall-focused-heading { display: none; }
-.wall-focused-chip { display: inline-flex; align-items: baseline; gap: 4px; }
-.wall-focused-label { font-size: 9.5px; }
-.wall-focused-value { font-size: 11.5px; color: #dce8f2; }
-.wall-focused-meta { font-size: 9px; color: #6f8896; }
-.wall-identity-line { margin: 1px 0 4px; }

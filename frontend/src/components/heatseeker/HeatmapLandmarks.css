@@ -8,6 +8,27 @@
 .heatmap-landmarks p { margin: 7px 0 0; color: #b2c3cc; }
 .heatmap-landmarks details { margin-top: 5px; }
 .heatmap-landmarks summary { cursor: pointer; color: #bfd1da; }
+
+/* 2026-10-19 phone-desk fix: one disclosure owns the zones list. */
+.heatmap-landmarks-zones { margin-top: 4px; }
+.heatmap-landmarks-zones > summary { display: inline-flex; align-items: center; min-height: 26px; padding: 3px 9px; border: 1px solid #37575f; border-radius: 4px; background: #10262e; color: #c8dce0; font-size: 11px; white-space: nowrap; }
+.heatmap-landmarks-zones > summary::-webkit-details-marker { display: none; }
+.heatmap-landmarks-zones[open] > summary { border-color: #e5bc62; }
+.heatmap-landmarks-zones > summary::before { content: "▸ "; color: #e5bc62; }
+.heatmap-landmarks-zones[open] > summary::before { content: "▾ "; }
+.heatmap-landmarks-zones :focus-visible { outline: 2px solid #e5bc62; outline-offset: 2px; }
+
+/* Visible-desk pass 2026-10-18: leaderboard compactness at narrow width. */
+@media(max-width:620px){
+ .heatmap-landmarks{padding:7px 10px;font-size:12px;}
+ .heatmap-landmarks-heading > span{font-size:11px;}
+ .heatmap-landmarks-levels{gap:6px 10px;font-size:12px;}
+ .heatmap-landmarks-levels dd{font-size:14px;}
+ .heatmap-landmarks p{margin:5px 0 0;font-size:11px;}
+ .heatmap-landmarks details p{font-size:11px;padding:3px 0;}
+ .chart-map-level-note{margin:8px 0 4px;font-size:11px;}
+}
+
 .heatmap-landmarks :focus-visible { outline: 2px solid #e5bc62; outline-offset: 2px; }
 .trin-strike-cell .heatmap-row-landmark { display: block; white-space: nowrap; color: #edcf8b; font-size: 10px; line-height: 12px; padding: 1px 4px; }
 .trin-strike-cell:has(.heatmap-row-landmark) { min-width: 86px; }

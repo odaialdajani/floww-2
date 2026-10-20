@@ -119,3 +119,54 @@ test("O2: basis menu hides on single-basis families (VEX/Charm)", () => {
   render(<SkylitControlBar ticker="SPY" viewMode="charm" metric="raw" />);
   expect(screen.queryByTestId("skylit-basis-select")).not.toBeInTheDocument();
 });
+
+test("2026-10-19: missing, nonfinite and zero percentage readings stay distinct", () => {
+  // Missing percentage: the change renders, the percentage slot is an em-dash — never a fabricated 0.00%.
+  const missing = render(<SkylitControlBar ticker="SPY" spot={650} change={1.25} changePct={null} />);
+  expect(screen.getByText(/\(—\)/)).toBeInTheDocument();
+  missing.unmount();
+  // A nonfinite percentage is unknown too — NaN must never reach the pixels.
+  const nonfinite = render(<SkylitControlBar ticker="SPY" spot={650} change={1.25} changePct={NaN} />);
+  expect(screen.getByText(/\(—\)/)).toBeInTheDocument();
+  expect(screen.queryByText(/NaN/)).not.toBeInTheDocument();
+  nonfinite.unmount();
+  // A real zero reading renders as an honest 0.00%, distinct from missing.
+  const zero = render(<SkylitControlBar ticker="SPY" spot={650} change={0} changePct={0} />);
+  expect(screen.getByText(/0\.00%/)).toBeInTheDocument();
+  zero.unmount();
+  // Nonfinite change/spot never render NaN; the spot falls back to —.
+  const invalid = render(<SkylitControlBar ticker="SPY" spot={NaN} change={NaN} />);
+  expect(screen.getByText(/^\$—$/)).toBeInTheDocument();
+  expect(screen.queryByText(/NaN/)).not.toBeInTheDocument();
+});
+
+test("2026-10-19: source clock is primary when parseable; local clock is labelled, including invalid as-of fallback", () => {
+  const sourced = render(<SkylitControlBar ticker="SPY" lastUpdate="2026-10-19T14:03:05Z" />);
+  expect(screen.getByTitle("Source clock")).toBeInTheDocument();
+  expect(screen.queryByTitle("Local ticking clock")).not.toBeInTheDocument();
+  sourced.unmount();
+  const localOnly = render(<SkylitControlBar ticker="SPY" />);
+  expect(screen.getByTitle("Local ticking clock")).toBeInTheDocument();
+  localOnly.unmount();
+  // An unparseable as-of value is an unknown clock: labelled local fallback, never "Invalid Date" pixels.
+  const invalid = render(<SkylitControlBar ticker="SPY" lastUpdate="not-a-timestamp" />);
+  expect(screen.getByTitle("Local ticking clock")).toBeInTheDocument();
+  expect(screen.queryByText(/Invalid Date/)).not.toBeInTheDocument();
+});
+
+test("2026-10-19: share failures are visible, never a silent false Copied", async () => {
+  // Clipboard API absent entirely.
+  Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true });
+  const noApi = render(<SkylitControlBar ticker="SPY" />);
+  await act(async () => { fireEvent.click(screen.getByTestId("skylit-share-btn")); });
+  expect(screen.getByTestId("skylit-copy-status")).toHaveTextContent("Clipboard unavailable");
+  expect(screen.getByTestId("skylit-share-btn")).toHaveAttribute("title", "Copy page link");
+  noApi.unmount();
+  // Clipboard present but the write is rejected.
+  const reject = jest.fn(async () => { throw new Error("denied"); });
+  Object.defineProperty(navigator, "clipboard", { value: { writeText: reject }, configurable: true });
+  const denied = render(<SkylitControlBar ticker="SPY" />);
+  await act(async () => { fireEvent.click(screen.getByTestId("skylit-share-btn")); });
+  expect(screen.getByTestId("skylit-copy-status")).toHaveTextContent("Copy denied");
+  expect(screen.getByTestId("skylit-share-btn")).toHaveAttribute("title", "Copy page link");
+});

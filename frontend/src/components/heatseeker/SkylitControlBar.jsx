@@ -54,6 +54,9 @@ function SkylitControlBar({
   // Info popover (2026-09-03): the ⓘ button now explains the grid
   // instead of sitting decorative.
   const [showInfo, setShowInfo] = useState(false);
+  // Copy failure feedback (2026-10-19): clipboard unavailable or rejected
+  // must show a visible failure, never a silent false "Copied".
+  const [copyError, setCopyError] = useState("");
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
@@ -85,19 +88,32 @@ function SkylitControlBar({
     if (next) onTickerChange(next);
   }, [onTickerChange, tickerList, ticker]);
 
-  const handleShare = useCallback(async () => {    const url = typeof window !== "undefined" ? window.location.href : "";
+  const handleShare = useCallback(async () => {
+    const url = typeof window !== "undefined" ? window.location.href : "";
     try {
       if (navigator.clipboard && navigator.clipboard.writeText) {
         await navigator.clipboard.writeText(url);
+        setCopied(true);
+        setCopyError("");
+        setTimeout(() => setCopied(false), 1500);
+      } else {
+        setCopyError("Clipboard unavailable");
+        setCopied(false);
       }
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
     } catch (_) {
+      setCopyError("Copy denied");
       setCopied(false);
     }
   }, []);
 
-  const timeStr = now.toLocaleTimeString("en-US", {
+  // Source-clock identity (2026-10-19): the reading's as-of time takes the
+  // primary clock when the caller supplies a parseable one; the local ticking
+  // clock is a fallback labeled "local" so consumers never mistake pixels
+  // for the feed. An unparseable as-of value is unknown, never "Invalid Date".
+  const parsedSource = lastUpdate ? new Date(lastUpdate) : null;
+  const fromSource = Boolean(parsedSource && Number.isFinite(parsedSource.valueOf()));
+  const displayTime = fromSource ? parsedSource : now;
+  const timeStr = displayTime.toLocaleTimeString("en-US", {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
@@ -220,10 +236,10 @@ function SkylitControlBar({
         </div>
 
         <div className="skylit-price-display">
-          <span className="skylit-spot-price">${spot != null ? Number(spot).toFixed(2) : "—"}</span>
-          {change != null && (
+          <span className="skylit-spot-price">${spot != null && Number.isFinite(Number(spot)) ? Number(spot).toFixed(2) : "—"}</span>
+          {change != null && Number.isFinite(change) && (
             <span className="skylit-price-change" style={{ color: changeColor }}>
-              {changeSign}{change.toFixed(2)} ({changeSign}{(changePct || 0).toFixed(2)}%)
+              {changeSign}{change.toFixed(2)} ({changePct == null || !Number.isFinite(changePct) ? "\u2014" : changeSign + changePct.toFixed(2) + "%"})
             </span>
           )}
         </div>
@@ -278,7 +294,13 @@ function SkylitControlBar({
 
       {/* Right: Actions */}
       <div className="skylit-control-right">
-        <span className="skylit-live-time">{timeStr}</span>
+        <span
+          className="skylit-live-time"
+          title={fromSource ? "Source clock" : "Local ticking clock"}
+        >
+          {timeStr}
+          {!fromSource ? <span className="skylit-live-time-tag">local</span> : null}
+        </span>
         <button className="skylit-action-btn" title="Refresh" onClick={onRefresh}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <polyline points="23 4 23 10 17 10" />
@@ -287,7 +309,8 @@ function SkylitControlBar({
         </button>
         <button
           className={`skylit-action-btn${playing ? " active" : ""}`}
-          title={playing ? "Playback on — auto-refreshing" : "Playback"}
+          title={playing ? `Auto-refresh every ${playbackIntervalMs / 1000}s` : "Auto-refresh"}
+          aria-label={playing ? `Auto-refresh on — every ${playbackIntervalMs / 1000}s` : "Auto-refresh"}
           onClick={() => setPlaying(!playing)}
           data-testid="skylit-playback-btn"
         >
@@ -315,7 +338,7 @@ function SkylitControlBar({
         </button>}
         <button
           className="skylit-action-btn"
-          title={copied ? "Copied!" : "Share"}
+          title={copied ? "Copied!" : "Copy page link"}
           onClick={handleShare}
           data-testid="skylit-share-btn"
         >
@@ -328,6 +351,9 @@ function SkylitControlBar({
             </svg>
           )}
         </button>
+        {copyError ? (
+          <span className="skylit-copy-status" data-testid="skylit-copy-status" role="status">{copyError}</span>
+        ) : null}
       </div>
     </div>
   );

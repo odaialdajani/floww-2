@@ -22,7 +22,16 @@ function InspectorSections({wall, contract, flow, publicAgent, context = null, i
     setActive(SECTIONS[next][0]);
     tabs.current[next]?.focus();
   };
-  return <div className="review-inspector">
+  const closeDisclosure = event => {
+    if (event.key !== "Escape" || event.defaultPrevented) return;
+    const disclosure = event.target.closest?.("details[open]");
+    if (!disclosure || !event.currentTarget.contains(disclosure)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    disclosure.open = false;
+    disclosure.querySelector(":scope > summary")?.focus();
+  };
+  return <div className="review-inspector" onKeyDown={closeDisclosure}>
     {context && <div className="review-selection-summary" role="group" aria-label="Selected reading">{context}</div>}
     <div className="review-inspector-tabs" role="tablist" aria-label="Inspector sections">
       {SECTIONS.map(([key, label], index) => <button key={key} ref={el => { tabs.current[index] = el; }}
