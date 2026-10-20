@@ -5,6 +5,8 @@ import {volumeProfile} from './chart/indicators/profile';
 import './RecordedPriceChart.css';
 const price=value=>Number.isFinite(value)?value.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'Unavailable';
 const bound=(value,low,high)=>Math.max(low,Math.min(high,value));
+const axisTime=value=>new Date(value).toLocaleString('en-US',{timeZone:'America/New_York',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false});
+const closeDetails=element=>{const details=element.closest('details');if(details){details.open=false;details.querySelector('summary')?.focus();}};
 
 export default function RecordedPriceChart({ticker,frames,revision='',onInteract,metricCoverage={},toolbarControls=null,toolbarActions=null,historyPeriodControls=null,historyControls=null,replayControls=null,dataDetails=null,readingStatus="Data details",emptyContent=null,showAtlas=true,exposureLine=null,darkLevels=null,flowBars=null,alertLines=null,cvdLine=null,contractBars=null,contractSymbol=null,contractStatus=null}) {
  const data=useMemo(()=>checkedCandles(frames),[frames]);
@@ -124,7 +126,7 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
   };
   const shift=amount=>{notify();setHover(null);setView(clampWindow({...windowView,start:windowView.start+amount},data.length));};
  const keyboard=event=>{const actions={ArrowLeft:()=>shift(-1),ArrowRight:()=>shift(1),PageUp:()=>shift(-Math.max(1,Math.floor(windowView.count/2))),PageDown:()=>shift(Math.max(1,Math.floor(windowView.count/2))),Home:()=>shift(-data.length),End:()=>shift(data.length),'+':()=>zoom('time',0.75),'-':()=>zoom('time',1.35)};if(actions[event.key]){event.preventDefault();event.stopPropagation();actions[event.key]();}};
- return <div className="recorded-price-chart" data-testid="recorded-price-chart" data-candles={data.length} data-visible-candles={visible.length} data-window-start={windowView.start} data-price-low={range.low} data-price-high={range.high}>
+ return <div className="recorded-price-chart" data-testid="recorded-price-chart" data-candles={data.length} data-visible-candles={visible.length} data-window-start={windowView.start} data-price-low={range.low} data-price-high={range.high} onKeyDown={event=>{if(event.key==='Escape'&&event.target.closest('details[open]')){event.preventDefault();event.stopPropagation();closeDetails(event.target);}}}>
   {/* 2026-10-18 visible refresh: ONE compact primary toolbar — symbol,
       interval + history summary, live price/time readout, scale, Tools and
       actions all in a single banded row. The readout keeps its testid,
@@ -132,7 +134,7 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
       separate stacked row. */}
   <div className="recorded-chart-tools" data-testid="chart-control-row">
    {toolbarControls}
-   <div className="recorded-chart-readout" aria-live="off" data-testid="chart-reading-row"><strong>{selected?chartTime(selected.time,true):'Waiting for a candle'} <span>New York</span></strong>{selected&&<span>Open <b>{price(selected.open)}</b> High <b>{price(selected.high)}</b> Low <b>{price(selected.low)}</b> Close <b>{price(selected.close)}</b></span>}<details className="recorded-chart-popover recorded-chart-data"><summary role="button" aria-label="Chart data details">{readingStatus}</summary><div className="recorded-chart-popover-content">{dataDetails||<p>Prices and lines use their own stored times. Missing readings remain unavailable.</p>}</div></details></div>
+   <div className="recorded-chart-readout" aria-live="off" data-testid="chart-reading-row"><strong>{selected?chartTime(selected.time,true):'Waiting for a candle'} <span>New York</span></strong>{selected&&<span>Open <b>{price(selected.open)}</b> High <b>{price(selected.high)}</b> Low <b>{price(selected.low)}</b> Close <b>{price(selected.close)}</b></span>}<details className="recorded-chart-popover recorded-chart-data"><summary role="button" aria-label="Chart data details">{readingStatus}</summary><div className="recorded-chart-popover-content">{dataDetails||<p>Prices and lines use their own stored times. Missing readings remain unavailable.</p>}<button type="button" onClick={event=>closeDetails(event.currentTarget)}>Close data details</button></div></details></div>
    <div className="recorded-chart-scale"><button type="button" aria-label="Zoom in time" disabled={!data.length} onClick={()=>zoom('time',0.75)}>+</button><button type="button" aria-label="Zoom out time" disabled={!data.length} onClick={()=>zoom('time',1.35)}>-</button><button type="button" aria-label="Auto scale" aria-pressed={!manualPrice} disabled={!data.length} title={manualPrice?"Price scale locked; click to fit visible prices":"Fits visible prices; click to lock"} onClick={()=>setManualPrice(held=>held?null:range)}>Auto scale {manualPrice?'locked':'on'}</button></div>
    <details className="recorded-chart-popover"><summary role="button" aria-label="Chart tools">Tools</summary><div className="recorded-chart-popover-content">
     {historyPeriodControls&&<div className="recorded-chart-period" data-testid="history-period-controls">{historyPeriodControls}</div>}
@@ -146,7 +148,7 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
       <label><input type="checkbox" aria-label="Toggle CVD" checked={cvdOn} disabled={!Array.isArray(cvdLine)||!cvdLine.some(p=>typeof p?.cvd==='number'&&Number.isFinite(p.cvd))} onChange={e=>setCvdOn(e.target.checked)}/>CVD{(!Array.isArray(cvdLine)||!cvdLine.some(p=>typeof p?.cvd==='number'&&Number.isFinite(p.cvd)))&&<span> unavailable</span>}</label>
     </fieldset>
      <button type="button" disabled={!data.length||exporting} onClick={downloadChart}>{exporting?'Saving image...':'Download chart image'}</button>{exportError&&<p role="alert">{exportError}</p>}
-    {historyControls}<small id={'chart-help-'+id}>Drag to scroll history. Pinch time and price. Drag an axis to stretch it. Ctrl + scroll zooms time; Shift + scroll zooms price. Normal scrolling moves the page.</small>
+    {historyControls}<button type="button" onClick={event=>closeDetails(event.currentTarget)}>Close chart tools</button><small id={'chart-help-'+id}>Drag to scroll history. Pinch time and price. Drag an axis to stretch it. Ctrl + scroll zooms time; Shift + scroll zooms price. Normal scrolling moves the page.</small>
    </div></details>
    <div className="recorded-chart-actions">{toolbarActions}</div>
   </div>
@@ -202,7 +204,14 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
       {hover!==null&&selected&&<><line x1={left+(hover+0.5)*spacing} x2={left+(hover+0.5)*spacing} y1={top} y2={bottom} stroke="#a8b3be" strokeDasharray="3 4"/><line x1={left} x2={right} y1={y(selected.close)} y2={y(selected.close)} stroke="#a8b3be" strokeDasharray="3 4"/></>}
     </g>
     <line x1={right} x2={right} y1={top} y2={bottom} stroke="#3d4853"/>
-    {Array.from({length:Math.min(5,visible.length)},(_,i)=>{const index=Math.round(i*Math.max(0,visible.length-1)/Math.max(1,Math.min(5,visible.length)-1)),frame=visible[index];return frame&&<text key={i} x={left+(index+0.5)*spacing} y={bottom+24} textAnchor={i===0?'start':i===4?'end':'middle'} className="recorded-time-label">{chartTime(frame.time)}</text>;})}
+    {(()=>{
+     const budget=Math.min(visible.length,5,Math.max(1,Math.floor(plotWidth/112)));
+     const indices=Array.from({length:budget},(_,i)=>budget===1?Math.floor((visible.length-1)/2):Math.round(i*(visible.length-1)/(budget-1)));
+     return indices.map((index,i)=>{const frame=visible[index],single=indices.length===1;
+      const x=single?(left+right)/2:i===0?left:i===indices.length-1?right:left+(index+0.5)*spacing;
+      return <text key={index} x={x} y={bottom+24} textAnchor={single?'middle':i===0?'start':i===indices.length-1?'end':'middle'} className="recorded-time-label">{axisTime(frame.time)}<title>{chartTime(frame.time,true)} New York</title></text>;
+     });
+    })()}
    </svg>
    </div>:<div className="recorded-chart-empty">{emptyContent||<p>No valid price candles are available.</p>}</div>}
    {!!data.length&&showAtlas&&Array.isArray(flowBars)&&flowBars.length===data.length&&(()=>{
@@ -236,7 +245,7 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
         {lines.map((seg,si)=><polyline data-testid="cvd-line" key={'cvd:'+si} points={seg.map(p=>p.x.toFixed(1)+','+p.y.toFixed(1)).join(' ')} fill="none" stroke="#9d7bea" strokeWidth="1.5"><title>CVD estimate</title></polyline>)}
         {dots.map((p,di)=><circle data-testid="cvd-point" key={'cvddot:'+di} cx={p.x} cy={p.y} r="2" fill="#9d7bea" opacity="0.9"><title>CVD estimate (single known candle)</title></circle>)}
        </svg>
-       <small>CVD estimated via bulk volume classification (Easley, López de Prado &amp; O&apos;Hara 2012); a bar-volume estimate, not classified trade-by-trade CVD. Unknown ≠ zero; gaps are honest. Range {lo.toLocaleString('en-US')}–{hi.toLocaleString('en-US')} shares (own scale).</small>
+       <div className="recorded-cvd-summary"><span data-testid="cvd-status">Estimated CVD · shares · {vals.length}/{visible.length} known</span><details><summary role="button">CVD method</summary><p>CVD estimated via bulk volume classification (Easley, López de Prado &amp; O&apos;Hara 2012); a bar-volume estimate, not classified trade-by-trade CVD. Unknown ≠ zero; gaps are honest. Range {lo.toLocaleString('en-US')}–{hi.toLocaleString('en-US')} shares (own scale).</p></details></div>
      </div>;})()}
     {Array.isArray(alertLines)&&alertLines.some(a=>a?.state==='stale')&&<small role="note">Stale alert refused — no evaluation on stale prices.</small>}
     {!!data.length&&(()=>{ // Contract premium path: selected option's own closes on their own $ scale.

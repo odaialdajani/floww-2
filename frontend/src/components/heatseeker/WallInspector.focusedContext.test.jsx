@@ -12,12 +12,13 @@
  *     dealer reaction.
  */
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import WallInspector from "./WallInspector";
 
 const wall = { wall_id: "w", low: 100, high: 100, members: [100], gross: 1_100_000, net: 900_000 };
 
 const wbOf = (fields) => ({ wall_metrics: { w: fields } });
+const amount = (reading, label) => within(reading).getByText(label).nextElementSibling;
 
 test("measured zero with usable inputs is a real $0 reading in the compact summary", () => {
   render(<WallInspector wall={wall} metrics={wbOf({
@@ -26,11 +27,13 @@ test("measured zero with usable inputs is a real $0 reading in the compact summa
     session_delta_volume_usable: 2, session_delta_volume_missing: 0, session_delta_volume_invalid: 0,
   })} />);
   const delta = screen.getByTestId("wall-focused-delta");
-  expect(delta.textContent).toContain("$0 / $0");
+  expect(amount(delta, "Gross")).toHaveTextContent("$0");
+  expect(amount(delta, "Net")).toHaveTextContent("$0");
   expect(delta.textContent).toContain("usable 3");
-  expect(delta.textContent).toContain("1 δ-missing");
+  expect(delta.textContent).toContain("1 delta missing");
   const vol = screen.getByTestId("wall-focused-voldelta");
-  expect(vol.textContent).toContain("$0 / $0");
+  expect(amount(vol, "Gross")).toHaveTextContent("$0");
+  expect(amount(vol, "Net")).toHaveTextContent("$0");
   expect(vol.textContent).toContain("usable 2");
 });
 
@@ -42,11 +45,13 @@ test("missing delta and missing volume stay missing — never a zero", () => {
   })} />);
   const delta = screen.getByTestId("wall-focused-delta");
   expect(delta.textContent).not.toContain("$0");
-  expect(delta.textContent).toContain("— (2 δ-missing, 1 δ-invalid (unusable reading))");
+  expect(delta).toHaveTextContent("Unavailable");
+  expect(delta).toHaveTextContent("2 delta missing");
+  expect(delta).toHaveTextContent("1 delta invalid");
   expect(delta.textContent).toContain("usable 0");
   const vol = screen.getByTestId("wall-focused-voldelta");
   expect(vol.textContent).not.toContain("$0");
-  expect(vol.textContent).toContain("—");
+  expect(vol).toHaveTextContent("Unavailable");
   expect(vol.textContent).toContain("usable 0");
   expect(vol.textContent).toContain("2 missing");
 });
@@ -70,9 +75,15 @@ test("the summary is wall-local: this wall's breakdown only, never another wall 
     },
   }} />);
   const summary = screen.getByTestId("wall-focused-context");
-  expect(summary.textContent).toContain("$1.1M / $900.0K"); // raw from the wall record
-  expect(summary.textContent).toContain("$1.2M / $1.0M"); // this wall's OI × |Δ|
-  expect(summary.textContent).toContain("$700.0K / $600.0K"); // this wall's vol × |Δ|
+  const raw = screen.getByTestId("wall-focused-raw");
+  expect(amount(raw, "Gross")).toHaveTextContent("$1.1M");
+  expect(amount(raw, "Net")).toHaveTextContent("$900.0K");
+  const delta = screen.getByTestId("wall-focused-delta");
+  expect(amount(delta, "Gross")).toHaveTextContent("$1.2M");
+  expect(amount(delta, "Net")).toHaveTextContent("$1.0M");
+  const vol = screen.getByTestId("wall-focused-voldelta");
+  expect(amount(vol, "Gross")).toHaveTextContent("$700.0K");
+  expect(amount(vol, "Net")).toHaveTextContent("$600.0K");
   expect(summary.textContent).not.toContain("$9.9M");    // other wall's Δ
   expect(summary.textContent).not.toContain("$8.8M");    // other wall's vol × |Δ|
   expect(summary.textContent).not.toContain("$5.5M");    // scope Δ gross
@@ -87,11 +98,15 @@ test("bases are declared per family and the volume family is not trade-signed fl
     bases: { daddex: "OI_DELTA_WEIGHTED", volume: "VOLUME", session_delta_volume: "VOLUME_DELTA_WEIGHTED" },
   })} />);
   const raw = screen.getByTestId("wall-focused-raw");
-  expect(raw.textContent).toContain("USD/1% move · OI · gex.v2");
+  expect(raw).toHaveTextContent("Raw OI");
+  expect(raw).toHaveTextContent("USD/1% move");
   const delta = screen.getByTestId("wall-focused-delta");
-  expect(delta.textContent).toContain("OI_DELTA_WEIGHTED");
+  expect(delta).toHaveTextContent("OI × |Δ|");
+  expect(delta).toHaveTextContent("USD/1% move");
   const vol = screen.getByTestId("wall-focused-voldelta");
-  expect(vol.textContent).toContain("VOLUME_DELTA_WEIGHTED");
+  expect(vol).toHaveTextContent("USD/1% move");
+  expect(screen.getByTestId("wall-provenance")).toHaveTextContent("OI_DELTA_WEIGHTED");
+  expect(screen.getByTestId("wall-provenance")).toHaveTextContent("VOLUME_DELTA_WEIGHTED");
   expect(vol.textContent).toContain("not trade-signed flow");
   const summary = screen.getByTestId("wall-focused-context");
   expect(summary.textContent).not.toMatch(/entry|guaranteed|will hedge/);
@@ -100,8 +115,10 @@ test("bases are declared per family and the volume family is not trade-signed fl
 test("no wall breakdown renders the summary with honest gaps, not fabricated zeros", () => {
   render(<WallInspector wall={wall} metrics={null} />);
   const summary = screen.getByTestId("wall-focused-context");
-  expect(summary.textContent).toContain("$1.1M / $900.0K"); // raw wall record survives
-  expect(screen.getByTestId("wall-focused-delta").textContent).toContain("—");
+  const raw = screen.getByTestId("wall-focused-raw");
+  expect(amount(raw, "Gross")).toHaveTextContent("$1.1M");
+  expect(amount(raw, "Net")).toHaveTextContent("$900.0K");
+  expect(screen.getByTestId("wall-focused-delta")).toHaveTextContent("Unavailable");
   expect(screen.getByTestId("wall-focused-delta").textContent).toContain("no wall breakdown");
   expect(screen.getByTestId("wall-focused-voldelta").textContent).toContain("no wall breakdown");
   expect(summary.textContent).not.toContain("$0");
@@ -131,7 +148,8 @@ test("window absence states its reason — never a zero", () => {
   expect(chip.textContent).not.toContain("$0");
   rerender(<WallInspector wall={wall} metrics={{ window_daddex_reason: "PROVIDER_MISMATCH" }} />);
   chip = screen.getByTestId("wall-focused-window");
-  expect(chip.textContent).toContain("unavailable — PROVIDER_MISMATCH");
+  expect(chip.textContent).toContain("unavailable — provider mismatch");
+  expect(screen.getByTestId("wall-provenance")).toHaveTextContent("PROVIDER_MISMATCH");
   rerender(<WallInspector wall={wall} metrics={{}} />);
   chip = screen.getByTestId("wall-focused-window");
   expect(chip.textContent).toContain("unavailable — no comparable window");

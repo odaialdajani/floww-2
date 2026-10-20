@@ -1,0 +1,22 @@
+.wall-desk { min-width: 0; color: #d5d9dd; }
+.wall-desk .wall-desk-scope { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.wall-desk button { max-width: 100%; border: 1px solid #454545; border-radius: 6px; padding: 6px 9px; background: #202020; color: #d5d9dd; white-space: normal; overflow-wrap: anywhere; }
+.wall-desk button[aria-pressed="true"] { border-color: #b39b50; background: #302c20; color: #ebd68e; }
+.wall-desk button:focus-visible, .wall-desk summary:focus-visible, .wall-desk-table-scroll:focus-visible { outline: 2px solid #c9a84c; outline-offset: 2px; }
+.wall-desk button:disabled { opacity: .45; cursor: default; }
+.wall-desk .wall-desk-empty, .wall-desk .wall-desk-error { background: #171717; border: 1px solid #454545; border-radius: 8px; padding: 16px; margin-block: 12px; }
+.wall-desk .wall-desk-empty h2 { font-size: 17px; margin: 0 0 8px; }
+.wall-desk .wall-desk-empty button + button { margin-left: 8px; }
+.wall-desk .chart-caption, .wall-desk details, .wall-desk aside { overflow-wrap: anywhere; }
+.wall-desk .wall-desk-table-scroll { width: 100%; overflow-x: auto; }
+.wall-desk .contract-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.wall-desk .contract-table th, .wall-desk .contract-table td { padding: 8px; text-align: left; vertical-align: top; border-bottom: 1px solid #323232; }
+.wall-desk .contract-table th { white-space: nowrap; color: #aab6be; }
+.wall-desk .contract-table td:first-child, .wall-desk .contract-table td:nth-child(5) { min-width: 155px; }
+.wall-desk .contract-table .selected { background: #26231a; }
+.wall-desk-clocks { display: block; color: #9aaab5; font-size: 11px; white-space: normal; overflow-wrap: anywhere; margin-block: 4px; }
+.wall-desk .wall-desk-window { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.wall-desk .triad-exposure { display: block; width: 100%; height: auto; }
+.wall-desk details { padding: 8px 0; color: #aab6be; }
+.wall-desk aside p { line-height: 1.5; }
+@media (max-width: 600px) { .wall-desk .panelhead { flex-wrap: wrap; gap: 8px; } .wall-desk .wall-desk-window { font-size: 12px; } }

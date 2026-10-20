@@ -51,6 +51,15 @@ function fmtCell(v) {
   return v == null ? "—" : fmtUsd(v);
 }
 
+function ExposureAmounts({gross, net}) {
+  return <dl className="wall-focused-amounts">
+    <div><dt>Gross</dt><dd>{fmtCell(gross)}</dd></div>
+    <div><dt>Net</dt><dd>{fmtCell(net)}</dd></div>
+  </dl>;
+}
+
+const plainReason = value => String(value).replace(/_/g, " ").toLowerCase();
+
 function wallDeltaWeighted(wb) {
   const usable = usableCount(wb?.daddex_usable);
   const missing = usableCount(wb?.daddex_missing);
@@ -163,34 +172,30 @@ function WallInspector({ wall = null, interaction = null, metrics = null, grids 
   const wb = (metrics?.wall_metrics || {})[wall.wall_id || ""];
   return (
     <div className="skylit-metrics-section" data-testid="wall-inspector">
-      <div className="skylit-section-title">Selected wall · {wall.wall_id || `${wall.low}–${wall.high}`}</div>
-      {/* Identity line (2026-10-18 reconciliation): the wall's zone, basis
-          and OI effective date stay visible while the Now row moves, so
-          identity never depends on the disclosure. Walls span expiries; the
-          selected expiry remains visible in ReviewSelectionContext. Nothing
-          here is invented: an absent wall formula states it is unavailable,
-          and this date is named as the OI effective date, never as expiry. */}
+      <div className="skylit-section-title">Selected wall</div>
+      {/* Zone, basis and OI date stay visible. Exact formula/record codes are
+          retained in provenance; an absent formula is never invented. */}
       <div className="wall-identity-line" data-testid="wall-identity-line">
-        {wall.low}–{wall.high} · basis {wall.exposure_basis || "OI"}
-        {" · "}Formula {wall.formula_version || "unavailable"}
+        {wall.low === wall.high ? wall.low : `${wall.low}–${wall.high}`} · basis {wall.exposure_basis || "OI"}
         {" · "}OI date {(Array.isArray(wall.oi_effective_dates) && wall.oi_effective_dates.length) ? wall.oi_effective_dates.join(", ") : "unavailable"}
-        {" · "}values are gross / net
       </div>
-      <FocusSummary wall={wall} wb={wb} wallWin={wallWin} metrics={metrics} />
+      <div className="wall-current-reading"><div className="wall-current-heading">Now</div>
+        <FocusSummary wall={wall} wb={wb} wallWin={wallWin} metrics={metrics} />
+      </div>
       {/* Always visible: readiness, confirmation, invalidation and explicit
           data quality. Repeated supporting facts and interaction history live
           in the Exposure details disclosure below — accessible, never dropped. */}
       <Readiness interaction={interaction} quality={quality} scenario={scenario} />
       <Row k="Confirm" v={scenario?.confirmation || "Confirmation not supplied — observe, not an entry signal"} />
       <Row k="Invalidates" v={scenario?.invalidation || "Invalidation not supplied — no trade plan inferred"} />
-      <Row k="Data" v={quality ? `${quality.state || "unknown"} · ${(quality.reasonCodes || []).join(", ") || "ok"}` : "unknown"} />
+      <Row k="Data" v={quality ? `${quality.state || "unknown"}${quality.reasonCodes?.length ? ` · ${quality.reasonCodes.map(plainReason).join(", ")}` : ""}` : "unknown"} />
       <details className="wall-exposure-details" data-testid="wall-exposure-details">
       <summary>Exposure details and coverage</summary>
       <div className="wall-details-section" data-testid="wall-details-facts">
         <div className="wall-details-heading">Wall facts</div>
-        <Row k="Now" v={`${wall.low}–${wall.high} · gross ${fmtUsd(wall.gross)} · net ${fmtUsd(wall.net)} (USD/1% move, ${wall.exposure_basis || "OI"})`} />
         <Row k="Call / Put" v={`${fmtUsd(wall.call)} / ${fmtUsd(wall.put)}`} tip="Call-plus vs put-minus components; high gross + near-zero net is two-sided concentration" />
-        <Row k="Distance" v={wall.distance != null ? `${Number(wall.distance).toFixed(2)} (${(Number(wall.distance_pct) * 100).toFixed(2)}%)` : "—"} />
+        <Row k="Distance" v={typeof wall.distance === "number" && Number.isFinite(wall.distance)
+          ? `${wall.distance.toFixed(2)} (${typeof wall.distance_pct === "number" && Number.isFinite(wall.distance_pct) ? `${(wall.distance_pct * 100).toFixed(2)}%` : "percentage unavailable"})` : "—"} />
       </div>
       <div className="wall-details-section" data-testid="wall-details-interaction">
         <div className="wall-details-heading">Interaction history</div>
@@ -201,6 +206,14 @@ function WallInspector({ wall = null, interaction = null, metrics = null, grids 
       </div>
       <div className="wall-details-section" data-testid="wall-details-coverage">
         <div className="wall-details-heading">Coverage and provenance</div>
+        <div data-testid="wall-provenance">
+          <Row k="Wall identity" v={wall.wall_id || "unavailable"} />
+          <Row k="Formula" v={wall.formula_version || "unavailable"} />
+          <Row k="Quality codes" v={quality?.reasonCodes?.join(", ") || "not supplied"} />
+          <Row k="Weighted basis" v={wb ? wb.bases?.daddex || "OI_DELTA_WEIGHTED" : "unavailable"} />
+          <Row k="Volume basis" v={wb ? wb.bases?.session_delta_volume || "VOLUME_DELTA_WEIGHTED" : "unavailable"} />
+          <Row k="Window reason" v={winReason || "not supplied"} />
+        </div>
         {perExpiry.length > 0 && (
           <Row k="Per-expiry" v={perExpiryGroups} tip="Same-snapshot per-expiry contributions for member strikes" />
         )}
@@ -234,53 +247,52 @@ function FocusSummary({ wall, wb, wallWin, metrics }) {
   const d = wallDeltaWeighted(wb);
   const dv = wallSessionDeltaVolume(wb);
   const win = wallRecentWindow(wallWin, metrics);
-  const bases = (wb && typeof wb.bases === "object" && wb.bases) || {};
   const contracts = usableCount(wb?.n_contracts);
   const dCov = [
+    d.missing > 0 || d.invalid > 0 ? "partial" : null,
     `usable ${d.usable ?? "unknown"}`,
-    d.missing > 0 ? `${d.missing} δ-missing` : null,
-    d.invalid > 0 ? `${d.invalid} δ-invalid` : null,
+    d.missing > 0 ? `${d.missing} delta missing` : null,
+    d.invalid > 0 ? `${d.invalid} delta invalid` : null,
+    d.missing == null || d.invalid == null ? "coverage details unavailable" : null,
   ].filter(Boolean).join(" · ");
   const dvCov = [
+    dv.missing > 0 || dv.invalid > 0 ? "partial" : null,
     `usable ${dv.usable ?? "unknown"}`,
     dv.missing > 0 ? `${dv.missing} missing` : null,
     dv.invalid > 0 ? `${dv.invalid} invalid` : null,
+    dv.missing == null || dv.invalid == null ? "coverage details unavailable" : null,
   ].filter(Boolean).join(" · ");
-  // 2026-10-18 author-review residual: the raw chip must never hardcode a
-  // basis the wall record didn't declare. The raw wall input contract defaults
-  // to OI only when the record predates the basis field — the same rule the
-  // header identity line uses. (The legacy "gex.v2" in the meta below stays:
-  // it ships with the accepted 4-chip slice and can only be retired with the
-  // formula contract owner, not by relabeling here.)
+  // Existing legacy basis default is preserved. Formula identity comes only
+  // from the record, in provenance; presentation never supplies one.
   const rawBasis = wall.exposure_basis || "OI";
   return (
     <div data-testid="wall-focused-context" className="wall-focused-context">
-      <div className="wall-focused-heading">Same wall · gross / net · USD/1% move</div>
+      <div className="wall-focused-heading">Same wall · separate exposure readings</div>
       <div className="wall-focused-chip" data-testid="wall-focused-raw">
         <span className="wall-focused-label">Raw {rawBasis}</span>
-        <span className="wall-focused-value">{fmtCell(wall.gross)} / {fmtCell(wall.net)}</span>
+        <ExposureAmounts gross={wall.gross} net={wall.net}/>
         <span className="wall-focused-meta">
-          USD/1% move · {rawBasis} · gex.v2{contracts != null ? ` · ${contracts} contracts` : ""}
+          USD/1% move{contracts != null ? ` · ${contracts} contracts` : ""}
         </span>
       </div>
       <div className="wall-focused-chip" data-testid="wall-focused-delta">
         <span className="wall-focused-label">OI × |Δ|</span>
-        <span className="wall-focused-value">{d.value}</span>
+        {d.usable > 0 ? <ExposureAmounts gross={wb.daddex_gross} net={wb.daddex_net}/> : <span className="wall-focused-value">Unavailable</span>}
         <span className="wall-focused-meta">
-          {wb ? `${bases.daddex || "OI_DELTA_WEIGHTED"} · ${dCov}` : "no wall breakdown"}
+          USD/1% move · {wb ? dCov : "no wall breakdown"}
         </span>
       </div>
       <div className="wall-focused-chip" data-testid="wall-focused-voldelta">
         <span className="wall-focused-label">Vol × |Δ|</span>
-        <span className="wall-focused-value">{dv.value}</span>
+        {dv.usable > 0 ? <ExposureAmounts gross={wb.session_delta_volume_gross} net={wb.session_delta_volume_net}/> : <span className="wall-focused-value">Unavailable</span>}
         <span className="wall-focused-meta">
-          {wb ? `${bases.session_delta_volume || "VOLUME_DELTA_WEIGHTED"} · ${dvCov} · not trade-signed flow` : "no wall breakdown"}
+          USD/1% move · {wb ? `${dvCov} · not trade-signed flow` : "no wall breakdown"}
         </span>
       </div>
       <div className="wall-focused-chip" data-testid="wall-focused-window">
         <span className="wall-focused-label">Window activity</span>
-        <span className="wall-focused-value">{win.value}</span>
-        <span className="wall-focused-meta">window Δ-weighted · member coverage · wall-local</span>
+        <span className="wall-focused-value">{win.present ? win.value : `unavailable — ${win.reason ? plainReason(win.reason) : "no comparable window"}`}</span>
+        <span className="wall-focused-meta">USD/1% move · window Δ-weighted · wall-local</span>
       </div>
     </div>
   );
@@ -454,7 +466,7 @@ function Readiness({ interaction, quality, scenario }) {
   return (
     <div data-testid="wall-readiness" title="Deterministic readiness (not an order)"
       className="skylit-inspector-note">
-      Readiness: <strong>{label}</strong> — {reason}
+      Readiness: <strong>{label}</strong> — {plainReason(reason)}
     </div>
   );
 }

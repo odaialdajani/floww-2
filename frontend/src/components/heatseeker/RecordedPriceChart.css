@@ -1,17 +1,17 @@
 .recorded-price-chart{width:100%;min-width:0;color:#dce5ee;--chart-border:#35404b;container-type:inline-size;}
 .recorded-chart-tools{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:10px 0;}
 .recorded-chart-history,.recorded-chart-layers{display:flex;gap:6px;align-items:center;flex-wrap:wrap;}
-.recorded-price-chart button,.price-history-toolbar button,.price-history-toolbar select{font:inherit;font-size:12px;line-height:1.3;border:1px solid #435260;border-radius:4px;background:#16212b;color:#dce8f2;padding:6px 9px;min-height:30px;}
+.recorded-price-chart button,.price-history-toolbar button,.price-history-toolbar select{font:inherit;font-size:12px;line-height:1.3;border:1px solid #435260;border-radius:4px;background:#16212b;color:#dce8f2;padding:6px 9px;min-height:34px;}
 .recorded-price-chart button:disabled{opacity:.4;cursor:default;}.recorded-price-chart button[aria-pressed=true]{border-color:#9bcac5;}
 .recorded-chart-layers label{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--node-color,#b9c6d2);white-space:nowrap;}
-.recorded-chart-layers label:has(input:disabled){color:#8594a2;}.recorded-chart-layers label span{font-size:10px;}
+.recorded-chart-layers label:has(input:disabled){color:#8594a2;}.recorded-chart-layers label span{font-size:12px;}
 .recorded-chart-layers input{accent-color:var(--node-color,#bdcaD5);min-width:0;min-height:0;}
 .recorded-chart-readout{display:flex;flex-wrap:wrap;gap:8px 20px;font-size:12px;line-height:1.8;padding:8px 0;min-height:35px;font-variant-numeric:tabular-nums;}
-.recorded-chart-readout strong{font-weight:500;color:#ecf1f5;}.recorded-chart-readout strong span{font-weight:400;color:#9dabb8;font-size:11px;}.recorded-chart-readout b{font-weight:500;color:#f0f4f8;margin-right:10px;}
+.recorded-chart-readout strong{font-weight:500;color:#ecf1f5;}.recorded-chart-readout strong span{font-weight:400;color:#9dabb8;font-size:12px;}.recorded-chart-readout b{font-weight:500;color:#f0f4f8;margin-right:10px;}
 .recorded-chart-surface{position:relative;width:100%;height:clamp(320px,56dvh,640px);min-width:0;border:1px solid var(--chart-border);background:#0c1118;touch-action:none;overflow:hidden;cursor:crosshair;border-radius:4px;user-select:none;}
 .recorded-chart-surface svg{position:absolute;inset:0;display:block;width:100%;height:100%;}.recorded-chart-surface:focus-visible{outline:2px solid #e3c16a;outline-offset:2px;}
-.recorded-candle-up{color:#57c5b0;}.recorded-candle-down{color:#e48d94;}.recorded-price-label,.recorded-time-label{font-family:var(--font-mono,Consolas,monospace);font-size:11px;fill:#aebcc9;user-select:none;}
-.recorded-chart-footer{display:flex;justify-content:space-between;flex-wrap:wrap;gap:7px;margin-top:10px;color:#a7b5c2;}.recorded-chart-footer small{font-size:11px;line-height:1.6;}
+.recorded-candle-up{color:#57c5b0;}.recorded-candle-down{color:#e48d94;}.recorded-price-label,.recorded-time-label{font-family:var(--font-mono,Consolas,monospace);font-size:12px;fill:#aebcc9;user-select:none;}
+.recorded-chart-footer{display:flex;justify-content:space-between;flex-wrap:wrap;gap:7px;margin-top:10px;color:#a7b5c2;}.recorded-chart-footer small{font-size:12px;line-height:1.6;}
 .recorded-chart-nodes{display:flex;flex-wrap:wrap;gap:10px 16px;font-size:12px;margin:10px 0 2px;padding-top:10px;border-top:1px solid #293640;}.recorded-chart-nodes b{font-weight:500;}
 .price-node-history{min-width:0;flex:0 0 auto;}.price-node-history[data-open=true]{padding:14px!important;}
 .price-history-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:10px 14px;margin-top:12px;}.price-history-toolbar strong{font-size:15px;font-weight:600;}.price-history-toolbar label{display:flex;align-items:center;gap:6px;font-size:12px;color:#bdcbd7;}.price-history-toolbar select{max-width:100%;}
@@ -21,7 +21,7 @@
 
 /* One control row and one reading row; menus keep optional tools out of the canvas. */
 .recorded-chart-tools{justify-content:flex-start;flex-wrap:wrap;gap:7px;padding:6px 0;min-width:0;min-height:36px;}
-.recorded-chart-tools>select{font:inherit;font-size:12px;line-height:1.3;background:#16212b;color:#e4edf4;border:1px solid #435260;border-radius:4px;padding:5px 7px;min-height:29px;max-width:110px;}
+.recorded-chart-tools>select{font:inherit;font-size:12px;line-height:1.3;background:#16212b;color:#e4edf4;border:1px solid #435260;border-radius:4px;padding:5px 7px;min-height:34px;max-width:110px;}
 .price-chart-symbol{font-size:14px;margin-right:2px;white-space:nowrap;}
 .recorded-chart-scale{display:flex;gap:5px;align-items:center;flex:0 0 auto;}
 /* Review blocker 2026-10-18 (390/346): AskFlow (x327–395 vs pane 30–376) sat
@@ -33,12 +33,12 @@
 .recorded-chart-actions>[data-testid="saved-chart-readings"]{position:relative;flex:0 0 auto;margin:0!important;padding:0!important;border:0;background:transparent;}
 .recorded-chart-actions>[data-testid="saved-chart-readings"]>div{position:absolute;top:100%;right:0;z-index:180;margin-top:8px!important;width:min(550px,100cqw);max-height:65dvh;overflow:auto;padding:14px;border:1px solid #526473;border-radius:5px;background:#101722;box-shadow:0 10px 28px #0008;}
 .recorded-chart-popover{position:relative;flex:0 0 auto;}
-.recorded-chart-popover>summary{display:flex;align-items:center;min-height:29px;padding:5px 9px;list-style:none;cursor:pointer;border:1px solid #435260;border-radius:4px;background:#16212b;color:#dce8f2;font-size:12px;white-space:nowrap;}
+.recorded-chart-popover>summary{display:flex;align-items:center;min-height:34px;padding:5px 9px;list-style:none;cursor:pointer;border:1px solid #435260;border-radius:4px;background:#16212b;color:#dce8f2;font-size:12px;white-space:nowrap;}
 .recorded-chart-popover>summary::-webkit-details-marker{display:none;}
 .recorded-chart-popover-content{position:absolute;top:calc(100% + 6px);left:0;z-index:170;width:min(400px,100cqw);max-height:60dvh;overflow:auto;background:#121b25;border:1px solid #526473;border-radius:5px;padding:12px;box-shadow:0 8px 25px #0008;color:#cddae5;font-size:12px;line-height:1.6;}
-.recorded-chart-popover-content small{display:block;margin-top:10px;color:#aebfcb;font-size:11px;line-height:1.6;}
+.recorded-chart-popover-content small{display:block;margin-top:10px;color:#aebfcb;font-size:12px;line-height:1.6;}
 .recorded-chart-popover-content .recorded-chart-layers{display:grid;gap:8px;border:0;padding:8px 0;margin:8px 0;}
-.recorded-chart-popover-content .recorded-chart-layers legend{font-size:11px;color:#bbcad6;padding:0;}
+.recorded-chart-popover-content .recorded-chart-layers legend{font-size:12px;color:#bbcad6;padding:0;}
 .recorded-chart-popover-content select{max-width:100%;font-size:12px;background:#16212b;border:1px solid #536676;color:#e3edf4;border-radius:4px;padding:6px;}
 /* Tools readability contract 2026-10-18 (compiled-review round): the toggle
    rows (VWAP/Profile/Bands/Envelope/CVD), the history actions and the
@@ -59,7 +59,7 @@
 .recorded-chart-readout{flex-wrap:nowrap;align-items:center;gap:8px 12px;padding:5px 0;font-size:12px;white-space:nowrap;min-height:34px;}
 .recorded-chart-readout strong{font-size:12px;}.recorded-chart-readout>span{min-width:0;overflow:hidden;text-overflow:ellipsis;}
 .price-history-details{margin:0;}.price-history-details p{margin:0 0 9px;}.price-history-view{display:grid;gap:5px;font-size:12px;margin:8px 0;}
-.price-history-replay{margin-top:8px;padding-top:8px;gap:7px;}.price-history-replay span{font-size:11px;}
+.price-history-replay{margin-top:8px;padding-top:8px;gap:7px;}.price-history-replay span{font-size:12px;}
 .recorded-chart-empty{min-height:180px;display:grid;place-items:center;color:#c7d6e2;font-size:13px;}
 .recorded-chart-footer{justify-content:flex-end;margin-top:5px;}
 @media(min-width:900px) and (max-width:1250px){.recorded-chart-actions .lodestar-ask button{padding-inline:6px;}.recorded-chart-tools{gap:5px;}.recorded-chart-tools button{padding-inline:6px;}}
@@ -122,7 +122,7 @@
 .recorded-chart-tools .recorded-chart-popover{order:4;}
 .recorded-chart-tools .recorded-chart-actions{order:5;}
 .recorded-chart-readout{gap:6px 14px;line-height:1.4;}
-.recorded-chart-readout strong{font-size:11.5px;}
+.recorded-chart-readout strong{font-size:12px;}
 .price-chart-symbol{font-size:13px;color:#f2d795;}
 .price-history-summary{background:#0d1822;border:1px solid #2b3a47;border-radius:4px;padding:2px 8px;color:#9fc7d4;}
 .recorded-chart-replay-row{border-bottom:1px solid #1a232c;padding-bottom:5px;margin-bottom:4px;}
@@ -171,21 +171,50 @@
    behind a one-line disclosure; velocity becomes an inline hairline row
    (rows stay inside the velocity-strip testid — no data or test moved). */
 .price-history-drawings { margin: 6px 0 2px; border-top: 1px solid #1a232c; padding-top: 4px; }
-.price-history-drawings > summary { cursor: pointer; list-style: none; font-size: 11px; color: #8fa3b0; padding: 2px 0; white-space: nowrap; }
+.price-history-drawings > summary { cursor: pointer; list-style: none; font-size:12px; color: #8fa3b0; padding: 2px 0; white-space: nowrap; }
 .price-history-drawings > summary::-webkit-details-marker { display: none; }
 .price-history-drawings > summary::before { content: "▸ "; color: #6f8896; }
 .price-history-drawings[open] > summary::before { content: "▾ "; }
 .price-history-drawings > summary:focus-visible { outline: 2px solid #e3c16a; outline-offset: 2px; }
-.price-history-velocity { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; margin: 4px 0 2px; padding: 4px 0 0; border-top: 1px solid #1a232c; font-size: 11px; color: #9db3c4; }
-.price-history-velocity strong { font-size: 11px; color: #c6d7df; }
-.price-history-velocity small { font-size: 10px; color: #6f8896; }
+.price-history-velocity { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; margin: 4px 0 2px; padding: 4px 0 0; border-top: 1px solid #1a232c; font-size:12px; color: #9db3c4; }
+.price-history-velocity strong { font-size:12px; color: #c6d7df; }
+.price-history-velocity small { font-size:12px; color: #6f8896; }
 .price-history-velocity ul { display: flex; flex-wrap: wrap; gap: 2px 14px; margin: 0; padding: 0; list-style: none; min-width: 0; }
-.price-history-velocity li { font-size: 10.5px; white-space: nowrap; color: #b9cbd3; }
+.price-history-velocity li { font-size:12px; white-space: nowrap; color: #b9cbd3; }
 .price-history-velocity-empty { margin: 2px 0; }
-.price-history-velocity-empty small { font-size: 10.5px; color: #6f8896; }
-.recorded-chart-nodes { font-size: 11px; gap: 6px 14px; margin: 4px 0 2px; padding-top: 4px; }
-.recorded-chart-footer small { font-size: 10.5px; color: #6f8896; }
+.price-history-velocity-empty small { font-size:12px; color: #6f8896; }
+.recorded-chart-nodes { font-size:12px; gap: 6px 14px; margin: 4px 0 2px; padding-top: 4px; }
+.recorded-chart-footer small { font-size:12px; color: #6f8896; }
 /* P1-5: merged footer + node-legend line below the chart. */
-.recorded-chart-below { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 18px; margin: 4px 0 2px; padding-top: 4px; border-top: 1px solid #1a232c; font-size: 11px; min-height: 0; }
-.recorded-chart-below small { font-size: 10.5px; color: #6f8896; }
-.recorded-chart-below .recorded-chart-nodes { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; padding: 0; border: 0; font-size: 11px; }
+.recorded-chart-below { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 18px; margin: 4px 0 2px; padding-top: 4px; border-top: 1px solid #1a232c; font-size:12px; min-height: 0; }
+.recorded-chart-below small { font-size:12px; color: #6f8896; }
+.recorded-chart-below .recorded-chart-nodes { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; padding: 0; border: 0; font-size:12px; }
+/* Visible-desk pass: CVD estimate status + narrow-screen toolbar economy. */
+@media(max-width:620px){.recorded-chart-tools{padding-bottom:4px;}.recorded-chart-tools > button{font-size:12px;padding:4px 7px;min-height:34px;}.recorded-chart-readout{font-size:12px;}.recorded-chart-popover-content{font-size:12px;line-height:1.5;}.recorded-cvd-status{font-size:12px;padding:2px 8px;}.recorded-chart-surface{height:360px;}}
+
+/* Readability is preserved by grouping secondary facts, rather than shrinking them. */
+.recorded-chart-tools .recorded-chart-readout{font-size:13px;white-space:normal;flex-wrap:wrap;}
+.recorded-chart-readout strong{font-size:13px;}
+.recorded-chart-readout>span{overflow:visible;text-overflow:clip;white-space:normal;}
+.recorded-chart-popover-content label{min-height:32px;}
+.recorded-chart-data .recorded-chart-popover-content{display:block;}
+.recorded-chart-empty>div{display:grid;gap:10px;justify-items:start;max-width:100%;padding:12px;}
+.recorded-chart-empty p{margin:0;}
+.recorded-cvd-summary{display:flex;align-items:baseline;justify-content:space-between;gap:8px 18px;flex-wrap:wrap;font-size:12px;color:#aebdcb;}
+.recorded-cvd-summary details{min-width:0;max-width:100%;}
+.recorded-cvd-summary summary{cursor:pointer;min-height:32px;display:flex;align-items:center;color:#c7b5e8;}
+.recorded-cvd-summary p{margin:4px 0 8px;max-width:65ch;line-height:1.6;}
+.price-history-context{margin:8px 0 0;color:#aebdcb;font-size:12px;line-height:1.6;}
+.price-history-context>summary{cursor:pointer;min-height:32px;display:flex;align-items:center;}
+.price-history-context p{margin:6px 0;}
+.saved-reading-identity{min-width:0;display:grid;gap:4px;overflow-wrap:anywhere;font-size:12px;}
+.saved-reading-identity>strong{font-size:13px;}
+[data-testid="saved-chart-readings"] summary{cursor:pointer;min-height:32px;display:flex;align-items:center;}
+[data-testid="saved-chart-readings"]>div>button{float:right;}
+.recorded-price-chart :focus-visible,[data-testid="saved-chart-readings"] :focus-visible{outline:2px solid #e3c16a;outline-offset:2px;}
+@container(max-width:500px){
+ .recorded-chart-actions{flex-basis:100%;margin-left:0;}
+ [data-testid="saved-chart-readings"] li{flex-wrap:wrap;}
+ .recorded-chart-readout strong{flex-basis:100%;}
+ .recorded-chart-popover-content{grid-template-columns:1fr;}
+}

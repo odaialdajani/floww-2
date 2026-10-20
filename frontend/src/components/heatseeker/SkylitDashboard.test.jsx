@@ -130,7 +130,10 @@ test('price chart offers separately labelled map levels without filling historic
   await act(async () => render(<SkylitDashboardView ticker="SPY" data={selectionMap()} spot={650}/>));
   const current = screen.getByRole('region', {name:'Map levels separate from historical candles'});
   expect(current).toHaveTextContent('not historical candle-time levels');
-  expect(current.querySelector('[aria-label="Raw OI landmarks"]')).toBeInTheDocument();
+  // 2026-10-19 dedup: the landmarks panel no longer duplicates the chart's
+  // levels inside the price study; the single owning summary lives in the
+  // options-desk heatmap grid (SkylitHeatmapGrid, mocked in this suite).
+  expect(current.querySelector('[aria-label="Raw OI landmarks"]')).toBeNull();
   expect(current.closest('[data-testid="recorded-price-chart"]')).toBeNull();
 });
 
@@ -1572,13 +1575,13 @@ describe("primary stock price study", () => {
  });
  test("opening a saved reading reveals its exact recorded options desk", async () => {
   axios.get.mockImplementation(async url => ({data:String(url).includes("/decisions/page") ? {ticker:"SPY",status:"available",order:"newest",count:1,has_more:false,next_cursor:null,decisions:[{ticker:"SPY",decision_id:"saved-one",snapshot_id:"owning-chart",snapshot_available:true,at_ts:"2026-10-06T18:00:00Z",n_quotes:2,features_status:"available"}]} : String(url).includes("/replay/") ? {snapshot:{ticker:"SPY",snapshot_id:"owning-chart",asof_ts:"2026-10-06T18:00:00Z",spot:649},strikes:[{strike:650}],grids:{grid:selectionMap(-7).grid},metrics_full:{},context:{}} : {ticker:"SPY",frames:[]}}));
-  render(chart());fireEvent.click(screen.getByRole("button", {name:"Saved chart readings"}));
-  await waitFor(()=>expect(screen.getByRole("button", {name:"Open saved chart"})).toBeEnabled());
-  fireEvent.click(screen.getByRole("button", {name:"Open saved chart"}));
+  render(chart());fireEvent.click(screen.getByRole("button", {name:"Saved option readings"}));
+  await waitFor(()=>expect(screen.getByRole("button", {name:"Open saved options snapshot"})).toBeEnabled());
+  fireEvent.click(screen.getByRole("button", {name:"Open saved options snapshot"}));
   await waitFor(()=>expect(screen.getByTestId("solstice-replay-banner")).toHaveTextContent("2026-10-06T18:00:00Z"));
   expect(screen.getByTestId("mock-control-bar")).toBeVisible();expect(screen.getByTestId("price-node-history")).toBeVisible();
   expect(JSON.parse(screen.getByTestId("research-selection").textContent)).toMatchObject({displayMode:"replay",snapshotId:"owning-chart"});
-  expect(screen.getByRole("button",{name:"Saved chart readings"})).toHaveAttribute("aria-expanded","false");
+  expect(screen.getByRole("button",{name:"Saved option readings"})).toHaveAttribute("aria-expanded","false");
  });
 });
 

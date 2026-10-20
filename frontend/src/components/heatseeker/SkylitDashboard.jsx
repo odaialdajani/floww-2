@@ -1,4 +1,4 @@
-import PriceNodeHistory from "./PriceNodeHistory";
+import ChartWorkspace, { isChartWorkspaceEnabled } from "./chart/ChartWorkspace";
 import SavedChartReadings from "./SavedChartReadings";
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
@@ -21,7 +21,6 @@ import AskFlow from "./AskFlow";
 
 import ExactContractReview from "./ExactContractReview";
 import ReviewInspector, {ReviewSelectionContext} from "./ReviewInspector";
-import HeatmapLandmarks from "./HeatmapLandmarks";
 import { GroundedPublicReview } from "../public/PublicHandoffReview";
 
 import SolsticeSymbolMaps from "./SolsticeSymbolMaps";
@@ -828,11 +827,23 @@ function SkylitDashboard({
   return (
     <div className="skylit-full-dashboard" data-expanded={expanded} data-study={rangeOpen ? "range" : priceHistoryOpen ? "price" : "options"}>
       {(rangeOpen || !showPriceHistory) && <div className="skylit-study-toolbar" role="toolbar" aria-label="Stock study">{studyActions}</div>}
-      {rangeOpen && <RangeAnalyticsWorkspace ticker={ticker} onReplayModeChange={setRangeIsReplay} />}
+      {rangeOpen && (
+        <section className="skylit-range-card" data-testid="analytical-range-card" aria-label="Analytical range research workspace">
+          <header className="skylit-range-card-header">
+            <h3>Analytical range · 14–60 DTE</h3>
+            <span className="skylit-range-card-hint">Research destination · no execution eligibility · ask the desk to open a current scope</span>
+          </header>
+          <RangeAnalyticsWorkspace ticker={ticker} onReplayModeChange={setRangeIsReplay} />
+        </section>
+      )}
       <>
       <div className="skylit-price-study" ref={priceStudyRef} tabIndex={-1} hidden={rangeOpen || !showPriceHistory}
         onPointerDownCapture={focusPriceInteraction} onClickCapture={focusPriceInteraction} onChangeCapture={focusPriceInteraction} onFocusCapture={focusPriceInteraction} >
-        <PriceNodeHistory ticker={ticker} primary={showPriceHistory} open={!rangeOpen && showPriceHistory} toolbarActions={showPriceHistory ? studyActions : null} forcedScope={chartScopeFor(visibleData, isReplay)} onRecordNodes={async () => {
+        {/* B06: the Stock chart price study mounts through the reversible
+            workspace. Flag off (default) renders the exact incumbent
+            PriceNodeHistory with every prop below passed through; flag on
+            adds the pane wrapper + data-quality strip. No control removed. */}
+        <ChartWorkspace useNew={isChartWorkspaceEnabled()} ticker={ticker} primary={showPriceHistory} open={!rangeOpen && showPriceHistory} toolbarActions={showPriceHistory ? studyActions : null} forcedScope={chartScopeFor(visibleData, isReplay)} onRecordNodes={async () => {
           // G11: refresh the heatmap desk (server records the fresh build as
           // a side effect), then poll price-history scopes until the new
           // snapshot is readable. Bounded, explicit, user-initiated spend.
@@ -846,7 +857,6 @@ function SkylitDashboard({
         }} />
         <section role="region" aria-label="Map levels separate from historical candles">
           <p className="chart-map-level-note">Displayed map levels — not historical candle-time levels. Missing saved chart nodes remain gaps.</p>
-          <HeatmapLandmarks data={visibleData} />
         </section>
       </div>
       <div className="skylit-options-study" ref={optionsStudyRef} role="region" aria-label={ticker + " options desk"} tabIndex={-1} hidden={rangeOpen}
@@ -1106,7 +1116,7 @@ function SkylitDashboard({
             onStrikeClick={handleStrikeClick}
             windowRows={fitRows}
             selected={gridSelection} wallBand={resolvedWall} profile={profile} anchorStrike={anchorStrike}
-            density={layout === "calendar" ? "calendar" : "compact"} onScroll={pauseFollow}
+            density={layout === "calendar" ? "calendar" : "compact"} showLandmarks onScroll={pauseFollow}
           />
           )}
         </div>

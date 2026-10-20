@@ -75,8 +75,8 @@ const mockRoutes = (expiries = EXPIRIES, chain = CHAIN) => {
   if (u.includes('/solstice/price-paths/expiries')) return ok(expiries);
   if (u.includes('/api/public/chain')) {
    const selected = new URL(u, 'http://test.local').searchParams.get('expiration');
-   if (selected === '2026-10-14' && chain === CHAIN) return ok({ ...chain,
-    contracts: chain.contracts.map(r => ({ ...r, expiry: selected })),
+   if (selected === '2026-10-14' && chain === CHAIN) return ok({ ...chain, expiries: [selected],
+    contracts: chain.contracts.map(r => ({ ...r, expiry: selected, osi: r.osi.replace('261007', '261014') })),
     exposure_by_strike: { ...chain.exposure_by_strike,
      strikes: chain.exposure_by_strike.strikes.map(r => ({ ...r, expiries: [selected] })) } });
    return ok(chain);
@@ -93,7 +93,7 @@ const orderSurfacesUntouched = () => {
 
 test('overlay draws the paired admitted series instead of recalculating chain rows', async () => {
  const chain = { ...CHAIN, ticker: paired.input.ticker, spot: paired.input.spot,
-  fetched_at: paired.input.fetched_at, contracts: [{ ...CHAIN.contracts[0], strike: 450, gex: 999999 }],
+  fetched_at: paired.input.fetched_at, contracts: [{ ...CHAIN.contracts[0], strike: 450, osi: 'SPY261007C00450000', gex: 999999 }],
   exposure_by_strike: paired.expected };
  mockRoutes(EXPIRIES, chain);
  const { container } = render(<TriadDesk ticker="SPY" />);
@@ -149,7 +149,7 @@ test('no same-day series renders the empty panel with next-listed action', async
 });
 
 test('SPX without same-day names the entitlement check explicitly', async () => {
- const no0dte = { ...EXPIRIES, expiries: [{ expiry: '2026-10-26', dte: 21, admitted: true, reason: null }],
+ const no0dte = { ...EXPIRIES, ticker: '^SPX', expiries: [{ expiry: '2026-10-26', dte: 21, admitted: true, reason: null }],
   range_map: { admitted_expiries: ['2026-10-26'] } };
  mockRoutes(no0dte);
  render(<TriadDesk ticker="^SPX" />);
@@ -172,8 +172,11 @@ test('chain Review selects the strike and the rail shows measured vs unknown tru
  await screen.findByRole('group', { name: /Signed exposure by strike/ });
  fireEvent.click(screen.getByRole('button', { name: 'Review strike 780' }));
  expect(await screen.findByText(/Wall context attached · SPY · 780 · 2026-10-07/)).toBeInTheDocument();
- expect(screen.getByText(/SPY261007C00780000/)).toBeInTheDocument();
- expect(screen.getByText(/unknown \(not zero\)|200 \(OI\)/)).toBeInTheDocument();
+ const review = screen.getByRole('complementary', { name: 'Triad wall review' });
+ expect(within(review).getByText(/No contract selected/)).toBeInTheDocument();
+ fireEvent.click(screen.getByRole('button', { name: 'Review call SPY261007C00780000' }));
+ expect(within(review).getByText(/SPY261007C00780000/)).toBeInTheDocument();
+ expect(within(review).getByText(/200 \(OI\)/)).toBeInTheDocument();
  expect(screen.getByText(/Execution owner: unselected/)).toBeInTheDocument();
  orderSurfacesUntouched();
  await act(drain);

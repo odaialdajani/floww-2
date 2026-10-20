@@ -266,7 +266,8 @@ test("R8 identity line is visible, formulas are never fabricated, details open r
   const identity = s9.getByTestId("wall-identity-line");
   expect(identity).toBeVisible();
   expect(identity.textContent).toContain("basis OI");
-  expect(identity.textContent).toContain("Formula gex.v2");
+  expect(s9.getByText("Formula").closest(".skylit-metric-row")).toHaveTextContent("gex.v2");
+  expect(s9.getByTestId("wall-provenance")).not.toBeVisible();
   expect(identity.textContent).toContain("OI date 2030-01-01");
   // The line names the OI effective date; it never claims expiry.
   expect(identity.textContent).not.toMatch(/expiry/i);
@@ -276,7 +277,7 @@ test("R8 identity line is visible, formulas are never fabricated, details open r
     quality: data.quality,
   }));
   const missing = s9.getByTestId("wall-identity-line").textContent;
-  expect(missing).toContain("Formula unavailable");
+  expect(s9.getByText("Formula").closest(".skylit-metric-row")).toHaveTextContent("unavailable");
   expect(missing).toContain("OI date unavailable");
   c9();
   r9(React.createElement(WI, {
@@ -298,7 +299,8 @@ test("R8 identity line is visible, formulas are never fabricated, details open r
   }));
   expect(s9.getByTestId("wall-identity-line").textContent).toContain("basis session_delta_volume");
   expect(s9.getByTestId("wall-focused-raw").textContent).toContain("Raw session_delta_volume");
-  expect(s9.getByTestId("wall-focused-raw").textContent).toContain("USD/1% move · session_delta_volume · gex.v2");
+  expect(s9.getByTestId("wall-focused-raw").textContent).toContain("USD/1% move");
+  expect(s9.getByText("Formula").closest(".skylit-metric-row")).toHaveTextContent("unavailable");
   c9();
 });
 

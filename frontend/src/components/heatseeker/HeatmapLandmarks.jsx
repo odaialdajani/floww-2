@@ -46,17 +46,27 @@ function HeatmapLandmarks({data, reading}) {
       <span>{data?.grid?.expiries?.length ?? "Unknown"} loaded expiries · {quality || "quality unknown"}</span>
     </div>
     {computed.basis !== "OI" && <p>Raw OI landmarks unavailable · loaded basis {computed.basis || "unknown"}. Volume is not open interest.</p>}
-    <dl className="heatmap-landmarks-levels">
-      <div><dt>Support watch · below</dt><dd>{below.length ? below.map(zone).join(" → ") : "Unavailable in loaded scope"}</dd></div>
-      <div><dt>Current zone</dt><dd>{zone(inside)}</dd></div>
-      <div><dt>Resistance watch · above</dt><dd>{above.length ? above.map(zone).join(" → ") : "Unavailable in loaded scope"}</dd></div>
-      <div title="Largest known call-side gamma among loaded strike rows, not the most positive net cell. Missing rows limit the ranking."><dt>Call wall · concentration</dt><dd>{call ? `${money(call.strike)}${call.partial ? " · partial" : ""}` : "Unavailable"}</dd></div>
-      <div title="Largest known put-side gamma among loaded strike rows, not the most negative net cell. A put concentration can be above price and is not automatically support."><dt>Put wall · concentration</dt><dd>{put ? `${money(put.strike)}${put.partial ? " · partial" : ""}` : "Unavailable"}</dd></div>
-    </dl>
-    <p>Zones to watch, not a forecast or entry signal. Hold/reclaim or break/retest needs measured price confirmation. Raw levels stay separate from adjusted cells.</p>
-    <details><summary>Level source and time</summary>
-      <p>{data?.data_source || "Source unknown"} · {data?.snapshotId || "Snapshot identity unknown"} · {data?.replay ? "recorded observations only" : "current map request"}.</p>
-      <p>{data?.event_time || data?.observed_at ? `Market time ${data.event_time || data.observed_at}` : "Market time unknown"} · Snapshot {data?.asof || "time unknown"}. The map reference is not a fresh executable quote.</p>
+    {/* 2026-10-19 phone-desk fix (H1): the expanded zones list consumed the
+        whole desk at phone width and starved the heatmap grid container to
+        0px (measured: container h=0, scrollHeight=633 at 390). One compact
+        summary line stays always visible; zones, concentrations, the honesty
+        note and the source/time detail move behind a single disclosure so
+        the grid keeps its space at every width. Nothing truthful is removed
+        or hidden — it is one click away, per the correction contract. */}
+    <details className="heatmap-landmarks-zones">
+      <summary role="button">Zones · concentrations · method</summary>
+      <dl className="heatmap-landmarks-levels">
+        <div><dt>Support watch · below</dt><dd>{below.length ? below.map(zone).join(" → ") : "Unavailable in loaded scope"}</dd></div>
+        <div><dt>Current zone</dt><dd>{zone(inside)}</dd></div>
+        <div><dt>Resistance watch · above</dt><dd>{above.length ? above.map(zone).join(" → ") : "Unavailable in loaded scope"}</dd></div>
+        <div title="Largest known call-side gamma among loaded strike rows, not the most positive net cell. Missing rows limit the ranking."><dt>Call wall · concentration</dt><dd>{call ? `${money(call.strike)}${call.partial ? " · partial" : ""}` : "Unavailable"}</dd></div>
+        <div title="Largest known put-side gamma among loaded strike rows, not the most negative net cell. A put concentration can be above price and is not automatically support."><dt>Put wall · concentration</dt><dd>{put ? `${money(put.strike)}${put.partial ? " · partial" : ""}` : "Unavailable"}</dd></div>
+      </dl>
+      <p>Zones to watch, not a forecast or entry signal. Hold/reclaim or break/retest needs measured price confirmation. Raw levels stay separate from adjusted cells.</p>
+      <details><summary>Level source and time</summary>
+        <p>{data?.data_source || "Source unknown"} · {data?.snapshotId || "Snapshot identity unknown"} · {data?.replay ? "recorded observations only" : "current map request"}.</p>
+        <p>{data?.event_time || data?.observed_at ? `Market time ${data.event_time || data.observed_at}` : "Market time unknown"} · Snapshot {data?.asof || "time unknown"}. The map reference is not a fresh executable quote.</p>
+      </details>
     </details>
   </section>;
 }

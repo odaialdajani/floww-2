@@ -1,54 +1,85 @@
 import React, { useMemo } from "react";
 
-/**
- * TriadChainTable — strike-grouped contract table from chain endpoint rows.
- *
- * One row per strike: call bid/ask + delta on the left, put bid/ask on the
- * right, strike center, Review selects the strike into the desk context.
- * Anything missing renders unknown ('—'/explicit), never fabricated; the
- * caption states fixture-vs-live provenance expectations. No order path:
- * Review selects, it never submits.
- */
-const dash = value => (typeof value === "number" && Number.isFinite(value) ? value : "—");
+const number = value => typeof value === 'number' && Number.isFinite(value);
+const dash = value => number(value) ? value : '—';
+const sideOf = row => ({ call: 'call', c: 'call', ce: 'call', put: 'put', p: 'put', pe: 'put' })[
+  String(row?.type || row?.opt_type || row?.side || '').toLowerCase()];
+const rootOf = ticker => String(ticker || '').toUpperCase().replace(/^\^/, '');
 
-export default function TriadChainTable({ rows, expiry, selectedStrike, onReview }) {
+// Identity admission only; never repair or recompute producer exposure.
+// Repeated sides are ambiguous even when quotes match. Neither may win.
+export function admitContracts(rows, ticker, expiry) {
+  const buckets = new Map();
+  let rejected = 0;
+  for (const row of rows || []) {
+    const side = sideOf(row);
+    const osi = typeof row?.osi === 'string' ? row.osi.trim().toUpperCase() : '';
+    const match = /^([A-Z][A-Z0-9.]{0,5})\s*(\d{6})([CP])(\d{8})$/.exec(osi);
+    const root = rootOf(ticker);
+    const roots = root === 'SPX' ? ['SPX', 'SPXW'] : [root];
+    const expectedDate = typeof expiry === 'string' ? expiry.slice(2).replace(/-/g, '') : '';
+    const identityValid = row && number(row.strike) && row.strike > 0 && side
+      && row.expiry === expiry && (!row.ticker || rootOf(row.ticker) === root)
+      && (!osi || (match && roots.includes(match[1]) && match[2] === expectedDate
+        && match[3] === (side === 'call' ? 'C' : 'P')
+        && Number(match[4]) === Math.round(row.strike * 1000)
+        && Math.abs(row.strike * 1000 - Number(match[4])) < 0.000001));
+    if (!identityValid) { rejected += 1; continue; }
+    const key = `${row.strike}:${side}`;
+    const bucket = buckets.get(key) || [];
+    bucket.push({ ...row, type: side, osi });
+    buckets.set(key, bucket);
+  }
+  const admitted = [];
+  let duplicates = 0;
+  for (const bucket of buckets.values()) {
+    if (bucket.length !== 1) duplicates += bucket.length;
+    else admitted.push(bucket[0]);
+  }
+  return { rows: admitted, rejected, duplicates, clean: rejected === 0 && duplicates === 0 };
+}
+
+export function ContractClocks({ row }) {
+  return <small className="wall-desk-clocks">
+    Bid observed {row?.bid_event_time || row?.bid_timestamp || 'unknown'} · Ask observed {row?.ask_event_time || row?.ask_timestamp || 'unknown'}
+    {' · '}Receipt {row?.received_at || 'unknown'}
+  </small>;
+}
+
+export default function TriadChainTable({ rows, ticker, expiry, selectedStrike, onReview, onSelectContract }) {
+  const admission = useMemo(() => admitContracts(rows, ticker, expiry), [rows, ticker, expiry]);
   const grouped = useMemo(() => {
     const byStrike = new Map();
-    for (const row of rows || []) {
-      if (!row || typeof row !== "object") continue;
-      const strike = Number(row.strike);
-      if (!Number.isFinite(strike)) continue;
-      const type = String(row.type || row.opt_type || row.side || "").toLowerCase();
-      const entry = byStrike.get(strike) || { strike };
-      if (type.startsWith("call") || type === "c") entry.call = row;
-      else if (type.startsWith("put") || type === "p") entry.put = row;
-      byStrike.set(strike, entry);
+    for (const row of admission.rows) {
+      const entry = byStrike.get(row.strike) || { strike: row.strike };
+      entry[row.type] = row;
+      byStrike.set(row.strike, entry);
     }
     return [...byStrike.values()].sort((a, b) => a.strike - b.strike);
-  }, [rows]);
-
-  if (!grouped.length) {
-    return <p role="status">No listed contracts for this expiry in the chain response.</p>;
-  }
-  const spread = leg => (typeof leg?.bid === "number" && typeof leg?.ask === "number"
-    ? (leg.ask - leg.bid).toFixed(2) : "—");
-  return <div className="panel"><div className="panelhead">
-    <strong>Exact contract review</strong><small>{expiry || "no expiry selected"}</small></div>
-    <div className="table-wrap"><table className="contract-table">
-      <thead><tr><th>Call bid / ask</th><th>Δ</th><th>Strike</th><th>Put bid / ask</th><th>Spread</th><th>Review</th></tr></thead>
-      <tbody>{grouped.map(g => {
-        const selected = g.strike === selectedStrike;
-        return <tr key={g.strike} className={selected ? "selected" : ""}>
-          <td>{dash(g.call?.bid)} / {dash(g.call?.ask)}</td>
-          <td>{dash(g.call?.delta)}</td>
-          <td>{g.strike}</td>
-          <td>{dash(g.put?.bid)} / {dash(g.put?.ask)}</td>
-          <td>{g.call ? spread(g.call) : spread(g.put)}</td>
+  }, [admission]);
+  const spread = leg => number(leg?.bid) && number(leg?.ask) && leg.bid >= 0 && leg.ask >= leg.bid
+    ? (leg.ask - leg.bid).toFixed(2) : '—';
+  const leg = (row, side) => <>
+    <div>{dash(row?.bid)} / {dash(row?.ask)}</div>
+    {row && <><ContractClocks row={row} />
+      {row.osi ? <button type="button" aria-label={`Review ${side} ${row.osi}`}
+        onClick={() => onSelectContract?.(row)}>{side === 'call' ? 'Call' : 'Put'} · {row.osi}</button>
+        : <small>Exact contract ID unavailable</small>}
+    </>}
+  </>;
+  return <div className="panel wall-desk-chain"><div className="panelhead">
+    <strong>Exact contract review</strong><small>{expiry || 'no expiry selected'}</small></div>
+    {!admission.clean && <p role="status">Contract identity unavailable for {admission.rejected + admission.duplicates} row(s): mismatched or duplicate identities withheld. Their exposure snapshot is unavailable.</p>}
+    {!grouped.length ? <p role="status">No unambiguous listed contracts for this expiry in the chain response.</p>
+      : <div className="wall-desk-table-scroll" role="region" aria-label="Contract comparison" tabIndex={0}><table className="contract-table">
+        <thead><tr><th>Call bid / ask</th><th>Call Δ</th><th>Call spread</th><th>Strike</th><th>Put bid / ask</th><th>Put Δ</th><th>Put spread</th><th>Focus</th></tr></thead>
+        <tbody>{grouped.map(g => <tr key={g.strike} className={g.strike === selectedStrike ? 'selected' : ''}>
+          <td>{leg(g.call, 'call')}</td><td>{dash(g.call?.delta)}</td><td>{spread(g.call)}</td>
+          <td>{g.strike}</td><td>{leg(g.put, 'put')}</td><td>{dash(g.put?.delta)}</td><td>{spread(g.put)}</td>
           <td><button type="button" aria-label={`Review strike ${g.strike}`}
-            onClick={() => onReview && onReview({ strike: g.strike, expiry })}>Review</button></td>
-        </tr>;
-      })}</tbody>
-    </table></div>
-    <div className="chart-caption">Vendor quotes and Greeks as returned · actual contract IDs and current broker timestamps are required before live review.</div>
+            onClick={() => onReview?.({ strike: g.strike, expiry })}>Focus strike</button></td>
+        </tr>)}</tbody>
+      </table></div>}
+    <div className="chart-caption">Quotes and spreads are premium per share in USD; Δ is dimensionless. Spread is ask minus bid only for a finite, non-crossed quote. Missing clocks are unknown; receipt is not observation. Selecting a side reviews its exact ID and never submits an order.</div>
   </div>;
 }

@@ -4695,3 +4695,115 @@ input[class*="bg-slate-800"], select[class*="bg-slate-800"], textarea[class*="bg
 .workspace-history-controls{display:flex;align-items:center;gap:4px;margin-right:8px;}
 .workspace-history-controls button{display:flex;align-items:center;justify-content:center;width:28px;height:28px;min-width:28px;min-height:28px;border:1px solid #425365;border-radius:4px;background:#111b25;color:#d4e0eb;}
 .workspace-history-controls button:disabled{opacity:.38;cursor:default;}
+/* Visible-desk pass 2026-10-19 21:05 — punch item 1 fix (reviewer-specified, integrator relayed):
+ * the 10-13px/22px/max-w-80px rules below previously declared .text-[10px]-style
+ * class selectors, which the CSS parser drops at parse time, so the rail
+ * readability corrections never reached their nodes. Attribute-substring form
+ * (same pattern as the working text-[9px] rule at :4692) reaches them instead. */
+/* Visible-desk pass 2026-10-18 — scoped left-rail presentation rules.
+ * App.js owns the markup; this only styles the exact rail selectors.
+ * Intentional scoped presentation: one rule set, readable rail labels
+ * (no forced 9px text), no repeated utility sets, valid bracket selectors,
+ * no broad app/Screener styles. */
+.heatseeker-layout .heatseeker-sidebar-left > .panel { padding: 8px 10px; }
+.heatseeker-layout .heatseeker-sidebar-left .panel + .panel { margin-top: 8px; }
+.heatseeker-layout .heatseeker-sidebar-left > .panel > .space-y-2 > * + * { margin-top: 4px; }
+.heatseeker-layout .heatseeker-sidebar-left .text-\[9px\] { font-size: 10px; }
+.heatseeker-layout .heatseeker-sidebar-left [class*="text-[10px]"] { font-size: 11px; }
+.heatseeker-layout .heatseeker-sidebar-left [class*="text-[11px]"] { font-size: 12px; }
+.heatseeker-layout .heatseeker-sidebar-left [class*="text-[12px]"] { font-size: 13px; }
+.heatseeker-layout .heatseeker-sidebar-left [class*="text-[13px]"] { font-size: 14px; }
+.heatseeker-layout .heatseeker-sidebar-left [class*="text-[22px]"] { font-size: 20px; }
+.heatseeker-layout .heatseeker-sidebar-left .text-slate-400 { color: #93b7c8; }
+.heatseeker-layout .heatseeker-sidebar-left .text-slate-500 { color: #8b9db4; }
+.heatseeker-layout .heatseeker-sidebar-left .text-slate-300 { color: #b3c4d6; }
+.heatseeker-layout .heatseeker-sidebar-left .text-sky-400 { color: #93bae0; }
+.heatseeker-layout .heatseeker-sidebar-left .text-amber-400 { color: #e8c96a; }
+.heatseeker-layout .heatseeker-sidebar-left .text-amber-200 { color: #ecc98a; }
+.heatseeker-layout .heatseeker-sidebar-left .text-emerald-400 { color: #a7d4b5; }
+.heatseeker-layout .heatseeker-sidebar-left .text-sky-300 { color: #b8cee6; }
+.heatseeker-layout .heatseeker-sidebar-left .text-rose-400 { color: #c9a9b0; }
+.heatseeker-layout .heatseeker-sidebar-left .text-red-500 { color: #c97c82; }
+.heatseeker-layout .heatseeker-sidebar-left .font-bold { font-weight: 650; }
+.heatseeker-layout .heatseeker-sidebar-left .tracking-widest { letter-spacing: 0.6px; }
+.heatseeker-layout .heatseeker-sidebar-left .select-none { user-select: none; }
+.heatseeker-layout .heatseeker-sidebar-left .truncate { text-overflow: ellipsis; overflow: hidden; }
+.heatseeker-layout .heatseeker-sidebar-left [class*="max-w-[80px]"] { max-width: 80px; }
+.heatseeker-layout .heatseeker-sidebar-left .overflow-hidden { overflow: hidden; }
+.heatseeker-layout .heatseeker-sidebar-left .whitespace-nowrap { white-space: nowrap; }
+.heatseeker-layout .heatseeker-sidebar-left .min-w-0 { min-width: 0; }
+.heatseeker-layout .heatseeker-sidebar-left .flex-col { flex-direction: column; }
+.heatseeker-layout .heatseeker-sidebar-left .items-center { align-items: center; }
+.heatseeker-layout .heatseeker-sidebar-left .gap-1 > * + * { margin-top: 4px; }
+.heatseeker-layout .heatseeker-sidebar-left .gap-2 > * + * { margin-top: 6px; }
+.heatseeker-layout .heatseeker-sidebar-left .p-2 { padding: 6px 8px; }
+.heatseeker-layout .heatseeker-sidebar-left .p-3 { padding: 8px 10px; }
+.heatseeker-layout .heatseeker-sidebar-left .rounded { padding: 2px; }
+.heatseeker-layout .heatseeker-sidebar-left .bg-sky-500\/10 { background: #0e1f2c; }
+.heatseeker-layout .heatseeker-sidebar-left .border-sky-500\/20 { border-color: #3c5a78; }
+.heatseeker-layout .heatseeker-sidebar-left .animate-pulse { transform: none; opacity: 0.8; }
+
+/* Analytical range research destination — compact, bounded card, not a
+ * full-page banner. Same workspace, clearer frame and a bounded height
+ * so the primary chart keeps its reading space on desktop. */
+.skylit-range-card {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--desk-border, #29454d);
+  border-radius: 8px;
+  background: var(--desk-bg, #0a1b21);
+  overflow: hidden;
+}
+.skylit-range-card-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--desk-border, #29454d);
+  background: linear-gradient(180deg, #0d222a, #0a1b21);
+}
+.skylit-range-card-header h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 650;
+  color: #f2d795;
+  letter-spacing: 0.02em;
+}
+.skylit-range-card-hint {
+  margin-left: auto;
+  font-size: 11px;
+  color: #94a3b8;
+  white-space: nowrap;
+}
+.skylit-range-card > .range-toolbar {
+  flex-shrink: 0;
+}
+.skylit-range-card > .range-desk {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.skylit-range-card > .range-desk .range-matrix-scroll {
+  flex: 1 1 auto;
+  min-height: 200px;
+  overflow: auto;
+}
+.skylit-range-card > .range-desk .range-inspector {
+  flex: 0 0 220px;
+  overflow: auto;
+}
+@media (max-width: 900px) {
+  .skylit-range-card > .range-desk { flex-direction: column; }
+  .skylit-range-card > .range-desk .range-inspector { flex: 0 0 180px; }
+}
+/* Phase0 2026-10-19 (H1): expanded phone navigation must overlay the workspace,
+   not squeeze it to an unusable strip. The shell pushes .floww-workspace by the
+   sidebar's live width (AppShell railWidth 64 collapsed / 240 expanded); at
+   390px that leaves the chart 92px wide. At phone widths the expanded sidebar
+   is a fixed overlay (it already carries z-40), so the workspace keeps the
+   rail margin. Presentation-only; no shell logic changes. */
+@media (max-width: 600px) {
+  .floww-workspace { margin-left: 64px !important; }
+}

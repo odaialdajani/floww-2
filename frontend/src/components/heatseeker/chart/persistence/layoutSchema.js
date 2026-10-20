@@ -2,6 +2,7 @@
 export const SCHEMA_VERSION = 1;
 export const MAX_LAYOUTS = 50;
 export const MAX_BYTES = 200000;
+export const KNOWN_TOOLS = ['horizontal', 'trend', 'vertical', 'rectangle', 'text', 'arrow'];
 export function createLayout(overrides = {}) {
   return { schema_version: SCHEMA_VERSION, showGrid: false, opacity: 0, drawings: [], ...overrides };
 }
@@ -26,5 +27,11 @@ export function sanitizeImport(obj) {
     if (k === '__proto__' || k === 'constructor' || k === 'prototype') throw new Error('proto-refused');
   }
   if (typeof obj.script === 'string') throw new Error('scripts-refused');
+  // Unknown tools refused: imported drawings may only use the supported set.
+  if (Array.isArray(obj.drawings)) {
+    for (const d of obj.drawings) {
+      if (d && typeof d === 'object' && 'tool' in d && !KNOWN_TOOLS.includes(d.tool)) throw new Error('tools-refused');
+    }
+  }
   return obj;
 }
