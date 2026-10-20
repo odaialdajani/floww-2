@@ -1,4 +1,4 @@
-import React, { useId, useMemo } from "react";
+import React, { useId, useMemo, useState } from "react";
 import { signedCellPalette } from "../../lib/signedGridPalette";
 
 /** Render the backend-admitted per-strike series from the same chain snapshot.
@@ -8,8 +8,8 @@ import { signedCellPalette } from "../../lib/signedGridPalette";
  * and spot/selection retain the existing gold rail. No client aggregation.
  */
 export function formatExposureTick(v) {
-  const n = Number(v);
-  if (!Number.isFinite(n)) return "0";
+  const n = v;
+  if (typeof n !== 'number' || !Number.isFinite(n)) return "unavailable";
   const sign = n < 0 ? "−" : "+";
   const abs = Math.abs(n);
   if (abs >= 1000000) {
@@ -22,7 +22,8 @@ export function formatExposureTick(v) {
 
 export default function TriadExposure({ series, spot, selectedStrike, onSelect }) {
   const hatchId = `triad-negative-${useId().replace(/:/g, '')}`;
-  const model = useMemo(() => {
+  const [windowStart, setWindowStart] = useState(null);
+  const full = useMemo(() => {
     const byStrike = new Map();
     for (const row of series?.strikes || []) {
       if (!row || typeof row !== "object") continue;
@@ -34,24 +35,46 @@ export default function TriadExposure({ series, spot, selectedStrike, onSelect }
         nTotal: row.n_total, partial: row.partial };
       byStrike.set(strike, entry);
     }
-    let strikes = [...byStrike.keys()].sort((a, b) => a - b);
-    if (typeof spot === "number" && Number.isFinite(spot) && strikes.length > 21) {
-      let anchor = 0;
-      for (let i = 0; i < strikes.length; i++) {
-        if (Math.abs(strikes[i] - spot) <= Math.abs(strikes[anchor] - spot)) anchor = i;
-      }
-      const lo = Math.max(0, Math.min(strikes.length - 21, anchor - 10));
-      strikes = strikes.slice(lo, lo + 21);
-    } else {
-      strikes = strikes.slice(0, 21);
-    }
-    const max = Math.max(1, ...strikes.map(s => Math.abs(byStrike.get(s).gex)));
-    return { byStrike, strikes, max };
-  }, [series, spot]);
+    return { byStrike, strikes: [...byStrike.keys()].sort((a, b) => a - b) };
+  }, [series]);
+  const spotKnown = typeof spot === 'number' && Number.isFinite(spot);
+  let anchor = 0;
+  if (spotKnown) for (let i = 0; i < full.strikes.length; i++) {
+    if (Math.abs(full.strikes[i] - spot) <= Math.abs(full.strikes[anchor] - spot)) anchor = i;
+  }
+  const lastStart = Math.max(0, full.strikes.length - 21);
+  const centered = spotKnown ? Math.max(0, Math.min(lastStart, anchor - 10)) : 0;
+  const start = Math.min(lastStart, windowStart ?? centered);
+  const strikes = full.strikes.slice(start, start + 21);
+  const model = { byStrike: full.byStrike, strikes,
+    max: Math.max(1, ...strikes.map(s => {
+      const value = full.byStrike.get(s).gex;
+      return typeof value === 'number' && Number.isFinite(value) ? Math.abs(value) : 0;
+    })) };
 
   const w = 750, h = 190, y = 99, step = 31, x0 = 65;
   const scale = 66 / model.max;
-  return <svg className="triad-exposure" viewBox={`0 0 ${w} ${h}`} role="group" aria-label="Signed exposure by strike. Gold positive, purple negative with hatching, partial outlined, unknown gray.">
+  const first = strikes[0], last = strikes[strikes.length - 1];
+  const outside = spotKnown && strikes.length > 0 && (spot < first || spot > last);
+  // Slots are equally spaced, so interpolate within the enclosing pair of
+  // listed strikes, not across the global strike range (which may have gaps).
+  let spotx = x0;
+  if (spotKnown && !outside) {
+    const upper = strikes.findIndex(s => s >= spot);
+    if (upper > 0) spotx += (upper - 1 + (spot - strikes[upper - 1]) / (strikes[upper] - strikes[upper - 1])) * step;
+  }
+  return <div>
+    <div className="wall-desk-window">
+      <span>{strikes.length ? `Showing strikes ${start + 1}–${start + strikes.length} of ${full.strikes.length} · ${first}–${last}` : 'No admitted strike rows'}</span>
+      {full.strikes.length > 21 && <>
+        <button type="button" disabled={start === 0} onClick={() => setWindowStart(Math.max(0, start - 21))}>Lower strikes</button>
+        <button type="button" disabled={start >= lastStart} onClick={() => setWindowStart(Math.min(lastStart, start + 21))}>Higher strikes</button>
+        <button type="button" disabled={!spotKnown} onClick={() => setWindowStart(null)}>Center on spot</button>
+      </>}
+    </div>
+    {outside && <p role="status">Spot {spot.toFixed(2)} is {spot < first ? 'below' : 'above'} this window. No off-window marker is extrapolated.</p>}
+    {selectedStrike != null && !strikes.includes(selectedStrike) && <p role="status">Selected strike {selectedStrike} is outside this window.</p>}
+    <svg className="triad-exposure" viewBox={`0 0 ${w} ${h}`} role="group" aria-label="Signed exposure by strike. Gold positive, purple negative with hatching, partial outlined, unknown gray.">
     <defs><pattern id={hatchId} width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
       <rect width="2" height="6" fill="rgba(0,0,0,0.28)" />
     </pattern></defs>
@@ -100,12 +123,7 @@ export default function TriadExposure({ series, spot, selectedStrike, onSelect }
           fill={selected ? "#f2d44b" : "#8ea6b5"} fontSize="10">{strike}</text>}
       </g>;
     })}
-    {typeof spot === "number" && Number.isFinite(spot) && model.strikes.length > 0 && (() => {
-      const first = model.strikes[0], last = model.strikes[model.strikes.length - 1];
-      const span = Math.max(1, last - first);
-      const spotx = x0 + ((spot - first) / span) * (model.strikes.length - 1) * step;
-      return <g><line x1={spotx} y1="20" x2={spotx} y2="165" stroke="#f2d44b" strokeDasharray="3 3" />
-        <text x={spotx} y="15" fill="#f2d44b" textAnchor="middle" fontSize="10">Spot {typeof spot === "number" && Number.isFinite(spot) ? spot.toFixed(2) : spot}</text></g>;
-    })()}
-  </svg>;
+    {spotKnown && !outside && strikes.length > 0 && <g data-spot-marker="true"><line x1={spotx} y1="20" x2={spotx} y2="165" stroke="#f2d44b" strokeDasharray="3 3" />
+      <text x={spotx} y="15" fill="#f2d44b" textAnchor="middle" fontSize="10">Spot {spot.toFixed(2)}</text></g>}
+  </svg></div>;
 }
