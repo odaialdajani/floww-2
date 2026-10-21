@@ -231,6 +231,10 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
       // B23: the REAL visible bars at the cursor (epoch time, observed range)
       // feed bar-resolution reads — never a fabricated volume-at-price.
       visible: frames.slice(0, position + 1).map(f => ({ time: Date.parse(f.time), low: f.low, high: f.high })),
+      // B24: the pane's real scope/generation identity — the focused-chart
+      // ask gate binds and resolves against exactly this (server-owned facts).
+      scope: payload?.query_key || "",
+      generation: ticker + ":" + days + ":" + minutes + ":" + (payload?.query_key || "") + ":" + reload,
     });
     return undefined;
   }, [onReplayState, frames, position, playing]); // eslint-disable-line react-hooks/exhaustive-deps

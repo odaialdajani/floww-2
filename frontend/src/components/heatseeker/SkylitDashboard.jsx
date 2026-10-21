@@ -269,6 +269,10 @@ function SkylitDashboard({
   const rangeOpen = analyticalRangeOpen ?? localRangeOpen;
   const [tradeMode, setTradeMode] = useState(false);
   const [selectedCell, setSelectedCell] = useState(null);
+  // B24: the focused chart's bound context descriptor + live pane state,
+  // emitted by the flag-on workspace — the price-history AskFlow gate
+  // resolves it (stale generations/scope changes/removed panes refuse).
+  const [focusedChartContext, setFocusedChartContext] = useState(null);
   const [contractSelection, setContractSelection] = useState(null);
   const [reviewSelectionRevision, setReviewSelectionRevision] = useState(0);
   const onContractSelection = useCallback(selection => {
@@ -821,7 +825,7 @@ function SkylitDashboard({
           setReplayPanelOpen(true);
           setReplayOpenRequest({id, nonce: Date.now()});
         }} />
-        {priceHistoryOpen && !rangeOpen && <AskFlow subject={ticker} overlayMetric={activeMetric} displayMode="price-history" compact />}
+        {priceHistoryOpen && !rangeOpen && <AskFlow subject={ticker} overlayMetric={activeMetric} displayMode="price-history" compact chartContext={focusedChartContext} />}
 
   </>;
   return (
@@ -843,7 +847,7 @@ function SkylitDashboard({
             workspace. Flag off (default) renders the exact incumbent
             PriceNodeHistory with every prop below passed through; flag on
             adds the pane wrapper + data-quality strip. No control removed. */}
-        <ChartWorkspace useNew={isChartWorkspaceEnabled()} ticker={ticker} primary={showPriceHistory} open={!rangeOpen && showPriceHistory} toolbarActions={showPriceHistory ? studyActions : null} forcedScope={chartScopeFor(visibleData, isReplay)} onRecordNodes={async () => {
+        <ChartWorkspace useNew={isChartWorkspaceEnabled()} ticker={ticker} primary={showPriceHistory} open={!rangeOpen && showPriceHistory} toolbarActions={showPriceHistory ? studyActions : null} forcedScope={chartScopeFor(visibleData, isReplay)} onChartContext={setFocusedChartContext} onRecordNodes={async () => {
           // G11: refresh the heatmap desk (server records the fresh build as
           // a side effect), then poll price-history scopes until the new
           // snapshot is readable. Bounded, explicit, user-initiated spend.

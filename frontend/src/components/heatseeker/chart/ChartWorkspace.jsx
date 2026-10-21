@@ -13,6 +13,7 @@ import FlowPane, { bucketHash } from './indicators/FlowPane';
 import { initialBalance, nakedLevels, poc, tickRows, valueArea } from './indicators/ProfilePrimitives';
 import { levelLabel, topLevels } from './indicators/DarkPoolLevels';
 import { candleDelta, sessionCvd } from './indicators/Footprint';
+import { bindContext } from './context/chartContext';
 import './ChartWorkspace.css';
 // B06 reversible single-pane workspace: controlled open + incumbent fallback.
 // OFF (default) renders the exact incumbent PriceNodeHistory with EVERY caller
@@ -56,6 +57,7 @@ export default function ChartWorkspace({
   notice = null, onRetry = null, frames = null, nodes = [], bars = [], flow = null, atlasDarkLevels = [],
   flowTrades = null, onFlowBucket = null,
   profileTrades = null, darkPoolPrints = null, classifiedBars = null, priorLevels = null,
+  onChartContext = null,
 }) {
   const [atlas, setAtlas] = useState(false);
   const [quality, setQuality] = useState(null);
@@ -86,6 +88,30 @@ export default function ChartWorkspace({
   }, []);
   const restored = useRef(false);
   const longPressTimer = useRef(null);
+  const lastContextEmit = useRef(null);
+  // B24 focused-chart context: bind the FOCUSED pane's real identity (symbol,
+  // saved-view scope, replay cursor, pane generation) through the mirror of
+  // the server's chart_context contract. The ask gate resolves this
+  // descriptor against the LIVE pane state — stale generations, scope changes
+  // and removed panes refuse; the server stays the resolver of facts.
+  const contextPane = panes.find(p => p.focused) || panes[0];
+  // Binding always runs through the mirror: an empty saved-view scope or a
+  // missing pane identity is REFUSED with the contract's reason, never
+  // silently blank. The ask gate refuses on the same reason.
+  const chartDescriptor = replayReport
+    ? bindContext({ focus: contextPane.symbol, query: 'focused-chart', scope: replayReport.scope, cursor: replayReport.cursor, generation: replayReport.generation })
+    : null;
+  const chartCurrent = replayReport
+    ? { generation: replayReport.generation, scope: replayReport.scope, pane_removed: false }
+    : { generation: null, scope: null, pane_removed: true };
+  useEffect(() => {
+    if (!onChartContext || !chartDescriptor) return undefined;
+    const key = JSON.stringify([chartDescriptor, chartCurrent]);
+    if (lastContextEmit.current === key) return undefined;
+    lastContextEmit.current = key;
+    onChartContext({ descriptor: chartDescriptor, current: chartCurrent });
+    return undefined;
+  }, [chartDescriptor, chartCurrent, onChartContext]); // eslint-disable-line react-hooks/exhaustive-deps
   const history = { ticker, open, primary, toolbarActions, forcedScope, onRecordNodes, showAtlas, exposureLine, darkLevels, flowBars, cvdLine };
 
   const applyPersisted = (data) => {
@@ -335,6 +361,14 @@ export default function ChartWorkspace({
             </div>
           );
         })()}
+        {replayReport && (
+          <div className="chart-context-strip" data-testid="chart-context"
+            data-status={chartDescriptor ? chartDescriptor.status : 'unbound'}>
+            Focused chart context {chartDescriptor && chartDescriptor.status === 'bound'
+              ? `bound · ${chartDescriptor.focus} · scope ${chartDescriptor.scope || 'none'} · cursor ${chartDescriptor.cursor}`
+              : chartDescriptor ? `unavailable — ${chartDescriptor.reason}` : 'unavailable — no focused pane report yet'}
+          </div>
+        )}
         {/* B15 mounted replay readout: the focused pane's real frames flow
             through the replay algebra — cursor, partial/completed bar, extrema
             swept strictly at-or-before the cursor, newest known-at, and the

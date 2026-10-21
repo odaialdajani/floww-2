@@ -1,6 +1,7 @@
 import React, { memo, useState, useRef, useEffect } from "react";
 import { useAgent } from "../../agent/AgentProvider";
 import {rangeResearchBlock} from '../../lib/rangeAnalytics';
+import { resolveContext } from "./chart/context/chartContext";
 
 /**
  * AskFlow — compact entry point next to a selected wall / active pane.
@@ -25,14 +26,26 @@ export const STARTERS = [
   "What confirms or invalidates?",
 ];
 
-export function admissionBlock({ context, overlayMetric, displayMode }) {
+export function admissionBlock({ context, overlayMetric, displayMode, chartContext }) {
   const rangeBlock=rangeResearchBlock(context);
   if(rangeBlock) return rangeBlock;
   if((typeof displayMode === 'string' && displayMode.startsWith('range-')) || context?.displayMode === 'range-replay') {
     if(context?.displayMode !== displayMode || context?.overlayMetric !== overlayMetric) return 'RANGE_RESEARCH_UNAVAILABLE: RANGE_SELECTION_MISMATCH — published pane/basis changed.';
     return rangeResearchBlock(context);
   }
-  if (displayMode === "price-history") return "Close the price-history chart to ask about the live map.";
+  if (displayMode === "price-history") {
+    // B24 focused-chart context: a bound descriptor that still resolves
+    // against the LIVE pane state admits the ask — the server resolves facts
+    // at answer time (contracts.py request_spec / validate_model_answer);
+    // client numbers are never evidence and no trade recommendations are
+    // offered. Without a chart context the honest legacy refusal stands.
+    if (chartContext) {
+      const resolved = resolveContext(chartContext.descriptor, chartContext.current);
+      if (resolved.status === "refused") return `Focused chart context refused: ${resolved.reason} — the ask stays closed until the focused pane is current.`;
+      return null;
+    }
+    return "Close the price-history chart to ask about the live map.";
+  }
   if (context && !context.ticker) return "No published selection for this screen.";
   if (context?.selectedContract) {
     const c = context.selectedContract;
@@ -58,7 +71,7 @@ export function admissionBlock({ context, overlayMetric, displayMode }) {
   return null;
 }
 
-function AskFlow({ subject = "", overlayMetric = "raw", displayMode = "live", compact = false, testId = "ask-lodestar", starters = STARTERS }) {
+function AskFlow({ subject = "", overlayMetric = "raw", displayMode = "live", compact = false, testId = "ask-lodestar", starters = STARTERS, chartContext = null }) {
   const agent = useAgent();
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState(null);
@@ -106,6 +119,11 @@ function AskFlow({ subject = "", overlayMetric = "raw", displayMode = "live", co
       )}
       {note && (
         <span className="lodestar-ask-note" role="status" data-testid={`${testId}-note`}>{note}</span>
+      )}
+      {displayMode === "price-history" && chartContext && !block && (
+        <span className="lodestar-ask-note" data-testid={`${testId}-chart-context`}>
+          Focused chart context bound · the server resolves facts · no trade recommendations
+        </span>
       )}
       {((typeof displayMode === 'string' && displayMode.startsWith('range-'))
         || (typeof agent.context?.displayMode === 'string' && agent.context.displayMode.startsWith('range-'))
