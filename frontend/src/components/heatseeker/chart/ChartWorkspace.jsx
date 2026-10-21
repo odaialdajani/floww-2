@@ -9,6 +9,7 @@ import { listLocal, loadLocal, saveLocal, scheduleAutosave } from './persistence
 import { DEFAULT_SHORTCUTS, LONG_PRESS_MS, actionFor, keyOf, nextFitMode, rebind, watermark } from './ChartShortcuts';
 import { clipboardState, composeExportSvg, exportPlan } from './ChartExport';
 import { createReplayState, replayStep } from './replay/replayReducer';
+import FlowPane, { bucketHash } from './indicators/FlowPane';
 import './ChartWorkspace.css';
 // B06 reversible single-pane workspace: controlled open + incumbent fallback.
 // OFF (default) renders the exact incumbent PriceNodeHistory with EVERY caller
@@ -50,6 +51,7 @@ export default function ChartWorkspace({
   forcedScope = null, onRecordNodes = null, showAtlas = true, exposureLine = null,
   darkLevels = null, flowBars = null, cvdLine = null,
   notice = null, onRetry = null, frames = null, nodes = [], bars = [], flow = null, atlasDarkLevels = [],
+  flowTrades = null, onFlowBucket = null,
 }) {
   const [atlas, setAtlas] = useState(false);
   const [quality, setQuality] = useState(null);
@@ -274,6 +276,22 @@ export default function ChartWorkspace({
           {replaying ? 'Pause replay' : 'Replay'}
         </button>
         {replaying && <p className="replay-banner" data-testid="replay-banner">Replay active — recorded session view.</p>}
+        {/* B20 filtered premium flow at the replay cursor's bucket: the pane
+            renders the FOCUSED bar's published trades (classified sides only,
+            multi-leg tickets grouped economically). Totals and drilldown share
+            one bar/window/filter identity, so they can only agree when they
+            describe the same bucket. No published trades -> explicit unknown
+            — aggregates are never inflated into invented trades. */}
+        {replayReport && (
+          <FlowPane
+            trades={flowTrades}
+            barId={replayReport.cursor}
+            windowKey="1m"
+            filters={{}}
+            cursorHash={bucketHash(replayReport.cursor, '1m', {})}
+            onBucketClick={onFlowBucket ? (payload) => onFlowBucket(payload) : null}
+          />
+        )}
         {/* B15 mounted replay readout: the focused pane's real frames flow
             through the replay algebra — cursor, partial/completed bar, extrema
             swept strictly at-or-before the cursor, newest known-at, and the
