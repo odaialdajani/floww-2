@@ -192,3 +192,21 @@ test("the full directory remains reachable when quick search fails and retries i
  fireEvent.click(screen.getByRole("button",{name:"Close stock directory"}));expect(screen.queryByRole("dialog")).toBeNull();expect(screen.queryByRole("listbox")).toBeNull();
  expect(fullAttempts).toBe(2);
 });
+
+// UI-02: backward-compatible diagnostics presentation option.
+test('diagnosticsDisclosure option moves the truthful feed counts into a scoped disclosure; default stays inline', () => {
+  const axios = require('axios');
+  axios.get.mockImplementation(async () => ({ data: { directory: { available: true, total: 5000, optionable_total: 900, stale: false }, options: { window_seconds: 600 }, coverage: { fresh: 120 } } }));
+  const { render, screen } = require('@testing-library/react');
+  // Default (no option): current inline behavior — counts rendered directly.
+  const { unmount } = render(<TickerPicker className="floww-header-symbol-picker" value="SPY" onChange={() => {}} />);
+  expect(screen.getByTestId('stock-feed-counts')).toBeInTheDocument();
+  expect(screen.queryByTestId('stock-diagnostics-disclosure')).not.toBeInTheDocument();
+  unmount();
+  // Opt-in: the SAME counts live inside a scoped disclosure with a summary.
+  render(<TickerPicker className="floww-header-symbol-picker" value="SPY" onChange={() => {}} diagnosticsDisclosure />);
+  const disclosure = screen.getByTestId('stock-diagnostics-disclosure');
+  expect(disclosure.tagName).toBe('DETAILS');
+  expect(disclosure.querySelector('summary')).toBeInTheDocument();
+  expect(disclosure.contains(screen.getByTestId('stock-feed-counts'))).toBe(true);
+});

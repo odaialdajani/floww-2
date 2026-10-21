@@ -33,3 +33,13 @@
 .ticker-picker-filters label { display:flex; align-items:center; gap:5px; font-size:12px; }
 .ticker-picker-filters select { max-width:240px; background:var(--panel-2,#111820); color:var(--text-primary,#f1f5f9); border:1px solid var(--border-2,#46505f); border-radius:4px; padding:5px; font-size:12px; }
 .ticker-picker-filters small { flex-basis:100%; color:var(--text-secondary,#adb7c7); line-height:1.4; }
+
+/* UI-02 diagnostics disclosure (opt-in presentation): same truthful counts,
+   one scoped disclosure instead of an always-on header row. */
+.ticker-picker .ticker-picker-diagnostics { margin-top: 4px; }
+.ticker-picker .ticker-picker-diagnostics > summary { display: inline-flex; align-items: center; min-height: 22px; padding: 2px 8px; border: 1px solid var(--border-subtle,#37575f); border-radius: 4px; background: transparent; color: var(--text-secondary,#b5c2cc); font-size: 11px; cursor: pointer; list-style: none; }
+.ticker-picker .ticker-picker-diagnostics > summary::-webkit-details-marker { display: none; }
+.ticker-picker .ticker-picker-diagnostics > summary::before { content: "▸ "; color: #e5bc62; }
+.ticker-picker .ticker-picker-diagnostics[open] > summary::before { content: "▾ "; }
+.ticker-picker .ticker-picker-diagnostics > summary:focus-visible { outline: 2px solid #e3c16a; outline-offset: 2px; }
+.ticker-picker .ticker-picker-diagnostics .ticker-picker-feed-counts { margin-top: 5px; }

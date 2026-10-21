@@ -19,7 +19,7 @@ function readFavorites(onError) {
 }
 
 /** Selection and favorites only: this component never changes scanner scope. */
-export default function TickerPicker({ value = "SPY", onChange, tickers = null, status = "unknown", onRetry, ariaLabel = "Search stocks", className = "" }) {
+export default function TickerPicker({ value = "SPY", onChange, tickers = null, status = "unknown", onRetry, ariaLabel = "Search stocks", className = "", diagnosticsDisclosure = false }) {
   const universe = useMemo(() => buildTickerUniverse(tickers).filter(validSymbol), [tickers]);
   const active = normalizeTicker(value);
   const globalPicker = className.split(/\s+/).includes("floww-header-symbol-picker");
@@ -196,11 +196,26 @@ export default function TickerPicker({ value = "SPY", onChange, tickers = null, 
       <button ref={directoryReturnFocus} type="button" className="ticker-picker-browse" aria-label="Browse stock list" aria-expanded={open} onClick={() => { if (open) close(); else { setOpen(true); input.current?.focus(); } }}>▾</button>
       <button type="button" className="ticker-picker-star" disabled={checking || !validSymbol(active)} aria-label={`${favorites.includes(active) ? "Remove" : "Add"} ${active} ${favorites.includes(active) ? "from" : "to"} favorites`} aria-pressed={favorites.includes(active)} onClick={toggleFavorite}>{favorites.includes(active) ? "★" : "☆"}</button>
     </div>
-    {globalPicker && <div className="ticker-picker-feed-counts" data-testid="stock-feed-counts" aria-label="Stock feed counts" title="Checked stocks have received option data in the shown window. Listed names show directory access; they do not prove every stock has recent data.">
-      <span>{coverage.data?.directory.available ? coverage.data.directory.total.toLocaleString()+" listed" : "Listed count unknown"}{coverage.data?.directory.stale || coverage.status==="unavailable" && coverage.data ? " (saved list)" : ""}</span>
-      <span>{coverage.fresh===null ? "Stock checks unknown" : coverage.fresh.toLocaleString()+" stocks checked"}{coverage.data?.directory.available ? " / "+coverage.data.directory.optionable_total.toLocaleString()+" with options" : ""}{coverage.data?.options.window_seconds ? " in "+Math.round(coverage.data.options.window_seconds/60)+" min" : ""}</span>
-      <span>{coverage.status==="unavailable" ? "Feed counts unavailable" : coverage.lastSuccessAge===null ? "Feed last success unknown" : "Feed read "+(coverage.lastSuccessAge<60 ? Math.round(coverage.lastSuccessAge)+"s" : Math.round(coverage.lastSuccessAge/60)+"m")+" ago"}</span>
-    </div>}
+    {/* UI-02 presentation option (backward-compatible, default OFF = current
+        behavior): the SAME truthful directory/scan diagnostics render either
+        inline as today, or — when a caller opts in — inside a scoped
+        disclosure so the header can drop the always-on diagnostics row. The
+        caller prop lives in protected App.js and stays BLOCKED until
+        specifically authorized; nothing is hidden or altered in content. */}
+    {globalPicker && (diagnosticsDisclosure
+      ? <details className="ticker-picker-diagnostics" data-testid="stock-diagnostics-disclosure">
+          <summary role="button">Feed & directory status</summary>
+          <div className="ticker-picker-feed-counts" data-testid="stock-feed-counts" aria-label="Stock feed counts" title="Checked stocks have received option data in the shown window. Listed names show directory access; they do not prove every stock has recent data.">
+            <span>{coverage.data?.directory.available ? coverage.data.directory.total.toLocaleString()+" listed" : "Listed count unknown"}{coverage.data?.directory.stale || coverage.status==="unavailable" && coverage.data ? " (saved list)" : ""}</span>
+            <span>{coverage.fresh===null ? "Stock checks unknown" : coverage.fresh.toLocaleString()+" stocks checked"}{coverage.data?.directory.available ? " / "+coverage.data.directory.optionable_total.toLocaleString()+" with options" : ""}{coverage.data?.options.window_seconds ? " in "+Math.round(coverage.data.options.window_seconds/60)+" min" : ""}</span>
+            <span>{coverage.status==="unavailable" ? "Feed counts unavailable" : coverage.lastSuccessAge===null ? "Feed last success unknown" : "Feed read "+(coverage.lastSuccessAge<60 ? Math.round(coverage.lastSuccessAge)+"s" : Math.round(coverage.lastSuccessAge/60)+"m")+" ago"}</span>
+          </div>
+        </details>
+      : <div className="ticker-picker-feed-counts" data-testid="stock-feed-counts" aria-label="Stock feed counts" title="Checked stocks have received option data in the shown window. Listed names show directory access; they do not prove every stock has recent data.">
+          <span>{coverage.data?.directory.available ? coverage.data.directory.total.toLocaleString()+" listed" : "Listed count unknown"}{coverage.data?.directory.stale || coverage.status==="unavailable" && coverage.data ? " (saved list)" : ""}</span>
+          <span>{coverage.fresh===null ? "Stock checks unknown" : coverage.fresh.toLocaleString()+" stocks checked"}{coverage.data?.directory.available ? " / "+coverage.data.directory.optionable_total.toLocaleString()+" with options" : ""}{coverage.data?.options.window_seconds ? " in "+Math.round(coverage.data.options.window_seconds/60)+" min" : ""}</span>
+          <span>{coverage.status==="unavailable" ? "Feed counts unavailable" : coverage.lastSuccessAge===null ? "Feed last success unknown" : "Feed read "+(coverage.lastSuccessAge<60 ? Math.round(coverage.lastSuccessAge)+"s" : Math.round(coverage.lastSuccessAge/60)+"m")+" ago"}</span>
+        </div>)}
     {(checking || message) && <p id={noteId} className="ticker-picker-notice" role={message ? "alert" : "status"}>{message || "Checking the provider stock list…"}</p>}
     {open && createPortal(<div ref={popup} className="ticker-picker-popup" style={position} onKeyDown={event => { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); input.current?.focus(); close(); } }}>
       {statusText && <p className="ticker-picker-status" role="status">{statusText}{onRetry && status !== "loading" && <button type="button" onClick={onRetry}>Retry stock list</button>}</p>}
