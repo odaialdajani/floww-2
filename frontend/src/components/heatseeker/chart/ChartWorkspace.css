@@ -74,3 +74,8 @@
   .workspace-layouts-row { flex-wrap: wrap; }
   .workspace-layouts-import input { max-width: 150px; }
 }
+
+/* B15 replay readout: the algebra's visible state, one compact strip. */
+.replay-readout { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 6px 0; padding: 6px 10px; border: 1px solid #2c3a46; border-radius: 6px; background: #0d151d; }
+.replay-readout span { font-size: 11px; color: #b9c6d2; white-space: nowrap; }
+.replay-readout span:first-child { color: #dce8f2; }

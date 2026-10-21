@@ -1,4 +1,4 @@
-import React, { useEffect, useReducer, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import PriceNodeHistory from '../PriceNodeHistory';
 import ChartPane from './ChartPane';
 import AtlasChart from './AtlasChart';
@@ -8,6 +8,7 @@ import { createLayout, migrate, sanitizeImport, serialize } from './persistence/
 import { listLocal, loadLocal, saveLocal, scheduleAutosave } from './persistence/layoutStore';
 import { DEFAULT_SHORTCUTS, LONG_PRESS_MS, actionFor, keyOf, nextFitMode, rebind, watermark } from './ChartShortcuts';
 import { clipboardState, composeExportSvg, exportPlan } from './ChartExport';
+import { createReplayState, replayStep } from './replay/replayReducer';
 import './ChartWorkspace.css';
 // B06 reversible single-pane workspace: controlled open + incumbent fallback.
 // OFF (default) renders the exact incumbent PriceNodeHistory with EVERY caller
@@ -61,6 +62,22 @@ export default function ChartWorkspace({
   const [fitMode, setFitMode] = useState('fit-visible');
   const [replaying, setReplaying] = useState(false);
   const [exportNote, setExportNote] = useState('');
+  // B15 replay algebra consumer: the focused pane's replay reports flow
+  // through replayReducer — the cursor, the partial/completed bar, extrema
+  // swept at the cursor and the live/replay cache split. Replay-derived
+  // events are admitted ONLY to the replay cache; the live cache never
+  // receives them (routeEvent enforces the split inside replayReducer).
+  const [replay, replayDispatch] = useReducer(replayStep, undefined, () => createReplayState());
+  const [replayReport, setReplayReport] = useState(null);
+  // Stable identity: the pane's report effect depends on this callback, so a
+  // new function per render would re-fire the effect forever. Dispatches
+  // only (both setters stable) — the memo never goes stale.
+  const handlePaneReplayState = useCallback((report) => {
+    if (!report) { setReplayReport(null); return; }
+    replayDispatch({ type: 'seek', cursor: report.cursor });
+    setReplayReport(report);
+    for (const event of report.delta || []) replayDispatch({ type: 'admit', event });
+  }, []);
   const restored = useRef(false);
   const longPressTimer = useRef(null);
   const history = { ticker, open, primary, toolbarActions, forcedScope, onRecordNodes, showAtlas, exposureLine, darkLevels, flowBars, cvdLine };
@@ -257,6 +274,23 @@ export default function ChartWorkspace({
           {replaying ? 'Pause replay' : 'Replay'}
         </button>
         {replaying && <p className="replay-banner" data-testid="replay-banner">Replay active — recorded session view.</p>}
+        {/* B15 mounted replay readout: the focused pane's real frames flow
+            through the replay algebra — cursor, partial/completed bar, extrema
+            swept strictly at-or-before the cursor, newest known-at, and the
+            live/replay cache split. Replay events never enter live caches. */}
+        {replayReport && (
+          <div className="replay-readout" data-testid="replay-readout"
+            data-cursor={replayReport.cursor}
+            data-bar-state={replayReport.bar && replayReport.bar.complete ? 'complete' : 'partial'}
+            data-live-count={Object.values(replay.caches.live || {}).reduce((n, m) => n + Object.keys(m || {}).length, 0)}
+            data-replay-count={Object.values(replay.caches.replay || {}).reduce((n, m) => n + Object.keys(m || {}).length, 0)}>
+            <span>Cursor {replayReport.cursorTime} · {replayReport.visibleBars}/{replayReport.totalBars} bars</span>
+            <span>Bar {replayReport.bar && replayReport.bar.complete ? 'complete' : 'partial'} · open {replayReport.bar ? replayReport.bar.open : '—'} close {replayReport.bar ? replayReport.bar.close : '—'}</span>
+            <span>Sweep high {replayReport.extrema.status === 'ok' ? replayReport.extrema.high : 'unknown'} · low {replayReport.extrema.status === 'ok' ? replayReport.extrema.low : 'unknown'} · {replayReport.extrema.status === 'ok' ? replayReport.extrema.count + ' bars' : replayReport.extrema.reason}</span>
+            <span>Known-at {replayReport.snapshotKnownAt ?? 'unknown'}</span>
+            <span>live {Object.values(replay.caches.live || {}).reduce((n, m) => n + Object.keys(m || {}).length, 0)} · replay {Object.values(replay.caches.replay || {}).reduce((n, m) => n + Object.keys(m || {}).length, 0)} · replay events never enter live caches</span>
+          </div>
+        )}
         <button type="button" data-testid="atlas-toggle" aria-pressed={atlas} onClick={() => setAtlas((v) => !v)}>
           {atlas ? 'Hide Atlas overlay' : 'Show Atlas overlay'}
         </button>
@@ -287,7 +321,7 @@ export default function ChartWorkspace({
             panes={panes}
             onFocus={(id) => dispatch({ type: 'focus', id })}
             renderPane={(pane) => (pane.id === focusedPane.id
-              ? <PriceNodeHistory {...history} onQuality={setQuality} />
+              ? <PriceNodeHistory {...history} onQuality={setQuality} onReplayState={handlePaneReplayState} />
               : <PriceNodeHistory ticker={pane.symbol} open={open} primary={false} showAtlas={showAtlas} />)}
           />
         </div>

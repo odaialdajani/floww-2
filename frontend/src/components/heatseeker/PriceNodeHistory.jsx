@@ -1,10 +1,11 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { API } from "../../config/api";
 import RecordedPriceChart from "./RecordedPriceChart";
 import DrawingRail from "./chart/drawings/DrawingRail";
 import { loadDrawings, saveDrawings } from "./chart/drawings/drawingPersistence";
 import { reduceDrawings, createDrawing, geometryFor, magnetPoint, nudgeDrawing, canEdit, suppressesPan, unprojectPoint, viewportFor, TOOLS as DRAWING_TOOLS_6 } from "./chart/drawings/drawingReducer";
+import { barAt, sweepExtrema, visibleSnapshot } from "./chart/replay/replayReducer";
 import { anchorsFor } from "./chart/drawings/toolRegistry";
 import { shouldHandleShortcut } from "./chart/ChartShortcuts";
 import { chartTime } from "./recordedPriceChartData";
@@ -20,7 +21,7 @@ function savedViewLabel(scope,index){
  return mode+" | "+sorted.length+" "+(sorted.length===1?"expiry":"expiries")+" | "+sorted[0]+(sorted.length>1?" to "+sorted.at(-1):"");
 }
 
-export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen, onOpenChange, primary = false, toolbarActions = null, exposureLine = null, darkLevels = null, flowBars = null, alertLines = null, showAtlas = true, forcedScope = null, onRecordNodes = null, cvdLine = null, onQuality = null }) {
+export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen, onOpenChange, primary = false, toolbarActions = null, exposureLine = null, darkLevels = null, flowBars = null, alertLines = null, showAtlas = true, forcedScope = null, onRecordNodes = null, cvdLine = null, onQuality = null, onReplayState = null }) {
   const [localOpen, setLocalOpen] = useState(false);
   const open = controlledOpen ?? (primary || localOpen);
   const setOpen = value => { setLocalOpen(value); onOpenChange?.(value); };
@@ -197,6 +198,39 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
       retry: retryRemaining > 0 ? `manual retry in ${retryRemaining}s` : "manual retry available",
     });
   }, [onQuality, status, frames.length, payload, retryRemaining]);
+  // B15 replay algebra reporting (inert without a listener, like onQuality):
+  // the pane reports its REAL frames through the replay algebra — cursor,
+  // partial/completed bar (a bar completes only once its window closes past
+  // the cursor), extrema swept strictly at-or-before the cursor (future bars
+  // can never extend the historical range), newest known-at snapshot, and the
+  // provenance of the newest visible frame (live at the advancing head,
+  // replay when scrubbing/rewinding). Replay-derived events never enter live
+  // caches — the consumer routes them through replayReducer's caches.
+  const lastReportedPosition = useRef(-1);
+  useEffect(() => {
+    if (!onReplayState) return undefined;
+    if (!frames.length) { onReplayState(null); return undefined; }
+    const cursorFrame = frames[Math.min(position, frames.length - 1)];
+    const cursor = Date.parse(cursorFrame.time);
+    const windowEnd = frames[position + 1] ? Date.parse(frames[position + 1].time) : null;
+    const events = frames.map(f => ({ id: f.time, event_time: Date.parse(f.time), available_at: Date.parse(f.time), open: f.open, close: f.close }));
+    const bar = barAt(events, cursor, windowEnd);
+    const visible = frames.slice(0, position + 1).map(f => ({ time: Date.parse(f.time), high: f.high, low: f.low }));
+    const extrema = sweepExtrema(visible, cursor);
+    const snapshot = visibleSnapshot(frames.map(f => ({ id: f.time, known_at: Date.parse(f.time), close: f.close })), cursor);
+    const wentBack = position < lastReportedPosition.current;
+    const origin = (playing || wentBack) ? "replay" : "live";
+    const delta = position === lastReportedPosition.current
+      ? []
+      : [{ id: cursorFrame.time, symbol: ticker.toUpperCase(), value: cursorFrame.close, time: cursor, origin }];
+    lastReportedPosition.current = position;
+    onReplayState({
+      cursor, cursorTime: cursorFrame.time, playing, bar, extrema,
+      snapshotKnownAt: snapshot ? snapshot.known_at : null,
+      visibleBars: position + 1, totalBars: frames.length, delta,
+    });
+    return undefined;
+  }, [onReplayState, frames, position, playing]); // eslint-disable-line react-hooks/exhaustive-deps
   const comparisonTime = frames[position]?.time;
   const awareTime = value => typeof value === "string" && /(?:Z|[+-]\d{2}:\d{2})$/.test(value)
     ? Date.parse(value) : NaN;
