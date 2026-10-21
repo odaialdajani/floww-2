@@ -4821,3 +4821,10 @@ input[class*="bg-slate-800"], select[class*="bg-slate-800"], textarea[class*="bg
   font-size: 18px;
   margin-bottom: 4px;
 }
+
+/* 2026-10-20 punch item 2: the Related pill in the header actions clipped at
+   390px (scrollWidth 52 vs clientWidth ~41) — the flex row squeezed the
+   unstyled button below its label. The pill keeps its natural hit-width: it
+   never shrinks under its label and never clips. App.js is protected; this is
+   the CSS-only geometry fix. */
+.ap-header-actions .related-workspace-toggle { flex: none; min-width: max-content; white-space: nowrap; }
