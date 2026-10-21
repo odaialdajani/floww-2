@@ -29,6 +29,7 @@ import { resolveSelectedWall, wallPositionOf } from "../../lib/solsticeSelection
 import {skylitViewScope,readSkylitView,writeSkylitView,captureSkylitSelection,restoreSkylitSelection} from "./skylitViewPreferences";
 import {chartScopeFor} from "./chart/scopeEcho";
 import { awaitRecording } from "./chart/pollRecording";
+import TrinityView from "../TrinityView";
 import {useScopedReading} from "../../hooks/useScopedReading";
 
 function stockStudyOpen(preferences, defaultStudy) {
@@ -847,7 +848,12 @@ function SkylitDashboard({
             workspace. Flag off (default) renders the exact incumbent
             PriceNodeHistory with every prop below passed through; flag on
             adds the pane wrapper + data-quality strip. No control removed. */}
-        <ChartWorkspace useNew={isChartWorkspaceEnabled()} ticker={ticker} primary={showPriceHistory} open={!rangeOpen && showPriceHistory} toolbarActions={showPriceHistory ? studyActions : null} forcedScope={chartScopeFor(visibleData, isReplay)} onChartContext={setFocusedChartContext} onRecordNodes={async () => {
+        <ChartWorkspace useNew={isChartWorkspaceEnabled()} ticker={ticker} primary={showPriceHistory} open={!rangeOpen && showPriceHistory} toolbarActions={showPriceHistory ? studyActions : null} forcedScope={chartScopeFor(visibleData, isReplay)}
+        /* B14 recovery carry: the dock REUSES this dashboard's existing map
+           state (entry = live visibleData, stale during replay — no parallel
+           fetch) and docks the EXISTING Market component lazily. */
+        docksMaps={{ [ticker]: { data: visibleData, stale: isReplay } }}
+        docksSidecar={(sidecar, symbol) => <TrinityView ticker={symbol} />} onChartContext={setFocusedChartContext} onRecordNodes={async () => {
           // G11: refresh the heatmap desk (server records the fresh build as
           // a side effect), then poll price-history scopes until the new
           // snapshot is readable. Bounded, explicit, user-initiated spend.

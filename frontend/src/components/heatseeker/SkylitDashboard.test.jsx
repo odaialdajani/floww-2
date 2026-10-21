@@ -1726,3 +1726,18 @@ test('no basis badge without a reported basis', async () => {
   await waitFor(() => expect(screen.getByTestId('mock-heatmap')).toBeInTheDocument());
   expect(screen.queryByTestId('basis-badge')).not.toBeInTheDocument();
 });
+
+test('flag-on workspace docks the live map entry through the sidecar policy (B14 recovery carry)', async () => {
+  window.__FLOWW_CHART_WORKSPACE__ = true;
+  try {
+    render(<SkylitDashboard />);
+    await drain();
+    const dock = await screen.findByTestId('chart-docks');
+    // The dashboard reuses its OWN live map state for its focused ticker:
+    // entry present (not tombstoned), so the policy resolves ok or stale —
+    // never missing/unavailable — and the census is bounded.
+    expect(['ok', 'stale']).toContain(dock.getAttribute('data-status'));
+    expect(dock.getAttribute('data-symbol')).toBeTruthy();
+    expect(screen.getByTestId('dock-subs').textContent).toMatch(/ of 10 subscriptions/);
+  } finally { window.__FLOWW_CHART_WORKSPACE__ = false; }
+});

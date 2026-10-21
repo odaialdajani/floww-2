@@ -56,7 +56,7 @@ export function magnetPoint(point, frames, radius = 0.25, vp = viewportFor(frame
   if (!point || !vp) return point;
   const list = (Array.isArray(frames) ? frames : []).filter(f => f && Number.isFinite(Date.parse(f.time)));
   if (!list.length) return point;
-  const t = Date.parse(new Date(point.t).toISOString ? point.t : point.t) || point.t;
+  const t = Number.isFinite(point.t) ? point.t : Date.parse(point.t);
   let nearest = null, bestDt = Infinity;
   for (const frame of list) {
     const dt = Math.abs(Date.parse(frame.time) - t);

@@ -160,6 +160,18 @@ test('B16 geometryFor renders every named tool family', () => {
   expect(geom.geometryFor('trend', [{ t: NaN, p: 1 }], vp)).toBe(null);
 });
 
+
+// jsdom's PointerEvent does not carry clientX/pointerType through React's
+// synthetic proxy, so pointer geometry is dispatched as pointerdown-typed
+// MouseEvents with real coordinates (real browsers need no such help).
+const firePointer = (el, type, x, y) => {
+  const { act } = require('@testing-library/react');
+  const event = new window.MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y });
+  event.pointerType = 'mouse';
+  act(() => { el.dispatchEvent(event); });
+  return event;
+};
+
 test('B16 MOUNTED: create by pointer, drag with pan suppressed, nudge by keyboard, undo, cancel', async () => {
   const axios = require('axios');
   axios.get.mockImplementation(async () => ({ data: { ticker: 'SPY', frames: frames2, candles_with_recorded_nodes: 0, scopes: [] } }));
@@ -174,9 +186,9 @@ test('B16 MOUNTED: create by pointer, drag with pan suppressed, nudge by keyboar
   // Creation: pick trend, place two anchors — both magnetized to OHLC times.
   fireEvent.click(screen.getByTestId('rail-tool-trend'));
   expect(screen.getByTestId('rail-cancel')).toBeInTheDocument();
-  fireEvent.pointerDown(screen.getByTestId('drawing-layer'), { pointerType: 'mouse', clientX: 150, clientY: 100 });
+  firePointer(screen.getByTestId('drawing-layer'), 'pointerdown', 150, 100);
   expect(screen.getAllByTestId('draft-anchor')).toHaveLength(1);
-  fireEvent.pointerDown(screen.getByTestId('drawing-layer'), { pointerType: 'mouse', clientX: 450, clientY: 260 });
+  firePointer(screen.getByTestId('drawing-layer'), 'pointerdown', 450, 260);
   expect(screen.queryByTestId('draft-anchor')).not.toBeInTheDocument(); // draft committed
   const persisted = JSON.parse(window.localStorage.getItem('floww.drawings.SPY'));
   expect(persisted).toHaveLength(1);
@@ -189,17 +201,17 @@ test('B16 MOUNTED: create by pointer, drag with pan suppressed, nudge by keyboar
   const shape = screen.getByTestId('drawing-shape');
   expect(shape.getAttribute('points').split(' ')).toHaveLength(2); // rendered line
   // Drag: pointer on the shape starts a selected-drawing drag (pan suppressed).
-  fireEvent.pointerDown(shape, { pointerType: 'mouse', clientX: 450, clientY: 260 });
+  firePointer(shape, 'pointerdown', 450, 260);
   expect(screen.getByTestId('drawing-layer').getAttribute('data-arbitration')).toBe('drawing-drag');
-  fireEvent.pointerMove(screen.getByTestId('drawing-layer'), { pointerType: 'mouse', clientX: 300, clientY: 200 });
+  firePointer(screen.getByTestId('drawing-layer'), 'pointermove', 300, 200);
   const dragged = JSON.parse(window.localStorage.getItem('floww.drawings.SPY'))[0];
   expect(dragged.anchors).not.toEqual(persisted[0].anchors); // moved
   expect(dragged.revision).toBeGreaterThan(persisted[0].revision);
-  fireEvent.pointerUp(screen.getByTestId('drawing-layer'), { pointerType: 'mouse' });
+  firePointer(screen.getByTestId('drawing-layer'), 'pointerup', 300, 200);
   expect(screen.getByTestId('drawing-layer').getAttribute('data-arbitration')).toBe('idle');
   // Keyboard nudge: arrows move the selected drawing by one logical step.
-  fireEvent.pointerDown(shape, { pointerType: 'mouse', clientX: 300, clientY: 200 }); // select + drag start
-  fireEvent.pointerUp(screen.getByTestId('drawing-layer'), { pointerType: 'mouse' });
+  firePointer(shape, 'pointerdown', 300, 200); // select + drag start
+  firePointer(screen.getByTestId('drawing-layer'), 'pointerup', 300, 200);
   const beforeNudge = JSON.parse(window.localStorage.getItem('floww.drawings.SPY'))[0].anchors;
   fireEvent.keyDown(window, { key: 'ArrowLeft' });
   const afterNudge = JSON.parse(window.localStorage.getItem('floww.drawings.SPY'))[0].anchors;
@@ -213,7 +225,7 @@ test('B16 MOUNTED: create by pointer, drag with pan suppressed, nudge by keyboar
   fireEvent.click(screen.getByTestId('rail-tool-text'));
   fireEvent.keyDown(window, { key: 'Escape' });
   expect(screen.queryByTestId('rail-cancel')).not.toBeInTheDocument();
-  fireEvent.pointerDown(screen.getByTestId('drawing-layer'), { pointerType: 'mouse', clientX: 200, clientY: 200 });
+  firePointer(screen.getByTestId('drawing-layer'), 'pointerdown', 200, 200);
   expect(JSON.parse(window.localStorage.getItem('floww.drawings.SPY'))).toHaveLength(1); // nothing added
   // Undo removes the drawing and persists the removal.
   fireEvent.click(screen.getByTestId('rail-undo'));

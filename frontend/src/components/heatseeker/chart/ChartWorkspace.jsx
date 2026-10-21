@@ -14,6 +14,7 @@ import { initialBalance, nakedLevels, poc, tickRows, valueArea } from './indicat
 import { levelLabel, topLevels } from './indicators/DarkPoolLevels';
 import { candleDelta, sessionCvd } from './indicators/Footprint';
 import { bindContext } from './context/chartContext';
+import ChartDocks from './ChartDocks';
 import './ChartWorkspace.css';
 // B06 reversible single-pane workspace: controlled open + incumbent fallback.
 // OFF (default) renders the exact incumbent PriceNodeHistory with EVERY caller
@@ -58,6 +59,7 @@ export default function ChartWorkspace({
   flowTrades = null, onFlowBucket = null,
   profileTrades = null, darkPoolPrints = null, classifiedBars = null, priorLevels = null,
   onChartContext = null,
+  docksMaps = {}, docksSidecar = null,
 }) {
   const [atlas, setAtlas] = useState(false);
   const [quality, setQuality] = useState(null);
@@ -361,6 +363,14 @@ export default function ChartWorkspace({
             </div>
           );
         })()}
+        {/* B14 focused-pane sidecar dock (recovery carry): the FOCUSED
+            pane's symbol follows the explicit sidecar policy
+            (ok/stale/missing/removed/unavailable); map entries come from the
+            consumer's existing map state and the sidecar content is the
+            consumer's existing component — a frame, never another dashboard.
+            Fetch subscriptions capped at MAX_SUBSCRIPTIONS with a census. */}
+        <ChartDocks focusedSymbol={focusedPane.symbol} maps={docksMaps}
+          subscriptionSymbols={panes.map(p => p.symbol)} renderSidecar={docksSidecar} />
         {replayReport && (
           <div className="chart-context-strip" data-testid="chart-context"
             data-status={chartDescriptor ? chartDescriptor.status : 'unbound'}>
