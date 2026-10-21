@@ -228,6 +228,9 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
       cursor, cursorTime: cursorFrame.time, playing, bar, extrema,
       snapshotKnownAt: snapshot ? snapshot.known_at : null,
       visibleBars: position + 1, totalBars: frames.length, delta,
+      // B23: the REAL visible bars at the cursor (epoch time, observed range)
+      // feed bar-resolution reads — never a fabricated volume-at-price.
+      visible: frames.slice(0, position + 1).map(f => ({ time: Date.parse(f.time), low: f.low, high: f.high })),
     });
     return undefined;
   }, [onReplayState, frames, position, playing]); // eslint-disable-line react-hooks/exhaustive-deps

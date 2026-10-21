@@ -10,6 +10,9 @@ import { DEFAULT_SHORTCUTS, LONG_PRESS_MS, actionFor, keyOf, nextFitMode, rebind
 import { clipboardState, composeExportSvg, exportPlan } from './ChartExport';
 import { createReplayState, replayStep } from './replay/replayReducer';
 import FlowPane, { bucketHash } from './indicators/FlowPane';
+import { initialBalance, nakedLevels, poc, tickRows, valueArea } from './indicators/ProfilePrimitives';
+import { levelLabel, topLevels } from './indicators/DarkPoolLevels';
+import { candleDelta, sessionCvd } from './indicators/Footprint';
 import './ChartWorkspace.css';
 // B06 reversible single-pane workspace: controlled open + incumbent fallback.
 // OFF (default) renders the exact incumbent PriceNodeHistory with EVERY caller
@@ -52,6 +55,7 @@ export default function ChartWorkspace({
   darkLevels = null, flowBars = null, cvdLine = null,
   notice = null, onRetry = null, frames = null, nodes = [], bars = [], flow = null, atlasDarkLevels = [],
   flowTrades = null, onFlowBucket = null,
+  profileTrades = null, darkPoolPrints = null, classifiedBars = null, priorLevels = null,
 }) {
   const [atlas, setAtlas] = useState(false);
   const [quality, setQuality] = useState(null);
@@ -292,6 +296,45 @@ export default function ChartWorkspace({
             onBucketClick={onFlowBucket ? (payload) => onFlowBucket(payload) : null}
           />
         )}
+        {/* B23 profiles/TPO/session reads at the replay cursor: initial
+            balance comes from the REAL visible bars (a labeled bar-resolution
+            approximation); POC/value-area need EXACT classified trade prices
+            (tick-binned, never bar-derived); CVD needs classified buy/sell
+            sizes — candle direction is never a proxy; dark-pool levels need
+            exact single prints — aggregates are refused. Every unavailable
+            state is explicit, with its reason. */}
+        {replayReport && (() => {
+          const bars = replayReport.visible || [];
+          const ib = initialBalance(bars, { periods: 2, cursor: replayReport.cursor });
+          const tick = tickRows(profileTrades, 0.5);
+          const rows = tick.status === 'ok' ? tick.rows : null;
+          const pocRow = rows ? poc(rows) : null;
+          const va = rows ? valueArea(rows, 0.7) : { status: 'unavailable', reason: tick.reason || 'no classified trade prices' };
+          const cvd = classifiedBars ? sessionCvd(classifiedBars) : candleDelta();
+          const dark = darkPoolPrints ? topLevels(darkPoolPrints, { topN: 3 }) : [];
+          const naked = priorLevels ? nakedLevels(priorLevels, bars, { cursor: replayReport.cursor }) : [];
+          const fmt = n => (Number.isFinite(n) ? `${Math.round(n * 100) / 100}` : 'unknown');
+          return (
+            <div className="profiles-panel" data-testid="profiles-panel"
+              data-ib-status={ib.status} data-ib-periods={ib.status === 'ok' ? String(ib.periods) : '0'}
+              data-va-status={va.status} data-cvd-status={cvd.status} data-dark-count={String(dark.length)}>
+              <span data-testid="profile-ib">Initial balance {ib.status === 'ok'
+                ? `${fmt(ib.low)}–${fmt(ib.high)} over ${ib.periods} bars · ${ib.approximation}`
+                : ib.reason}</span>
+              <span data-testid="profile-poc">{pocRow ? `POC ${fmt(pocRow.price)} · ${pocRow.volume}` : 'POC unavailable — no classified trade prices'}</span>
+              <span data-testid="profile-va">{va.status === 'ok'
+                ? `Value area ${fmt(va.low)}–${fmt(va.high)} · ${Math.round((va.attained || 0) * 100)}% attained (70% target)`
+                : `Value area unavailable — ${va.reason}`}</span>
+              <span data-testid="profile-cvd">{cvd.status === 'ok'
+                ? `Session CVD ${cvd.rows.map(r => (r.delta >= 0 ? '+' : '') + Math.round(r.delta)).join(' ') || 'zero'} · last ${Math.round(cvd.rows[cvd.rows.length - 1].close)}`
+                : `CVD unavailable — ${cvd.reason}`}</span>
+              <span data-testid="profile-dark">{dark.length
+                ? dark.map(levelLabel).join(' | ')
+                : 'no dark-pool prints published — aggregates are never shown as single prints'}</span>
+              {naked.length > 0 && <span data-testid="profile-naked">{naked.filter(l => l.naked).length} naked level(s) beyond the cursor</span>}
+            </div>
+          );
+        })()}
         {/* B15 mounted replay readout: the focused pane's real frames flow
             through the replay algebra — cursor, partial/completed bar, extrema
             swept strictly at-or-before the cursor, newest known-at, and the

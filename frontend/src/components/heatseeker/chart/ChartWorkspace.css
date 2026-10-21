@@ -79,3 +79,8 @@
 .replay-readout { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 6px 0; padding: 6px 10px; border: 1px solid #2c3a46; border-radius: 6px; background: #0d151d; }
 .replay-readout span { font-size: 11px; color: #b9c6d2; white-space: nowrap; }
 .replay-readout span:first-child { color: #dce8f2; }
+
+/* B23 profiles panel: one compact honest-reads strip beside the flow pane. */
+.profiles-panel { display: flex; flex-direction: column; gap: 3px; margin: 6px 0; padding: 6px 10px; border: 1px solid #2c3a46; border-radius: 6px; background: #0d151d; }
+.profiles-panel span { font-size: 11px; color: #b9c6d2; }
+.profiles-panel span[data-testid="profile-ib"] { color: #dce8f2; }
