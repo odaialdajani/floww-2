@@ -4807,3 +4807,17 @@ input[class*="bg-slate-800"], select[class*="bg-slate-800"], textarea[class*="bg
 @media (max-width: 600px) {
   .floww-workspace { margin-left: 64px !important; }
 }
+
+/* 2026-10-19 punch item 3 (reviewer spec, integrator relay): compact the rail
+   error card. ErrorState (components/RetryButton.js) renders
+   className="panel p-4 text-center" data-testid="error-state"; in the narrow
+   left rail that padding plus the 2xl emoji crowds the summary. Rail-scoped
+   override only — desktop panels and other ErrorState mounts unchanged. */
+.heatseeker-layout .heatseeker-sidebar-left [data-testid="error-state"] {
+  padding: 10px 12px;
+  text-align: left;
+}
+.heatseeker-layout .heatseeker-sidebar-left [data-testid="error-state"] > div:first-child {
+  font-size: 18px;
+  margin-bottom: 4px;
+}
