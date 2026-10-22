@@ -59,12 +59,13 @@ export default function ChartWorkspace({
   notice = null, onRetry = null, frames = null, nodes = [], bars = [], flow = null, atlasDarkLevels = [],
   flowTrades = null, onFlowBucket = null,
   profileTrades = null, darkPoolPrints = null, classifiedBars = null, priorLevels = null,
-  ibEnvelope = null, nakedEnvelope = null,
+  ibEnvelope = null, nakedEnvelope = null, flowEnvelope = null,
   onChartContext = null,
   docksMaps = {}, docksSidecar = null,
 }) {
   const [atlas, setAtlas] = useState(false);
   const [quality, setQuality] = useState(null);
+  const [envelopes, setEnvelopes] = useState(null);
   const [layoutId, setLayoutId] = useState('single');
   const [panes, dispatch] = useReducer(panesReducer, undefined, () => createPanes(1, ticker));
   const [layoutNote, setLayoutNote] = useState('');
@@ -146,6 +147,16 @@ export default function ChartWorkspace({
     return undefined;
   }, [chartDescriptor, chartCurrent, onChartContext]); // eslint-disable-line react-hooks/exhaustive-deps
   const history = { ticker, open, primary, toolbarActions, forcedScope, onRecordNodes, showAtlas, exposureLine, darkLevels, flowBars, cvdLine };
+
+  // R21-03/04 supply wiring: the focused pane's own price-history fetch
+  // publishes its recorded admission envelopes through onEnvelopes. An
+  // explicit caller prop still wins (mount harness + host binding
+  // contracts); with neither source present the legacy local algebra runs
+  // exactly as committed — callers that never ask envelopes are byte-stable.
+  const recordedEnvelopes = envelopes && typeof envelopes === 'object' ? envelopes : null;
+  const ibSource = ibEnvelope ?? (recordedEnvelopes ? recordedEnvelopes.initial_balance : null);
+  const nakedSource = nakedEnvelope ?? (recordedEnvelopes ? recordedEnvelopes.naked : null);
+  const flowSource = flowEnvelope ?? (recordedEnvelopes ? recordedEnvelopes.flow : null);
 
   const applyPersisted = (data) => {
     if (!data || typeof data !== 'object') return false;
@@ -353,6 +364,7 @@ export default function ChartWorkspace({
           return (
             <FlowPane
               trades={flowTrades}
+              envelope={flowSource && typeof flowSource === 'object' ? flowSource : null}
               barId={liveReport.cursor}
               windowKey={windowKey}
               filters={{}}
@@ -373,8 +385,8 @@ export default function ChartWorkspace({
           // R21-04 caller binding: a server admission envelope (admit_initial_balance /
           // naked_levels_claim) overrides the local algebra — its refusal code or
           // coverage-honest bounds are the truth, never re-derived locally.
-          const ibServer = ibEnvelope && typeof ibEnvelope === 'object' ? ibEnvelope : null;
-          const nakedServer = nakedEnvelope && typeof nakedEnvelope === 'object' ? nakedEnvelope : null;
+          const ibServer = ibSource && typeof ibSource === 'object' ? ibSource : null;
+          const nakedServer = nakedSource && typeof nakedSource === 'object' ? nakedSource : null;
           const ib = ibServer ? null : initialBalance(bars, { periods: 2, cursor: liveReport.cursor });
           const tick = tickRows(profileTrades, 0.5);
           const rows = tick.status === 'ok' ? tick.rows : null;
@@ -481,7 +493,7 @@ export default function ChartWorkspace({
                   darkLevels={pane.symbol === ticker ? darkLevels : null}
                   flowBars={pane.symbol === ticker ? flowBars : null}
                   cvdLine={pane.symbol === ticker ? cvdLine : null}
-                  onQuality={setQuality} onReplayState={handlePaneReplayState} replaySourceId={pane.id}
+                  onQuality={setQuality} onEnvelopes={setEnvelopes} onReplayState={handlePaneReplayState} replaySourceId={pane.id}
                   replayEpoch={layoutId + ':' + pane.generation} />
               : <PriceNodeHistory ticker={pane.symbol} open={open} primary={false} showAtlas={showAtlas} />)}
           />

@@ -21,7 +21,7 @@ function savedViewLabel(scope,index){
  return mode+" | "+sorted.length+" "+(sorted.length===1?"expiry":"expiries")+" | "+sorted[0]+(sorted.length>1?" to "+sorted.at(-1):"");
 }
 
-export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen, onOpenChange, primary = false, toolbarActions = null, exposureLine = null, darkLevels = null, flowBars = null, alertLines = null, showAtlas = true, forcedScope = null, onRecordNodes = null, cvdLine = null, onQuality = null, onReplayState = null, replaySourceId = null, replayEpoch = null }) {
+export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen, onOpenChange, primary = false, toolbarActions = null, exposureLine = null, darkLevels = null, flowBars = null, alertLines = null, showAtlas = true, forcedScope = null, onRecordNodes = null, cvdLine = null, onQuality = null, onEnvelopes = null, onReplayState = null, replaySourceId = null, replayEpoch = null }) {
   const [localOpen, setLocalOpen] = useState(false);
   const open = controlledOpen ?? (primary || localOpen);
   const setOpen = value => { setLocalOpen(value); onOpenChange?.(value); };
@@ -97,7 +97,7 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
     setPayload(null); setStatus("loading"); setPlaying(false); setRetryUntil(0);
     const activeScope = usingMapScope ? forcedScope : scope;
     axios.get(`${API}/heatseeker/price-history/${encodeURIComponent(ticker)}`, {
-      params: { days, interval_minutes: minutes, include_metric_lines: true, sessions, ...(activeScope ? { query_key: activeScope } : {}), ...(contract ? { contract_symbol: contract } : {}) },
+      params: { days, interval_minutes: minutes, include_metric_lines: true, include_envelopes: true, sessions, ...(activeScope ? { query_key: activeScope } : {}), ...(contract ? { contract_symbol: contract } : {}) },
       timeout: 30000, signal: controller.signal,
     }).then(({ data }) => {
       if (!active) return;
@@ -198,6 +198,16 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
       retry: retryRemaining > 0 ? `manual retry in ${retryRemaining}s` : "manual retry available",
     });
   }, [onQuality, status, frames.length, payload, retryRemaining]);
+  // R21-03/04 supply wiring (inert without a listener, like onQuality): the
+  // pane publishes the recorded admission envelopes that arrived alongside
+  // this read's own bars. A payload without an envelopes key — or this
+  // pane's reset to no payload — publishes null, so the workspace never
+  // renders a previous read's truth.
+  useEffect(() => {
+    if (!onEnvelopes) return;
+    onEnvelopes(payload && typeof payload === "object" && payload.envelopes
+      && typeof payload.envelopes === "object" ? payload.envelopes : null);
+  }, [onEnvelopes, payload]);
   // B15 replay algebra reporting (inert without a listener, like onQuality):
   // the pane reports its REAL frames through the replay algebra — cursor,
   // partial/completed bar (a bar completes only once its window closes past
