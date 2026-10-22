@@ -83,3 +83,59 @@ test("economic multi-leg grouping keeps mixed tickets explicit", () => {
   expect(buckets.put_premium).toBe(-20);
   expect(buckets.count).toBe(2);
 });
+
+// R21-03 caller binding: the pane consumes the server admission envelope
+// (admit_flow_bucket) as the source of truth — refused/unavailable states
+// carry their named reasons and gap counts; available buckets show the
+// SERVER-admitted totals, never a local re-bucket.
+describe('R21-03 admission envelope binding', () => {
+  test('refused envelope renders the refusal code, never invented totals', () => {
+    const { container } = render(
+      <FlowPane envelope={{ status: 'refused', reason: 'cursor-not-in-regular-session' }} />
+    );
+    const refused = container.querySelector('[data-testid="flow-pane-refused"]');
+    expect(refused).not.toBeNull();
+    expect(refused.getAttribute('data-reason')).toBe('cursor-not-in-regular-session');
+    expect(container.querySelector('[data-testid="flow-totals"]')).toBeNull();
+  });
+
+  test('unavailable envelope renders the reason and named gap counts', () => {
+    const { container } = render(
+      <FlowPane envelope={{
+        status: 'unavailable', reason: 'no admitted rows for this flow bucket',
+        gaps: { previous_session: 2, malformed_row: 1, filtered_out: 3 },
+        excluded_count: 6,
+      }} />
+    );
+    const un = container.querySelector('[data-testid="flow-pane-unavailable"]');
+    expect(un).not.toBeNull();
+    expect(un.getAttribute('data-reason')).toBe('no admitted rows for this flow bucket');
+    const gaps = container.querySelector('[data-testid="flow-gaps"]');
+    expect(gaps.textContent).toContain('previous_session 2');
+    expect(gaps.textContent).toContain('malformed_row 1');
+    expect(gaps.textContent).toContain('filtered_out 3');
+    expect(container.querySelector('[data-testid="flow-totals"]')).toBeNull();
+  });
+
+  test('available envelope renders server totals, gaps, and certification basis', () => {
+    const { container } = render(
+      <FlowPane envelope={{
+        status: 'available', ticker: 'SPY', scope_hash: 'abc123',
+        totals: { call_premium: 5000, put_premium: -2000, count: 7, unknown: 1, top: [] },
+        admitted_count: 7, excluded_count: 2,
+        gaps: { late_receipt: 2, filtered_out: 0 },
+        certification: { basis: 'row-level eligibility checks over recorded receipt and own-window event clocks', certified_by_hash: false },
+      }} cursorHash="abc123" />
+    );
+    expect(container.querySelector('[data-testid="flow-call-premium"]').textContent)
+      .toContain('5000');
+    expect(container.querySelector('[data-testid="flow-put-premium"]').textContent)
+      .toContain('-2000');
+    const gaps = container.querySelector('[data-testid="flow-gaps"]');
+    expect(gaps.textContent).toContain('late_receipt 2');
+    expect(gaps.textContent).not.toContain('filtered_out');
+    const cert = container.querySelector('[data-testid="flow-certification"]');
+    expect(cert.textContent).toContain('row-level');
+    expect(container.querySelector('[data-testid="flow-drilldown"]')).not.toBeNull();
+  });
+});

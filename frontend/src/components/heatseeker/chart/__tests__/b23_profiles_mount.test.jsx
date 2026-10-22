@@ -82,3 +82,51 @@ test('B23 MOUNTED: published trades/prints/classified bars light the exact paths
     expect(screen.getByTestId('profile-cvd').textContent).toContain('-20');
   } finally { window.__FLOWW_CHART_WORKSPACE__ = false; }
 });
+
+// R21-04 caller binding: when the server admission envelopes are provided,
+// the profiles panel shows the SERVER-admitted truth — refusal codes,
+// unavailable reasons, coverage honesty — instead of the local algebra.
+test('R21-04 MOUNTED: ib/naked admission envelopes bind over the local algebra', async () => {
+  armPayload(FRAMES);
+  window.__FLOWW_CHART_WORKSPACE__ = true;
+  try {
+    render(<ChartWorkspace
+      ticker="SPY" open useNew
+      ibEnvelope={{
+        status: 'refused', reason: 'opening-history-truncated',
+      }}
+      nakedEnvelope={{
+        status: 'unavailable', reason: 'unknown-range-cannot-certify-untouched',
+      }} />);
+    await waitFor(() => expect(screen.getByTestId('recorded-price-chart')).toBeInTheDocument());
+    await act(async () => { await new Promise(r => setTimeout(r, 200)); });
+    const panel = screen.getByTestId('profiles-panel');
+    expect(panel.getAttribute('data-ib-status')).toBe('refused');
+    expect(screen.getByTestId('profile-ib').textContent).toContain('opening-history-truncated');
+    expect(screen.getByTestId('profile-naked').textContent).toContain('unknown-range-cannot-certify-untouched');
+  } finally { delete window.__FLOWW_CHART_WORKSPACE__; }
+});
+
+test('R21-04 MOUNTED: available ib envelope shows server bounds and coverage', async () => {
+  armPayload(FRAMES);
+  window.__FLOWW_CHART_WORKSPACE__ = true;
+  try {
+    render(<ChartWorkspace
+      ticker="SPY" open useNew
+      ibEnvelope={{
+        status: 'available',
+        bounds: { low: 98, high: 103 },
+        coverage: { covered: 4, expected_total: 4, complete: true, opening_minutes: 60 },
+        approximation: 'bar-resolution',
+        certification: { basis: 'recorded opening-window coverage knowable at the cursor', certified_by_hash: false },
+      }} />);
+    await waitFor(() => expect(screen.getByTestId('recorded-price-chart')).toBeInTheDocument());
+    await act(async () => { await new Promise(r => setTimeout(r, 200)); });
+    const panel = screen.getByTestId('profiles-panel');
+    expect(panel.getAttribute('data-ib-status')).toBe('available');
+    expect(screen.getByTestId('profile-ib').textContent).toContain('98');
+    expect(screen.getByTestId('profile-ib').textContent).toContain('103');
+    expect(screen.getByTestId('profile-ib').textContent).toContain('4 of 4');
+    expect(screen.getByTestId('profile-ib').textContent).toContain('recorded opening-window');
+  } finally { delete window.__FLOWW_CHART_WORKSPACE__; }
+});

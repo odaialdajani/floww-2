@@ -94,6 +94,7 @@ const fmt = (n) => (Number.isFinite(n) ? `${Math.round(n * 100) / 100}` : "unkno
 
 export default function FlowPane({
   trades = null,
+  envelope = null,
   barId = null,
   windowKey = "1m",
   filters = {},
@@ -101,6 +102,83 @@ export default function FlowPane({
   cursorHash = null,
   onBucketClick = null,
 }) {
+  // R21-03 caller binding: the server admission envelope (admit_flow_bucket)
+  // is the source of truth when present — a refusal renders its named code,
+  // an unavailable bucket renders its reason and named gap counts, and an
+  // available bucket shows the SERVER-admitted totals with its gap and
+  // certification basis. Totals are never re-derived locally from the
+  // envelope; the legacy trades path below stays for trades-only callers.
+  if (envelope && typeof envelope === "object") {
+    const gapRows = Object.entries(envelope.gaps && typeof envelope.gaps === "object" ? envelope.gaps : {})
+      .filter(([, n]) => Number(n) > 0)
+      .map(([k, n]) => `${k} ${n}`);
+    const gapsBlock = gapRows.length ? (
+      <div data-testid="flow-gaps" role="status">
+        Excluded rows: {gapRows.join(" \u00b7 ")} \u2014 named gaps, never folded into totals.
+      </div>
+    ) : null;
+    if (envelope.status === "refused") {
+      return (
+        <div className="flow-pane" data-testid="flow-pane-refused" data-reason={String(envelope.reason || "refused")}>
+          Flow refused \u2014 {String(envelope.reason || "unspecified refusal")}.
+        </div>
+      );
+    }
+    if (envelope.status !== "available" || !envelope.totals) {
+      return (
+        <div className="flow-pane" data-testid="flow-pane-unavailable" data-reason={String(envelope.reason || "unavailable")}>
+          Flow unavailable \u2014 {String(envelope.reason || "no admitted rows for this flow bucket")}.
+          {gapsBlock}
+        </div>
+      );
+    }
+    const et = envelope.totals;
+    const sameScope = typeof cursorHash === "string" && cursorHash === envelope.scope_hash;
+    return (
+      <div className="flow-pane" data-testid="flow-pane">
+        <div data-testid="flow-totals">
+          <span data-testid="flow-call-premium">Call premium up {fmt(et.call_premium)}</span>
+          <span data-testid="flow-put-premium">Put premium down {fmt(et.put_premium)}</span>
+          <span data-testid="flow-unknown">
+            Unknown {et.unknown} of {et.count} \u2014 not classified by the feed
+          </span>
+        </div>
+        {gapsBlock}
+        <div data-testid="flow-certification" role="status">
+          {(envelope.certification && envelope.certification.basis) || "row-level eligibility"};
+          hash-certified: {String((envelope.certification && envelope.certification.certified_by_hash) || false)}.
+        </div>
+        <ul data-testid="flow-top">
+          {(et.top || []).map((tr, i) => (
+            <li key={`${tr.group_id || "leg"}-${i}`} data-testid={`flow-top-${i}`}>
+              {tr.side || "unknown"}
+              {" \u00b7 "}
+              {fmt(Number(tr.premium) || 0)}
+              {tr.leg_count > 1 ? ` \u00b7 ${tr.leg_count} legs (net ${fmt(tr.net_premium)})` : ""}
+            </li>
+          ))}
+        </ul>
+        {sameScope ? (
+          <div data-testid="flow-drilldown">
+            <span data-testid="flow-drilldown-call">Call premium up {fmt(et.call_premium)}</span>
+            <span data-testid="flow-drilldown-put">Put premium down {fmt(et.put_premium)}</span>
+            <span data-testid="flow-drilldown-unknown">
+              Unknown {et.unknown} of {et.count}
+            </span>
+          </div>
+        ) : (
+          <div data-testid="flow-drilldown-scope-note" role="status">
+            Drilldown scope differs from the totals bucket {String(envelope.scope_hash || "unknown")} \u2014 not merged.
+          </div>
+        )}
+        {onBucketClick && (
+          <button type="button" data-testid="flow-open-drilldown" onClick={() => onBucketClick({ hash: envelope.scope_hash })}>
+            Open bucket drilldown
+          </button>
+        )}
+      </div>
+    );
+  }
   if (!Array.isArray(trades)) {
     return (
       <div className="flow-pane" data-testid="flow-pane-unavailable">

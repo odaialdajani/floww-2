@@ -58,6 +58,7 @@ export default function ChartWorkspace({
   notice = null, onRetry = null, frames = null, nodes = [], bars = [], flow = null, atlasDarkLevels = [],
   flowTrades = null, onFlowBucket = null,
   profileTrades = null, darkPoolPrints = null, classifiedBars = null, priorLevels = null,
+  ibEnvelope = null, nakedEnvelope = null,
   onChartContext = null,
   docksMaps = {}, docksSidecar = null,
 }) {
@@ -362,7 +363,12 @@ export default function ChartWorkspace({
             state is explicit, with its reason. */}
         {liveReport && (() => {
           const bars = liveReport.visible || [];
-          const ib = initialBalance(bars, { periods: 2, cursor: liveReport.cursor });
+          // R21-04 caller binding: a server admission envelope (admit_initial_balance /
+          // naked_levels_claim) overrides the local algebra — its refusal code or
+          // coverage-honest bounds are the truth, never re-derived locally.
+          const ibServer = ibEnvelope && typeof ibEnvelope === 'object' ? ibEnvelope : null;
+          const nakedServer = nakedEnvelope && typeof nakedEnvelope === 'object' ? nakedEnvelope : null;
+          const ib = ibServer ? null : initialBalance(bars, { periods: 2, cursor: liveReport.cursor });
           const tick = tickRows(profileTrades, 0.5);
           const rows = tick.status === 'ok' ? tick.rows : null;
           const pocRow = rows ? poc(rows) : null;
@@ -373,11 +379,16 @@ export default function ChartWorkspace({
           const fmt = n => (Number.isFinite(n) ? `${Math.round(n * 100) / 100}` : 'unknown');
           return (
             <div className="profiles-panel" data-testid="profiles-panel"
-              data-ib-status={ib.status} data-ib-periods={ib.status === 'ok' ? String(ib.periods) : '0'}
+              data-ib-status={ibServer ? ibServer.status : ib.status}
+              data-ib-periods={(ibServer ? ibServer.status === 'available' : ib.status === 'ok') ? String(ibServer ? ibServer.coverage.expected_total : ib.periods) : '0'}
               data-va-status={va.status} data-cvd-status={cvd.status} data-dark-count={String(dark.length)}>
-              <span data-testid="profile-ib">Initial balance {ib.status === 'ok'
-                ? `${fmt(ib.low)}–${fmt(ib.high)} over ${ib.periods} bars · ${ib.approximation}`
-                : ib.reason}</span>
+              <span data-testid="profile-ib">{ibServer
+                ? (ibServer.status === 'available'
+                    ? `Initial balance ${fmt(ibServer.bounds.low)}–${fmt(ibServer.bounds.high)} · ${ibServer.coverage.covered} of ${ibServer.coverage.expected_total} opening bars${ibServer.coverage.complete ? ' complete' : ' incomplete'} · ${ibServer.approximation} · ${ibServer.certification.basis}`
+                    : `Initial balance ${ibServer.status} — ${ibServer.reason || 'unavailable'}`)
+                : `Initial balance ${ib.status === 'ok'
+                  ? `${fmt(ib.low)}–${fmt(ib.high)} over ${ib.periods} bars · ${ib.approximation}`
+                  : ib.reason}`}</span>
               <span data-testid="profile-poc">{pocRow ? `POC ${fmt(pocRow.price)} · ${pocRow.volume}` : 'POC unavailable — no classified trade prices'}</span>
               <span data-testid="profile-va">{va.status === 'ok'
                 ? `Value area ${fmt(va.low)}–${fmt(va.high)} · ${Math.round((va.attained || 0) * 100)}% attained (70% target)`
@@ -388,7 +399,10 @@ export default function ChartWorkspace({
               <span data-testid="profile-dark">{dark.length
                 ? dark.map(levelLabel).join(' | ')
                 : 'no dark-pool prints published — aggregates are never shown as single prints'}</span>
-              {naked.length > 0 && <span data-testid="profile-naked">{naked.filter(l => l.naked).length} naked level(s) beyond the cursor</span>}
+              {nakedServer ? <span data-testid="profile-naked">{nakedServer.status === 'available'
+                ? `${(nakedServer.levels || []).filter(l => l && l.naked).length} naked level(s) beyond the cursor · server-admitted`
+                : `Naked levels ${nakedServer.status} — ${nakedServer.reason || 'unavailable'}`}</span>
+                : naked.length > 0 && <span data-testid="profile-naked">{naked.filter(l => l.naked).length} naked level(s) beyond the cursor</span>}
             </div>
           );
         })()}
