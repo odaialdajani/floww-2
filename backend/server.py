@@ -4081,11 +4081,19 @@ try:
             from services.public_scanner import peek_scan_view
             return peek_scan_view()
 
+        def read_recorded_chart(ticker, first, last):
+            # Synchronous recorded-store probe for focused-chart asks: the
+            # route-shaped reader over as-of rows; eligibility is decided
+            # later at the ask cursor. No provider or live read.
+            from routes.price_history import read_snapshots
+            return read_snapshots(db, ticker, first, last)
+
         try:
             repository = AgentRepository(db)
             await repository.initialize()
             reads = ResearchReads(peek_chain, peek_map, read_alerts, read_recorded_map=read_recorded_map,
-                                  read_recorded_range=read_recorded_range, peek_scan=peek_scan, read_daily_bars=peek_daily_bars)
+                                  read_recorded_range=read_recorded_range, peek_scan=peek_scan,
+                                  read_daily_bars=peek_daily_bars, read_recorded_chart=read_recorded_chart)
             from services.agent.codex_model import CodexModel
             from services.agent.spend import SpendLedger, money_units
             spending = SpendLedger(repository.budgets, cap_units=money_units(os.getenv("AGENT_DAILY_BUDGET_USD", "20")), audit_collection=db["agent_budget_audit"])

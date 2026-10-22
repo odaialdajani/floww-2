@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import copy
 import hashlib
 from datetime import UTC, datetime
@@ -26,7 +27,7 @@ from services.market_provenance import spot_provenance
 
 class ResearchReads:
     def __init__(self, peek_chain, peek_map, read_alerts, *, read_daily_bars=None, read_recorded_map=None,
-                 read_recorded_range=None, peek_scan=None):
+                 read_recorded_range=None, peek_scan=None, read_recorded_chart=None):
         self._peek_chain = peek_chain
         self._peek_map = peek_map
         self._read_alerts = read_alerts
@@ -35,6 +36,9 @@ class ResearchReads:
         # Synchronous server-owned seam: (ticker, record_id) -> stored replay wrapper | None.
         self._read_recorded_range = read_recorded_range
         self._peek_scan = peek_scan
+        # Synchronous server-owned seam for focused-chart asks:
+        # (ticker, first, last) -> recorded store rows in the as-of window.
+        self._read_recorded_chart = read_recorded_chart
 
     async def market_snapshot(self, *, limit=50, now=None):
         """Inspect only a previously completed public scan, without provider work."""
@@ -63,7 +67,75 @@ class ResearchReads:
                 return await self._snapshot(ticker, horizon, **kwargs)
         return await self._snapshot(ticker, horizon, **kwargs)
 
-    async def _snapshot(self, ticker, horizon, *, selected_expiry=None, now=None, screen=None, price_only=False):
+    async def _focused_chart_snapshot(self, ticker, chart_context, now):
+        """Focused price-history ask: facts from the recorded store at the descriptor's cursor.
+
+        The descriptor focuses the recorded reading; its numbers never answer
+        for themselves. Nothing recorded at the cursor stays plainly
+        unavailable; no provider read or substitute source starts.
+        """
+        from services.agent.contracts import fact, finite
+        from services.chart_context import circuit_window, resolve_focused_chart
+
+        snapshot = {"ticker": ticker, "horizon": "all", "facts": [], "gaps": [], "window": {},
+                    "anchor_kind": "unavailable"}
+        descriptor = chart_context if isinstance(chart_context, dict) else None
+        if not isinstance(descriptor, dict) or descriptor.get("status") != "bound":
+            snapshot["gaps"].append("Focused chart research is unavailable: the focused netting context is not bound")
+            return snapshot
+        focus, scope, cursor = descriptor.get("focus"), descriptor.get("scope"), descriptor.get("cursor")
+        if isinstance(focus, str):
+            focus = focus.strip().upper()
+        window = circuit_window(cursor)
+        if window is None:
+            snapshot["gaps"].append("Focused chart research is unavailable: the ask cursor is unusable")
+            return snapshot
+        seam = self._read_recorded_chart
+        if seam is None:
+            snapshot["gaps"].append("Focused chart recorded reading is unavailable: the recorded store is not reachable")
+            return snapshot
+        try:
+            rows = await asyncio.to_thread(seam, focus or ticker, *window)
+        except Exception:
+            snapshot["gaps"].append("Focused chart recorded reading is unavailable; no refresh was started")
+            return snapshot
+        resolved = resolve_focused_chart(rows, focus=focus, scope=scope, cursor=cursor)
+        if resolved["status"] == "refused":
+            snapshot["gaps"].append("Focused chart context refused: " + str(resolved["reason"]))
+            return snapshot
+        if resolved["status"] != "available":
+            snapshot["gaps"].append(
+                f"Focused chart recording is unavailable at this cursor: {resolved['reason']}")
+            return snapshot
+        levels = [float(node["level"]) for node in resolved["nodes"] if finite(node.get("level"))]
+        if resolved["nodes"] and not levels:
+            snapshot["gaps"].append("Focused chart recorded row has no numeric wall levels")
+        if len(levels) > 12:
+            snapshot["gaps"].append("Focused chart recorded reading has more wall levels than the summary shows")
+            levels = levels[:12]
+        for level in levels:
+            snapshot["facts"].append(fact(
+                "Focused chart recorded wall level", level, "USD",
+                ticker=focus, source="recorded", snapshot_id=resolved["snapshot_id"],
+                event_time=resolved["asof"], received_at=resolved["received_at"]))
+        if finite(resolved["exposure_centre"]):
+            snapshot["facts"].append(fact(
+                "Focused chart exposure centre", resolved["exposure_centre"], "USD",
+                ticker=focus, source="recorded", snapshot_id=resolved["snapshot_id"],
+                event_time=resolved["asof"], received_at=resolved["received_at"]))
+        snapshot["facts"].append(fact(
+            "Focused chart node known-at", str(resolved["node_known_at"]), "clock",
+            ticker=focus, source="recorded", snapshot_id=resolved["snapshot_id"],
+            event_time=resolved["asof"], received_at=resolved["received_at"]))
+        snapshot["anchor_kind"] = "recorded"
+        snapshot["recorded_cursor_known_at"] = resolved["node_known_at"]
+        snapshot["recorded_node_age_seconds"] = resolved["node_age_seconds"]
+        for gap in resolved["gaps"]:
+            snapshot["gaps"].append("Focused chart recorded reading: " + gap)
+        return snapshot
+
+    async def _snapshot(self, ticker, horizon, *, selected_expiry=None, now=None, screen=None,
+                        price_only=False, chart_context=None):
         now = now or datetime.now(UTC)
         if screen and screen.get("displayMode") == "range-live":
             from services.agent.range_replay import range_snapshot
@@ -73,6 +145,11 @@ class ResearchReads:
             return snapshot
         if screen and screen.get("displayMode") == "range-replay":
             return await self._range_snapshot(ticker, horizon, screen, now)
+        if screen and screen.get("displayMode") == "price-history":
+            # Focused price-history asks never touch live/provider seams; the
+            # recorded store resolvable at the descriptor's cursor is the only
+            # permitted source. A missing descriptor stays the closed gate.
+            return await self._focused_chart_snapshot(ticker, chart_context, now)
         if screen and (screen.get("displayMode") == "replay" or
                        screen.get("contextVersion") == 2 and (screen.get("overlayMetric", "raw") != "raw" or screen.get("selectedContract") is not None)):
             return await self._selected_snapshot(ticker, horizon, screen, now)

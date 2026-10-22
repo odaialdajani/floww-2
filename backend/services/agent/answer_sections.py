@@ -42,6 +42,13 @@ UNAVAILABLE = {
     "Invalidation": "No testable prediction or verified trade setup was formed, so a price invalidation is unavailable.",
     "Trade": "No executable trade proposal is available. No order, fill or position was created.",
 }
+# Focused recorded-chart readings ride the deterministic price-only path; the
+# server re-resolved them from the recorded store at the descriptor's cursor.
+FOCUSED_CHART_METRICS = {
+    "Focused chart recorded wall level",
+    "Focused chart exposure centre",
+    "Focused chart node known-at",
+}
 HISTORY_INTENT = r"\b(?:changed?|since|earlier|previously|previous|prior|history|historical|yesterday|closing|last close|saved observations?|saved readings?)\b"
 
 QUICK = {
@@ -113,9 +120,13 @@ def _contract_quote_note(facts):
 
 
 def _entry(name, snapshot, price_only=False):
+    if price_only:
+        metrics = {"Underlying price"} | FOCUSED_CHART_METRICS
+    else:
+        metrics = METRICS[name]
     facts = [item for item in snapshot.get("facts", [])
              if item.get("ticker") == snapshot["ticker"]
-             and (item.get("metric") in ({"Underlying price"} if price_only else METRICS[name])
+             and (item.get("metric") in metrics
                   or not price_only and name == "Structure" and item.get("metric", "").startswith("Exact contract ")
                   or not price_only and name == "Structure" and snapshot.get("range_observation")
                   and item.get("metric", "").startswith("Recorded range cell "))]
@@ -147,7 +158,12 @@ def _entry(name, snapshot, price_only=False):
         if not any(item["metric"] not in {"Underlying price", "Cached map price"} for item in facts):
             note = "Only the underlying price is available; no level was established for this scope."
     if not text:
-        text = UNAVAILABLE[name] if not price_only else "The cached underlying price is unavailable."
+        if price_only:
+            text = ("The focused chart's recorded reading is unavailable at the asked cursor; nothing was substituted."
+                    if snapshot.get("anchor_kind") in {"recorded", "unavailable"}
+                    else "The cached underlying price is unavailable.")
+        else:
+            text = UNAVAILABLE[name]
     if note and note not in text:
         text += ". " + note
     if note:

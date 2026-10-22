@@ -175,7 +175,7 @@ async def price_history(ticker: str, days: int = Query(5, ge=1, le=2600),
     # This path deliberately does not use market_bars' stale-on-error cache:
     # a failed historical fetch must be visible, not labelled as a new read.
     bars, price_failure, received_at = await _history_bars(ticker, period, aggregation, sessions)
-    price_only = build_history(ticker, bars, [], query_key)
+    price_only = build_history(ticker, bars, [], query_key, bar_seconds)
     session_dates = sorted({datetime.fromtimestamp(epoch(frame["time"]), UTC).astimezone(ZoneInfo("America/New_York")).date()
                             for frame in price_only["frames"]})
     if interval_minutes is not None and len(session_dates) > days:
@@ -183,11 +183,11 @@ async def price_history(ticker: str, days: int = Query(5, ge=1, le=2600),
         valid_instants = {epoch(frame["time"]) for frame in price_only["frames"]
                           if datetime.fromtimestamp(epoch(frame["time"]), UTC).astimezone(ZoneInfo("America/New_York")).date() in keep}
         bars = [bar for bar in bars if epoch(bar.get("t")) in valid_instants]
-        price_only = build_history(ticker, bars, [], query_key)
+        price_only = build_history(ticker, bars, [], query_key, bar_seconds)
         session_dates = session_dates[-days:]
     valid_times = [epoch(frame["time"]) for frame in price_only["frames"]]
     if not valid_times:
-        return {**build_history(ticker, [], [], query_key), "price_status": "unavailable",
+        return {**build_history(ticker, [], [], query_key, bar_seconds), "price_status": "unavailable",
                 "node_status": "not_loaded", "days": days, "recording": recording,
                 "price_failure": price_failure or {"reason": "invalid_price_bars", "retry_after_seconds": None},
                 "prices_received_at": received_at,
@@ -205,7 +205,7 @@ async def price_history(ticker: str, days: int = Query(5, ge=1, le=2600),
     truncated = len(rows) > 50000
     if truncated:
         rows = rows[:50000]
-    result = build_history(ticker, bars, rows, query_key)
+    result = build_history(ticker, bars, rows, query_key, bar_seconds)
     if node_status == "unavailable":
         result["node_coverage"] = {"scope_status": "unavailable", "gap_counts": None}
     if include_metric_lines:

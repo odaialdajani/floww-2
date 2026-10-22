@@ -165,3 +165,150 @@ def test_recorded_projection_does_not_mutate_the_record():
     before = deepcopy(raw)
     display_facts(raw, screen(), "SPY", NOW)
     assert raw == before
+
+
+FOCUSED_DESCRIPTOR = {"status": "bound", "focus": "spy", "query": "focused-chart",
+                      "scope": "SPY|expiries=2026-10-23|gex.v2|OI",
+                      "cursor": 1792510200, "generation": "SPY:5:30:x:1"}
+FOCUSED_SCREEN = {"ticker": "SPY", "displayMode": "price-history"}
+
+
+class _EngineShim:
+    def __init__(self, conn):
+        self.conn = conn
+
+    def query_strict(self, sql, args):
+        result = self.conn.execute(sql, args)
+        names = [column[0] for column in result.description]
+        return [dict(zip(names, row, strict=True)) for row in result.fetchall()]
+
+
+def focused_request(**changes):
+    body = {"question": "What does the recorded wall level show here?",
+            "screen": dict(FOCUSED_SCREEN), "chart_context": dict(FOCUSED_DESCRIPTOR)}
+    body.update(changes)
+    return request_spec(body)
+
+
+def test_focused_price_history_admits_only_a_complete_bound_descriptor():
+    spec = focused_request()
+    assert spec["price_only"] is True
+    assert spec["tickers"] == ["SPY"]
+    assert spec["chart_context"]["focus"] == "SPY"
+    assert spec["chart_context"]["cursor"] == 1792510200.0
+    assert spec["chart_context"]["scope"] == FOCUSED_DESCRIPTOR["scope"]
+    assert spec["chart_context"]["generation"] == FOCUSED_DESCRIPTOR["generation"]
+    assert spec["screen"] == FOCUSED_SCREEN
+    for broken in (
+        None, {}, {**FOCUSED_DESCRIPTOR, "status": "unbound"},
+        {**FOCUSED_DESCRIPTOR, "query": "live-map"},
+        {**FOCUSED_DESCRIPTOR, "cursor": "yesterday"},
+        {**FOCUSED_DESCRIPTOR, "cursor": True},
+        {**FOCUSED_DESCRIPTOR, "cursor": 631151999},
+        {**FOCUSED_DESCRIPTOR, "generation": ""},
+        {**FOCUSED_DESCRIPTOR, "focus": ""},
+        {**FOCUSED_DESCRIPTOR, "scope": None},
+        {**FOCUSED_DESCRIPTOR, "extra": 1},
+        [FOCUSED_DESCRIPTOR],
+    ):
+        with pytest.raises(ValueError, match="display is unavailable"):
+            focused_request(chart_context=broken)
+    with pytest.raises(ValueError, match="display is unavailable"):
+        focused_request(chart_context=None)
+
+
+def test_focused_price_history_stays_inside_the_displayed_symbol_and_recorded_scope():
+    with pytest.raises(ValueError, match="within|symbol"):
+        focused_request(question="What about $QQQ recorded walls?")
+    with pytest.raises(ValueError, match="within|symbol"):
+        focused_request(screen={"ticker": "QQQ", "displayMode": "price-history"})
+    with pytest.raises(ValueError, match="recorded scope"):
+        focused_request(question="Explain SPY expiry 2026-10-16 walls here")
+    with pytest.raises(ValueError, match="recorded reading"):
+        focused_request(question="Compare this wall with yesterday's recorded wall")
+    with pytest.raises(ValueError, match="focused chart"):
+        focused_request(history_baseline={"date": "2026-10-19"})
+    with pytest.raises(ValueError, match="live view"):
+        focused_request(scope="market")
+
+
+async def _focused_snapshot_from_store(conn, rows, cursor=1792510200):
+    from datetime import UTC, datetime
+
+    from routes.price_history import read_snapshots
+    from services.agent.reads import ResearchReads
+
+    engine = _EngineShim(conn)
+    reads = ResearchReads(None, None, None,
+                          read_recorded_chart=lambda ticker, first, last: read_snapshots(engine, ticker, first, last))
+    return await reads.snapshot(
+        "SPY", "all", screen={"displayMode": "price-history"},
+        chart_context={**FOCUSED_DESCRIPTOR, "focus": "SPY"},
+        now=datetime.fromtimestamp(cursor, UTC))
+
+
+def _duckdb_store(rows):
+    import duckdb
+
+    from services.heatmap_history import ensure_tables
+
+    conn = duckdb.connect(":memory:")
+    ensure_tables(conn)
+    for row in rows:
+        conn.execute(
+            "INSERT INTO heatmap_snapshots_v2 (ticker, query_key, expiries, formula_version, "
+            "exposure_basis, snapshot_id, asof_ts, received_at, walls_json, strikes_json) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (row["ticker"], row["query_key"], row["expiries"], row["formula_version"],
+             row["exposure_basis"], row["snapshot_id"], row["asof_ts"], row["received_at"],
+             row["walls_json"], row["strikes_json"]))
+    return conn
+
+
+async def test_focused_answer_renders_only_server_resolved_recorded_facts():
+    import json
+
+    from services.agent.research import deterministic_answer
+
+    walls = [{"wall_id": "w-a", "mid": 431.5, "low": 431.0, "high": 432.0}]
+    conn = _duckdb_store([{
+        "ticker": "SPY", "snapshot_id": "snap-b", "query_key": "SPY",
+        "expiries": json.dumps(["2026-10-23"]), "formula_version": "gex.v2", "exposure_basis": "OI",
+        "asof_ts": "2026-10-20T15:25:00+00:00", "received_at": "2026-10-20T15:27:00+00:00",
+        "walls_json": json.dumps(walls), "strikes_json": json.dumps([{"strike": 431.5, "gex": 1}])}])
+    try:
+        snap = await _focused_snapshot_from_store(conn, [])
+        answer = deterministic_answer([snap], focused_request())
+        assert answer["mode"] == "deterministic"
+        assert "431.5 USD" in answer["summary"]
+        assert "known at 2026-10-20T15:27:00+00:00" in answer["summary"]
+        structure = next(section for section in answer["sections"] if section["name"] == "Structure")
+        assert structure["status"] == "available"
+        entry = structure["entries"][0]
+        assert "Focused chart recorded wall level: 431.5 USD" in entry["text"]
+        assert "Focused chart node known-at: 2026-10-20T15:27:00+00:00" in entry["text"]
+        ledger = {item["id"]: item for item in answer["facts"]}
+        assert all(ledger[fact_id]["ticker"] == "SPY" and ledger[fact_id]["source"] == "recorded"
+                   for fact_id in structure["fact_ids"])
+    finally:
+        conn.close()
+
+
+async def _SimpleEngine_unused_marker():  # pragma: no cover - placeholder guard
+    pass
+
+
+async def test_focused_answer_stays_honest_when_the_cursor_reading_is_unknown():
+    from services.agent.research import deterministic_answer
+
+    conn = _duckdb_store([])
+    try:
+        snap = await _focused_snapshot_from_store(conn, [])
+        answer = deterministic_answer([snap], focused_request())
+        assert "unavailable" in answer["summary"]
+        assert "no provider read was started" in answer["summary"]
+        structure = next(section for section in answer["sections"] if section["name"] == "Structure")
+        assert structure["status"] == "unavailable"
+        assert structure["entries"][0]["fact_ids"] == []
+    finally:
+        conn.close()

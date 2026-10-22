@@ -53,6 +53,23 @@ def test_explicit_half_hour_candles_do_not_silently_use_five_minutes(history_cli
     assert response.json()["bar_seconds"] == 1800
 
 
+def test_route_serves_own_window_end_and_batch_receipt_availability(history_client):
+    """R21-01 route contract: end_time is the selected bar's own window end;
+    price availability is the read receipt clock, never the candle time."""
+    client, _ = history_client
+    response = client.get("/api/heatseeker/price-history/SPY", params={"days": 5, "interval_minutes": 30})
+    assert response.status_code == 200
+    body = response.json()
+    frame = body["frames"][0]
+    assert frame["time"] == "2026-10-06T14:00:00+00:00"
+    assert frame["end_time"] == "2026-10-06T14:30:00+00:00"
+    assert frame["snapshot_id"] is None and frame["nodes_known_at"] is None
+    # Batch receipt is honest and usable; recorded node availability stays
+    # null until recorded rows actually join — never their candle clock.
+    assert body["prices_received_at"] is not None
+    assert body["node_status"] in {"available", "not_loaded"}
+
+
 @pytest.mark.parametrize(("minutes", "aggregation"), [(1, "ONE_MINUTE"), (5, "FIVE_MINUTES"), (15, "FIFTEEN_MINUTES"), (30, "THIRTY_MINUTES"), (60, "ONE_HOUR")])
 def test_selected_interval_preserves_owning_price_candle_times(history_client, minutes, aggregation):
     client, calls = history_client
