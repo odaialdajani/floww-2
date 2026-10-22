@@ -225,3 +225,15 @@
 .price-history-drawings .rail-tools button { font: inherit; font-size: 11px; border: 1px solid #435260; border-radius: 4px; background: #16212b; color: #dce8f2; padding: 4px 10px; min-height: 28px; cursor: pointer; }
 .price-history-drawings .rail-tools button[aria-pressed="true"] { border-color: #e3c16a; color: #f2d795; }
 .price-history-drawings .rail-tools button:focus-visible { outline: 2px solid #e3c16a; outline-offset: 2px; }
+
+/* UI-03/04 control-band compaction: the readout keeps its NATURAL one-line
+   width (clock + OHLC + data-details popover in a single nowrap line, 34px)
+   and stops growing to squeeze beside the study actions — the actions wrap
+   to their own row instead, so the band collapses from five stacked rows to
+   two at 1470 and three tight rows at 1024. The replay row stays one row at
+   desktop widths. No control removed; no quote clock discarded. */
+.recorded-chart-tools .recorded-chart-readout{font-size:12px;line-height:1.35;flex:0 1 auto;min-width:0;white-space:nowrap;overflow:hidden;max-width:none;}
+.recorded-chart-tools .recorded-chart-readout > span{white-space:nowrap;flex:0 0 auto;}
+.recorded-chart-replay-row{white-space:nowrap;}
+.recorded-chart-replay-row .price-history-replay{flex-wrap:nowrap;}
+.recorded-chart-replay-row .price-history-replay input{flex:1;min-width:120px;}
