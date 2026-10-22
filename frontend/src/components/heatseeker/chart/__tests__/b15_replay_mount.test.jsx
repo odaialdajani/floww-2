@@ -50,6 +50,35 @@ test('B15 mounted pane reports replay algebra: cursor, bar, extrema, provenance'
   expect(fwd.cursor).toBe(Date.parse('2026-09-10T14:01:00+00:00'));
 });
 
+// R21-02: origin is live ONLY at the advancing head — a paused cursor moved
+// forward anywhere behind the newest frame is replay, whichever way it moved.
+// The old rule labeled a paused forward scrub "live" because it keyed on the
+// playing flag and the move direction instead of the cursor's true position.
+test('B15 paused forward scrub behind the head reports replay provenance', async () => {
+  const THREE = [
+    { time: '2026-09-10T14:00:00+00:00', open: 100, high: 101, low: 99, close: 100, nodes: [] },
+    { time: '2026-09-10T14:01:00+00:00', open: 100, high: 102, low: 99, close: 101, nodes: [] },
+    { time: '2026-09-10T14:02:00+00:00', open: 101, high: 103, low: 100, close: 102, nodes: [] },
+  ];
+  armPayload(THREE);
+  const reports = [];
+  render(<PriceNodeHistory ticker="SPY" open onReplayState={r => reports.push(r)} />);
+  await waitFor(() => expect(screen.getByTestId('recorded-price-chart')).toBeInTheDocument());
+  await act(async () => { await new Promise(r => setTimeout(r, 120)); });
+  const slider = screen.getByLabelText('Replay position');
+  let last = reports[reports.length - 1];
+  expect(last.delta.every(e => e.origin === 'live')).toBe(true); // head is live
+  // scrub back to the first frame, then FORWARD to the middle frame:
+  // paused, moved forward, still behind the head — replay, not live.
+  await act(async () => { fireEvent.change(slider, { target: { value: '0' } }); });
+  await act(async () => { fireEvent.change(slider, { target: { value: '1' } }); });
+  await act(async () => { await new Promise(r => setTimeout(r, 120)); });
+  last = reports[reports.length - 1];
+  expect(last.cursor).toBe(Date.parse('2026-09-10T14:01:00+00:00'));
+  expect(last.delta.length).toBeGreaterThan(0);
+  expect(last.delta.every(e => e.origin === 'replay')).toBe(true);
+});
+
 test('B15 mounted workspace: the focused pane drives a real replay readout', async () => {
   armPayload(FRAMES);
   window.__FLOWW_CHART_WORKSPACE__ = true;
@@ -95,5 +124,8 @@ test('B15 algebra pinned: no future data to extrema; unknown origin dropped', ()
   const routed = routeEvent(caches, { id: 'x', symbol: 'SPY' });
   expect(routed.dropped).toEqual(['x']);
   expect(visibleSnapshot([{ id: 's1', known_at: 5 }, { id: 's2', known_at: 3 }], 4).id).toBe('s2');
-  expect(barAt([{ event_time: 1, available_at: 1, open: 10, close: 11 }], 1, 1).complete).toBe(true);
+  // R21-02: the [1,2) bar is FORMING at cursor 1 — its window has not
+  // closed. The old pin claimed completion from a caller-invented windowEnd
+  // equal to the cursor itself; the owning-bucket algebra refuses that.
+  expect(barAt([{ event_time: 1, available_at: 1, open: 10, close: 11 }], 1, 1).complete).toBe(false);
 });

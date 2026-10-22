@@ -20,33 +20,62 @@ export function ageOk(asof, cursor, limit = 900) {
   return 0 <= c - a && c - a <= lim;
 }
 
-// Incomplete aggregation: only base events with event_time<=cursor AND
-// available_at<=cursor contribute. A bar is never rendered as complete while
-// any leg is still unavailable.
-export function partialBar(events, cursor) {
-  const use = (events || []).filter((e) => e
-    && (e.event_time != null ? e.event_time : 1) <= cursor
-    && (e.available_at != null ? e.available_at : 1) <= cursor);
-  if (!use.length) return null;
+// Incomplete aggregation of the OWNING bar only (R21-02): the bar is the
+// bar_seconds bucket that contains the cursor — [floor(c/bs)*bs, +bs) — so
+// events from an earlier bucket never leak into it. Only base events with a
+// REAL event_time inside that bucket AND a REAL available_at <= cursor
+// contribute; an unknown event_time or available_at never admits the event
+// (availability is the server-emitted end_time / window close, never
+// invented from the candle's own open time).
+export function partialBar(events, cursor, barSeconds = 900) {
+  const bs = Number(barSeconds);
+  if (!Number.isFinite(bs) || bs <= 0 || cursor == null || !Number.isFinite(Number(cursor))) return null;
+  const c = Number(cursor);
+  const bucketStart = Math.floor(c / bs) * bs;
+  const bucketEnd = bucketStart + bs;
+  const inBucket = [];
+  const use = [];
+  for (const e of events || []) {
+    if (!e || e.event_time == null || !Number.isFinite(Number(e.event_time))) continue;
+    const et = Number(e.event_time);
+    if (et < bucketStart || et >= bucketEnd) continue;
+    inBucket.push(e);
+    if (e.available_at != null && Number.isFinite(Number(e.available_at)) && Number(e.available_at) <= c) {
+      use.push(e);
+    }
+  }
+  if (!inBucket.length) return null;
   const opens = use.filter((e) => "open" in e).map((e) => e.open);
   const closes = use.filter((e) => "close" in e).map((e) => e.close);
+  const lastAvailableAt = use.length
+    ? Math.max(...use.map((e) => Number(e.available_at)))
+    : null;
   return {
     open: opens.length ? opens[0] : null,
     close: closes.length ? closes[closes.length - 1] : null,
     complete: false,
     count: use.length,
+    pending: inBucket.length - use.length,
+    lastAvailableAt,
+    bucketStart,
+    bucketEnd,
   };
 }
 
-// Completed only with a known window end at-or-before the cursor AND no
-// pending unavailable leg; otherwise the bar stays explicitly partial.
-export function barAt(events, cursor, windowEnd = null) {
-  const partial = partialBar(events, cursor);
+// The bar at the cursor completes only when its window close was EMITTED and
+// is available at the cursor (lastAvailableAt >= bucketEnd) with no leg
+// still pending; otherwise the bar stays explicitly forming/partial. With
+// recorded frames (available_at = end_time = window close) the bar at a
+// frame-aligned cursor is honestly always still forming — that is the
+// known-at truth, never a rendering convenience.
+export function barAt(events, cursor, barSeconds = 900) {
+  const partial = partialBar(events, cursor, barSeconds);
   if (!partial) return null;
-  if (windowEnd == null || !(cursor >= windowEnd)) return partial;
-  const pending = (events || []).some((e) => e && (e.available_at != null ? e.available_at : 1) > cursor);
-  if (pending) return partial;
-  return { ...partial, complete: true };
+  const closed = partial.count > 0
+    && partial.pending === 0
+    && partial.lastAvailableAt != null
+    && partial.lastAvailableAt >= partial.bucketEnd;
+  return closed ? { ...partial, complete: true } : partial;
 }
 
 // Extrema sweep limited to observations at or before the cursor: a future

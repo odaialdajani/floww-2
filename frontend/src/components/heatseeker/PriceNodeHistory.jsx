@@ -212,14 +212,20 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
     if (!frames.length) { onReplayState(null); return undefined; }
     const cursorFrame = frames[Math.min(position, frames.length - 1)];
     const cursor = Date.parse(cursorFrame.time);
-    const windowEnd = frames[position + 1] ? Date.parse(frames[position + 1].time) : null;
-    const events = frames.map(f => ({ id: f.time, event_time: Date.parse(f.time), available_at: Date.parse(f.time), open: f.open, close: f.close }));
-    const bar = barAt(events, cursor, windowEnd);
+    // R21-02: the owning bar is the bar_seconds bucket of this pane's own
+    // resolution (minutes prop — the same one the read requested), and a
+    // frame's availability is the server-emitted end_time (its window close)
+    // — never invented from the candle's own open time. Without a real
+    // emission (older backend) availability is honestly unknown: null.
+    const barSeconds = [60, 300, 900, 1800, 3600].includes(minutes * 60) ? minutes * 60 : null;
+    const events = frames.map(f => ({ id: f.time, event_time: Date.parse(f.time), available_at: f.end_time ? Date.parse(f.end_time) : null, open: f.open, close: f.close }));
+    const bar = barSeconds ? barAt(events, cursor, barSeconds) : null;
     const visible = frames.slice(0, position + 1).map(f => ({ time: Date.parse(f.time), high: f.high, low: f.low }));
     const extrema = sweepExtrema(visible, cursor);
     const snapshot = visibleSnapshot(frames.map(f => ({ id: f.time, known_at: Date.parse(f.time), close: f.close })), cursor);
-    const wentBack = position < lastReportedPosition.current;
-    const origin = (playing || wentBack) ? "replay" : "live";
+    // R21-02: live ONLY at the advancing head — a paused or scrubbed cursor
+    // anywhere behind the newest frame is replay, whichever way it moved.
+    const origin = position === frames.length - 1 ? "live" : "replay";
     const delta = position === lastReportedPosition.current
       ? []
       : [{ id: cursorFrame.time, symbol: ticker.toUpperCase(), value: cursorFrame.close, time: cursor, origin }];
