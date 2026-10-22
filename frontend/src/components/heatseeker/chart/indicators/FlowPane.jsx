@@ -7,6 +7,14 @@ import React from "react";
 // only; ask ticks are never used to infer buy direction.
 // Mirrors backend/services/chart_flow.py bucket algebra.
 
+// R21-03 caller binding (H3 gates): the flow window key must come from the
+// OWNING chart resolution — never a hardcoded '1m' while the chart runs 30m.
+// Unknown resolutions stay honestly unmapped, never guessed.
+export function flowWindowKeyFor(barSeconds) {
+  const map = { 60: "1m", 300: "5m", 900: "15m", 1800: "30m", 3600: "1h" };
+  return map[Number(barSeconds)] || null;
+}
+
 // Stable local bucket identity: server-provided hashes pass straight
 // through; otherwise a deterministic sorted-string digest keeps drilldown
 // and totals on the same identity without re-deriving the backend digest.

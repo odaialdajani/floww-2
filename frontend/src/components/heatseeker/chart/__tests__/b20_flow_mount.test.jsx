@@ -1,7 +1,7 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import ChartWorkspace from '../ChartWorkspace';
-import { bucketHash } from '../indicators/FlowPane';
+import { bucketHash, flowWindowKeyFor } from '../indicators/FlowPane';
 
 // Bare factory + per-test re-arm (durable pattern for this CRA setup).
 jest.mock('axios', () => ({ get: jest.fn(), post: jest.fn() }));
@@ -56,7 +56,9 @@ test('B20 MOUNTED: flow pane renders the focused bucket at the replay cursor', a
     await waitFor(() => expect(screen.getAllByTestId('flow-open-drilldown').length).toBeGreaterThan(0));
     await act(async () => { screen.getAllByTestId('flow-open-drilldown')[0].click(); });
     expect(opened).toHaveLength(1);
-    expect(opened[0]).toBe(bucketHash(Date.parse('2026-09-10T14:01:00+00:00'), '1m', {}));
+    // R21-03: the identity keys on the owning 30m resolution (the pane's
+    // reported bar seconds), never the legacy hardcoded '1m'.
+    expect(opened[0]).toBe(bucketHash(Date.parse('2026-09-10T14:01:00+00:00'), '30m', {}));
     workspace2.unmount();
   } finally { window.__FLOWW_CHART_WORKSPACE__ = false; }
 });
@@ -73,4 +75,39 @@ test('B20 MOUNTED: no published trades renders an explicit unknown bucket', asyn
     expect(screen.getByTestId('flow-pane-unavailable')).toBeInTheDocument();
     expect(screen.queryByTestId('flow-pane')).not.toBeInTheDocument();
   } finally { window.__FLOWW_CHART_WORKSPACE__ = false; }
+});
+
+
+// R21-03 caller binding (H3 gates): the pane's flow identity must come from
+// the OWNING chart resolution — never a hardcoded '1m' while the chart runs
+// 30m. The window key maps the report's real bar seconds; the bucket click
+// carries the same-keyed identity.
+test('R21-03: flow window key maps the owning bar seconds', () => {
+  expect(flowWindowKeyFor(60)).toBe('1m');
+  expect(flowWindowKeyFor(300)).toBe('5m');
+  expect(flowWindowKeyFor(900)).toBe('15m');
+  expect(flowWindowKeyFor(1800)).toBe('30m');
+  expect(flowWindowKeyFor(3600)).toBe('1h');
+  // unknown resolutions stay honestly unmapped, never guessed
+  expect(flowWindowKeyFor(null)).toBeNull();
+  expect(flowWindowKeyFor(45)).toBeNull();
+});
+
+test("R21-03 MOUNTED: the bucket identity keys on the chart real 30m window", async () => {
+  armPayload(FRAMES);
+  window.__FLOWW_CHART_WORKSPACE__ = true;
+  const clicked = [];
+  try {
+    render(<ChartWorkspace ticker="SPY" open useNew flowTrades={TRADES}
+      onFlowBucket={(payload) => clicked.push(payload)} />);
+    await waitFor(() => expect(screen.getByTestId('recorded-price-chart')).toBeInTheDocument());
+    await act(async () => { await new Promise(r => setTimeout(r, 200)); });
+    fireEvent.click(screen.getByTestId('flow-open-drilldown'));
+    expect(clicked.length).toBe(1);
+    // the pane runs 30m bars (PriceNodeHistory default) — the identity must
+    // be the 30m bucket hash, not the hardcoded '1m' one
+    const headCursor = Date.parse('2026-09-10T14:01:00+00:00');
+    expect(clicked[0].hash).toBe(bucketHash(headCursor, '30m', {}));
+    expect(clicked[0].hash).not.toBe(bucketHash(headCursor, '1m', {}));
+  } finally { delete window.__FLOWW_CHART_WORKSPACE__; }
 });

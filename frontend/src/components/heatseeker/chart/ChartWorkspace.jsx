@@ -14,6 +14,7 @@ import { initialBalance, nakedLevels, poc, tickRows, valueArea } from './indicat
 import { levelLabel, topLevels } from './indicators/DarkPoolLevels';
 import { candleDelta, sessionCvd } from './indicators/Footprint';
 import { bindContext } from './context/chartContext';
+import { flowWindowKeyFor } from './indicators/FlowPane';
 import ChartDocks from './ChartDocks';
 import './ChartWorkspace.css';
 // B06 reversible single-pane workspace: controlled open + incumbent fallback.
@@ -344,16 +345,22 @@ export default function ChartWorkspace({
             one bar/window/filter identity, so they can only agree when they
             describe the same bucket. No published trades -> explicit unknown
             — aggregates are never inflated into invented trades. */}
-        {liveReport && (
-          <FlowPane
-            trades={flowTrades}
-            barId={liveReport.cursor}
-            windowKey="1m"
-            filters={{}}
-            cursorHash={bucketHash(liveReport.cursor, '1m', {})}
-            onBucketClick={onFlowBucket ? (payload) => onFlowBucket(payload) : null}
-          />
-        )}
+        {liveReport && (() => {
+          // R21-03 caller binding: the bucket identity keys on the OWNING
+          // chart resolution (the pane's reported bar seconds) — the legacy
+          // '1m' key stays only when the report carries no resolution.
+          const windowKey = flowWindowKeyFor(liveReport.barSeconds) || '1m';
+          return (
+            <FlowPane
+              trades={flowTrades}
+              barId={liveReport.cursor}
+              windowKey={windowKey}
+              filters={{}}
+              cursorHash={bucketHash(liveReport.cursor, windowKey, {})}
+              onBucketClick={onFlowBucket ? (payload) => onFlowBucket(payload) : null}
+            />
+          );
+        })()}
         {/* B23 profiles/TPO/session reads at the replay cursor: initial
             balance comes from the REAL visible bars (a labeled bar-resolution
             approximation); POC/value-area need EXACT classified trade prices

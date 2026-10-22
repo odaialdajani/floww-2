@@ -241,6 +241,9 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
       // ask gate binds and resolves against exactly this (server-owned facts).
       scope: payload?.query_key || "",
       generation: ticker + ":" + days + ":" + minutes + ":" + (payload?.query_key || "") + ":" + reload,
+      // R21-03: the pane's REAL resolution, so flow/profile consumers key
+      // their bucket identities on the owning interval, never a guess.
+      barSeconds,
       // R21-06: the reporting pane's identity — the consumer validates the
       // report against the LIVE focused pane, so a late report from a pane
       // that lost focus can never re-admit.
