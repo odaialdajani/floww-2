@@ -21,7 +21,7 @@ function savedViewLabel(scope,index){
  return mode+" | "+sorted.length+" "+(sorted.length===1?"expiry":"expiries")+" | "+sorted[0]+(sorted.length>1?" to "+sorted.at(-1):"");
 }
 
-export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen, onOpenChange, primary = false, toolbarActions = null, exposureLine = null, darkLevels = null, flowBars = null, alertLines = null, showAtlas = true, forcedScope = null, onRecordNodes = null, cvdLine = null, onQuality = null, onReplayState = null }) {
+export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen, onOpenChange, primary = false, toolbarActions = null, exposureLine = null, darkLevels = null, flowBars = null, alertLines = null, showAtlas = true, forcedScope = null, onRecordNodes = null, cvdLine = null, onQuality = null, onReplayState = null, replaySourceId = null, replayEpoch = null }) {
   const [localOpen, setLocalOpen] = useState(false);
   const open = controlledOpen ?? (primary || localOpen);
   const setOpen = value => { setLocalOpen(value); onOpenChange?.(value); };
@@ -235,9 +235,13 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
       // ask gate binds and resolves against exactly this (server-owned facts).
       scope: payload?.query_key || "",
       generation: ticker + ":" + days + ":" + minutes + ":" + (payload?.query_key || "") + ":" + reload,
+      // R21-06: the reporting pane's identity — the consumer validates the
+      // report against the LIVE focused pane, so a late report from a pane
+      // that lost focus can never re-admit.
+      source: replaySourceId,
     });
     return undefined;
-  }, [onReplayState, frames, position, playing]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [onReplayState, frames, position, playing, replayEpoch]); // eslint-disable-line react-hooks/exhaustive-deps
   const comparisonTime = frames[position]?.time;
   const awareTime = value => typeof value === "string" && /(?:Z|[+-]\d{2}:\d{2})$/.test(value)
     ? Date.parse(value) : NaN;

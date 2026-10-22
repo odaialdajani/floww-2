@@ -78,14 +78,27 @@ export default function ChartWorkspace({
   // events are admitted ONLY to the replay cache; the live cache never
   // receives them (routeEvent enforces the split inside replayReducer).
   const [replay, replayDispatch] = useReducer(replayStep, undefined, () => createReplayState());
-  const [replayReport, setReplayReport] = useState(null);
+  // R21-06: the binding ties a report to the exact pane instance that
+  // produced it (pane id + symbol). Late reports from a pane that is no
+  // longer focused are DROPPED; layout changes revoke every prior binding
+  // (panes are recreated); the live identity never copies the stale report
+  // it is validating.
+  const [replayBinding, setReplayBinding] = useState(null);
+  const panesRef = useRef(panes); panesRef.current = panes;
+  const lastLayoutForBinding = useRef(null);
   // Stable identity: the pane's report effect depends on this callback, so a
-  // new function per render would re-fire the effect forever. Dispatches
-  // only (both setters stable) — the memo never goes stale.
+  // new function per render would re-fire the effect forever. Dispatches and
+  // refs only — the memo never goes stale.
   const handlePaneReplayState = useCallback((report) => {
-    if (!report) { setReplayReport(null); return; }
+    const focused = panesRef.current.find(p => p.focused) || panesRef.current[0];
+    // Late reports from a pane that lost focus are refused; only the LIVE
+    // focused pane's reports bind. (The pane carries its own source id, so
+    // this callback keeps ONE stable identity — a per-render closure here
+    // would re-fire the pane's report effect forever.)
+    if (!report) { setReplayBinding(null); return; }
+    if (!focused || report.source !== focused.id) return;
+    setReplayBinding({ paneId: focused.id, paneSymbol: focused.symbol, report });
     replayDispatch({ type: 'seek', cursor: report.cursor });
-    setReplayReport(report);
     for (const event of report.delta || []) replayDispatch({ type: 'admit', event });
   }, []);
   const restored = useRef(false);
@@ -97,17 +110,33 @@ export default function ChartWorkspace({
   // descriptor against the LIVE pane state — stale generations, scope changes
   // and removed panes refuse; the server stays the resolver of facts.
   const contextPane = panes.find(p => p.focused) || panes[0];
+  // R21-06: validity is judged against the LIVE pane identity — a binding
+  // from a pane that lost focus, changed symbol or was removed is revoked
+  // atomically, before any newer report can arrive.
+  if (lastLayoutForBinding.current !== layoutId) {
+    lastLayoutForBinding.current = layoutId;
+    if (replayBinding) setReplayBinding(null); // panes recreated: all prior reports stale
+  }
+  const bindingPane = replayBinding && contextPane
+    && replayBinding.paneId === contextPane.id && replayBinding.paneSymbol === contextPane.symbol
+    ? replayBinding : null;
+  const liveReport = bindingPane ? bindingPane.report : null;
   // Binding always runs through the mirror: an empty saved-view scope or a
   // missing pane identity is REFUSED with the contract's reason, never
   // silently blank. The ask gate refuses on the same reason.
-  const chartDescriptor = replayReport
-    ? bindContext({ focus: contextPane.symbol, query: 'focused-chart', scope: replayReport.scope, cursor: replayReport.cursor, generation: replayReport.generation })
-    : null;
-  const chartCurrent = replayReport
-    ? { generation: replayReport.generation, scope: replayReport.scope, pane_removed: false }
-    : { generation: null, scope: null, pane_removed: true };
+  const chartDescriptor = liveReport
+    ? bindContext({ focus: contextPane.symbol, query: 'focused-chart', scope: liveReport.scope, cursor: liveReport.cursor, generation: liveReport.generation })
+    : { status: 'refused', reason: replayBinding ? 'pane changed' : 'no focused pane report' };
+  const chartCurrent = liveReport
+    ? { generation: liveReport.generation, scope: liveReport.scope, pane_removed: false }
+    : { generation: null, scope: null, pane_removed: !contextPane };
+  const everBound = useRef(false);
   useEffect(() => {
-    if (!onChartContext || !chartDescriptor) return undefined;
+    if (!onChartContext) return undefined;
+    // Emit the bound identity and every subsequent REVOCATION after it; the
+    // pre-report state stays silent so a fresh mount shows the legacy gate.
+    if (chartDescriptor.status !== 'bound' && !everBound.current) return undefined;
+    if (chartDescriptor.status === 'bound') everBound.current = true;
     const key = JSON.stringify([chartDescriptor, chartCurrent]);
     if (lastContextEmit.current === key) return undefined;
     lastContextEmit.current = key;
@@ -314,13 +343,13 @@ export default function ChartWorkspace({
             one bar/window/filter identity, so they can only agree when they
             describe the same bucket. No published trades -> explicit unknown
             — aggregates are never inflated into invented trades. */}
-        {replayReport && (
+        {liveReport && (
           <FlowPane
             trades={flowTrades}
-            barId={replayReport.cursor}
+            barId={liveReport.cursor}
             windowKey="1m"
             filters={{}}
-            cursorHash={bucketHash(replayReport.cursor, '1m', {})}
+            cursorHash={bucketHash(liveReport.cursor, '1m', {})}
             onBucketClick={onFlowBucket ? (payload) => onFlowBucket(payload) : null}
           />
         )}
@@ -331,16 +360,16 @@ export default function ChartWorkspace({
             sizes — candle direction is never a proxy; dark-pool levels need
             exact single prints — aggregates are refused. Every unavailable
             state is explicit, with its reason. */}
-        {replayReport && (() => {
-          const bars = replayReport.visible || [];
-          const ib = initialBalance(bars, { periods: 2, cursor: replayReport.cursor });
+        {liveReport && (() => {
+          const bars = liveReport.visible || [];
+          const ib = initialBalance(bars, { periods: 2, cursor: liveReport.cursor });
           const tick = tickRows(profileTrades, 0.5);
           const rows = tick.status === 'ok' ? tick.rows : null;
           const pocRow = rows ? poc(rows) : null;
           const va = rows ? valueArea(rows, 0.7) : { status: 'unavailable', reason: tick.reason || 'no classified trade prices' };
           const cvd = classifiedBars ? sessionCvd(classifiedBars) : candleDelta();
           const dark = darkPoolPrints ? topLevels(darkPoolPrints, { topN: 3 }) : [];
-          const naked = priorLevels ? nakedLevels(priorLevels, bars, { cursor: replayReport.cursor }) : [];
+          const naked = priorLevels ? nakedLevels(priorLevels, bars, { cursor: liveReport.cursor }) : [];
           const fmt = n => (Number.isFinite(n) ? `${Math.round(n * 100) / 100}` : 'unknown');
           return (
             <div className="profiles-panel" data-testid="profiles-panel"
@@ -371,28 +400,26 @@ export default function ChartWorkspace({
             Fetch subscriptions capped at MAX_SUBSCRIPTIONS with a census. */}
         <ChartDocks focusedSymbol={focusedPane.symbol} maps={docksMaps}
           subscriptionSymbols={panes.map(p => p.symbol)} renderSidecar={docksSidecar} />
-        {replayReport && (
-          <div className="chart-context-strip" data-testid="chart-context"
-            data-status={chartDescriptor ? chartDescriptor.status : 'unbound'}>
-            Focused chart context {chartDescriptor && chartDescriptor.status === 'bound'
-              ? `bound · ${chartDescriptor.focus} · scope ${chartDescriptor.scope || 'none'} · cursor ${chartDescriptor.cursor}`
-              : chartDescriptor ? `unavailable — ${chartDescriptor.reason}` : 'unavailable — no focused pane report yet'}
-          </div>
-        )}
+        <div className="chart-context-strip" data-testid="chart-context"
+          data-status={chartDescriptor ? chartDescriptor.status : 'unbound'}>
+          Focused chart context {chartDescriptor && chartDescriptor.status === 'bound'
+            ? `bound · ${chartDescriptor.focus} · scope ${chartDescriptor.scope || 'none'} · cursor ${chartDescriptor.cursor}`
+            : `unavailable — ${chartDescriptor && chartDescriptor.reason ? chartDescriptor.reason : 'no focused pane report'}`}
+        </div>
         {/* B15 mounted replay readout: the focused pane's real frames flow
             through the replay algebra — cursor, partial/completed bar, extrema
             swept strictly at-or-before the cursor, newest known-at, and the
             live/replay cache split. Replay events never enter live caches. */}
-        {replayReport && (
+        {liveReport && (
           <div className="replay-readout" data-testid="replay-readout"
-            data-cursor={replayReport.cursor}
-            data-bar-state={replayReport.bar && replayReport.bar.complete ? 'complete' : 'partial'}
+            data-cursor={liveReport.cursor}
+            data-bar-state={liveReport.bar && liveReport.bar.complete ? 'complete' : 'partial'}
             data-live-count={Object.values(replay.caches.live || {}).reduce((n, m) => n + Object.keys(m || {}).length, 0)}
             data-replay-count={Object.values(replay.caches.replay || {}).reduce((n, m) => n + Object.keys(m || {}).length, 0)}>
-            <span>Cursor {replayReport.cursorTime} · {replayReport.visibleBars}/{replayReport.totalBars} bars</span>
-            <span>Bar {replayReport.bar && replayReport.bar.complete ? 'complete' : 'partial'} · open {replayReport.bar ? replayReport.bar.open : '—'} close {replayReport.bar ? replayReport.bar.close : '—'}</span>
-            <span>Sweep high {replayReport.extrema.status === 'ok' ? replayReport.extrema.high : 'unknown'} · low {replayReport.extrema.status === 'ok' ? replayReport.extrema.low : 'unknown'} · {replayReport.extrema.status === 'ok' ? replayReport.extrema.count + ' bars' : replayReport.extrema.reason}</span>
-            <span>Known-at {replayReport.snapshotKnownAt ?? 'unknown'}</span>
+            <span>Cursor {liveReport.cursorTime} · {liveReport.visibleBars}/{liveReport.totalBars} bars</span>
+            <span>Bar {liveReport.bar && liveReport.bar.complete ? 'complete' : 'partial'} · open {liveReport.bar ? liveReport.bar.open : '—'} close {liveReport.bar ? liveReport.bar.close : '—'}</span>
+            <span>Sweep high {liveReport.extrema.status === 'ok' ? liveReport.extrema.high : 'unknown'} · low {liveReport.extrema.status === 'ok' ? liveReport.extrema.low : 'unknown'} · {liveReport.extrema.status === 'ok' ? liveReport.extrema.count + ' bars' : liveReport.extrema.reason}</span>
+            <span>Known-at {liveReport.snapshotKnownAt ?? 'unknown'}</span>
             <span>live {Object.values(replay.caches.live || {}).reduce((n, m) => n + Object.keys(m || {}).length, 0)} · replay {Object.values(replay.caches.replay || {}).reduce((n, m) => n + Object.keys(m || {}).length, 0)} · replay events never enter live caches</span>
           </div>
         )}
@@ -426,7 +453,15 @@ export default function ChartWorkspace({
             panes={panes}
             onFocus={(id) => dispatch({ type: 'focus', id })}
             renderPane={(pane) => (pane.id === focusedPane.id
-              ? <PriceNodeHistory {...history} onQuality={setQuality} onReplayState={handlePaneReplayState} />
+              ? <PriceNodeHistory {...history}
+                  ticker={pane.symbol}
+                  forcedScope={pane.symbol === ticker ? forcedScope : null}
+                  exposureLine={pane.symbol === ticker ? exposureLine : null}
+                  darkLevels={pane.symbol === ticker ? darkLevels : null}
+                  flowBars={pane.symbol === ticker ? flowBars : null}
+                  cvdLine={pane.symbol === ticker ? cvdLine : null}
+                  onQuality={setQuality} onReplayState={handlePaneReplayState} replaySourceId={pane.id}
+                  replayEpoch={layoutId + ':' + pane.generation} />
               : <PriceNodeHistory ticker={pane.symbol} open={open} primary={false} showAtlas={showAtlas} />)}
           />
         </div>
