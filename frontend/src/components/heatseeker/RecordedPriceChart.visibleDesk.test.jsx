@@ -51,7 +51,8 @@ test('control band compaction rules exist (readout two-line, replay one-row)', (
   const path = require('path');
   const css = fs.readFileSync(path.join(__dirname, 'RecordedPriceChart.css'), 'utf8');
   expect(css).toMatch(/recorded-chart-tools \.recorded-chart-readout\{[^}]*flex:0 1 auto/);
-  expect(css).toMatch(/recorded-chart-tools \.recorded-chart-readout\{[^}]*white-space:nowrap/);
+  expect(css).toMatch(/recorded-chart-tools \.recorded-chart-readout\{[^}]*flex-wrap:wrap/);
+  expect(css).not.toMatch(/recorded-chart-tools \.recorded-chart-readout\{[^}]*overflow:hidden/);
   expect(css).toMatch(/recorded-chart-tools \.recorded-chart-readout > span\{[^}]*white-space:nowrap/);
   expect(css).toMatch(/recorded-chart-replay-row\{[^}]*white-space:nowrap/);
 });

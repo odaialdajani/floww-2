@@ -232,8 +232,12 @@
    to their own row instead, so the band collapses from five stacked rows to
    two at 1470 and three tight rows at 1024. The replay row stays one row at
    desktop widths. No control removed; no quote clock discarded. */
-.recorded-chart-tools .recorded-chart-readout{font-size:12px;line-height:1.35;flex:0 1 auto;min-width:0;white-space:nowrap;overflow:hidden;max-width:none;}
+.recorded-chart-tools .recorded-chart-readout{font-size:12px;line-height:1.35;flex:0 1 auto;min-width:0;flex-wrap:wrap;gap:2px 10px;max-width:none;}
+.recorded-chart-tools .recorded-chart-readout strong{white-space:nowrap;flex:0 0 auto;}
 .recorded-chart-tools .recorded-chart-readout > span{white-space:nowrap;flex:0 0 auto;}
+/* Squeezed readouts WRAP as units (clock line, OHLC line, data popover) —
+   never clip, so the interactive data-details summary stays reachable at
+   every desktop width. */
 .recorded-chart-replay-row{white-space:nowrap;}
 .recorded-chart-replay-row .price-history-replay{flex-wrap:nowrap;}
 .recorded-chart-replay-row .price-history-replay input{flex:1;min-width:120px;}
