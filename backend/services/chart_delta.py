@@ -62,11 +62,25 @@ def admit_delta(bars, *, ticker, cursor, bar_seconds, capabilities, tick_size, u
     admitted, gaps = gate_recorded_rows(bars, ticker=instrument["ticker"], cursor=cursor,
                                         window_start=session["start"],
                                         window_end=window_end, session=session)
-    gaps.update({"superseded_by_correction": 0, "unclassified_bar": 0})
-    corrected_times = {row["event_epoch"] for row in admitted if row.get("corrected") is True}
+    gaps.update({"superseded_by_correction": 0, "unclassified_bar": 0, "ambiguous_correction": 0})
+    corrections = {}
+    ambiguous = set()
+    for row in admitted:
+        if row.get("corrected") is True:
+            previous = corrections.get(row["event_epoch"])
+            if previous is None or row["receipt_epoch"] > previous["receipt_epoch"]:
+                corrections[row["event_epoch"]] = row
+                ambiguous.discard(row["event_epoch"])
+            elif row["receipt_epoch"] == previous["receipt_epoch"]:
+                fields = ("buy", "sell", "unclassified", "session_reset")
+                if any(row.get(key) != previous.get(key) for key in fields):
+                    ambiguous.add(row["event_epoch"])
     stream = []
     for row in admitted:
-        if row["event_epoch"] in corrected_times and row.get("corrected") is not True:
+        if row["event_epoch"] in ambiguous:
+            gaps["ambiguous_correction"] += 1
+            continue
+        if row["event_epoch"] in corrections and row is not corrections[row["event_epoch"]]:
             gaps["superseded_by_correction"] += 1
             continue
         if _finite(row.get("buy")) is None or _finite(row.get("sell")) is None:

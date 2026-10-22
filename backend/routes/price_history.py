@@ -155,6 +155,17 @@ def _recorded_envelopes(ticker, bars, receipt, bar_seconds, opening_minutes,
     from services.chart_delta import admit_delta
     from services.chart_flow import admit_flow_bucket, resolve_epoch, session_bounds_for_date
     from services.chart_profiles import admit_initial_balance
+    valid_clock_bars = [bar for bar in bars if isinstance(bar, dict) and epoch(bar.get("t")) is not None]
+    malformed_clocks = len(bars) - len(valid_clock_bars)
+    normalized = build_history(ticker, valid_clock_bars, [], bar_seconds=bar_seconds)["frames"]
+    bars = [{"t": frame["time"], "o": frame["open"], "h": frame["high"],
+             "l": frame["low"], "c": frame["close"]} for frame in normalized]
+    source_gaps = {"malformed_bar_clock": malformed_clocks,
+                   "invalid_or_duplicate_bars": len(valid_clock_bars) - len(bars)}
+    if not bars:
+        missing = {"status": "unavailable", "reason": "no valid bar clocks at this supplier"}
+        return {"session": None, "source_gaps": source_gaps,
+                **{key: dict(missing) for key in ("initial_balance", "flow", "naked", "delta", "darkpool")}}
     # The response rides the newest catalogued session of this read.
     read_dates = sorted({datetime.fromtimestamp(epoch(bar.get("t")), UTC).astimezone(ZoneInfo("America/New_York")).date()
                          for bar in bars if bar.get("t") is not None})
@@ -189,6 +200,7 @@ def _recorded_envelopes(ticker, bars, receipt, bar_seconds, opening_minutes,
         ib_envelope = {"status": "not_requested",
                        "reason": "no live-session bars for the receipt's own day; the supplier does not fabricate availability for older days"}
     return {
+        "source_gaps": source_gaps,
         "session": session_block,
         "initial_balance": ib_envelope,
         "flow": admit_flow_bucket([], ticker=upright, cursor=cursor, bar_seconds=bar_seconds),

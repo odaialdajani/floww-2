@@ -29,7 +29,6 @@ import { resolveSelectedWall, wallPositionOf } from "../../lib/solsticeSelection
 import {skylitViewScope,readSkylitView,writeSkylitView,captureSkylitSelection,restoreSkylitSelection} from "./skylitViewPreferences";
 import {chartScopeFor} from "./chart/scopeEcho";
 import { awaitRecording } from "./chart/pollRecording";
-import TrinityView from "../TrinityView";
 import {useScopedReading} from "../../hooks/useScopedReading";
 
 function stockStudyOpen(preferences, defaultStudy) {
@@ -274,6 +273,7 @@ function SkylitDashboard({
   // emitted by the flag-on workspace — the price-history AskFlow gate
   // resolves it (stale generations/scope changes/removed panes refuse).
   const [focusedChartContext, setFocusedChartContext] = useState(null);
+  const [workspaceEnabled,setWorkspaceEnabled]=useState(isChartWorkspaceEnabled);
   const [contractSelection, setContractSelection] = useState(null);
   const [reviewSelectionRevision, setReviewSelectionRevision] = useState(0);
   const onContractSelection = useCallback(selection => {
@@ -820,6 +820,8 @@ function SkylitDashboard({
           }
           setExpanded(false); setDrawerOpen(false);
         }}>{rangeOpen ? "Return to options desk" : !priceHistoryOpen ? "Price chart" : "Options desk"}</button>
+        {showPriceHistory && !rangeOpen && <button type="button" className="skylit-trade-mode-btn"
+          aria-pressed={workspaceEnabled} onClick={()=>{setFocusedChartContext(null);setWorkspaceEnabled(value=>!value);}}>Chart layouts</button>}
         <SavedChartReadings key={replayOpenRequest?.nonce || "saved"} ticker={ticker} disabled={rangeOpen} onOpen={id => {
           focusStudy("options"); setScrollStudy("options");
           setExpanded(false); setDrawerOpen(false);
@@ -848,12 +850,20 @@ function SkylitDashboard({
             workspace. Flag off (default) renders the exact incumbent
             PriceNodeHistory with every prop below passed through; flag on
             adds the pane wrapper + data-quality strip. No control removed. */}
-        <ChartWorkspace useNew={isChartWorkspaceEnabled()} ticker={ticker} primary={showPriceHistory} open={!rangeOpen && showPriceHistory} toolbarActions={showPriceHistory ? studyActions : null} forcedScope={chartScopeFor(visibleData, isReplay)}
+        <ChartWorkspace useNew={workspaceEnabled} ticker={ticker} primary={showPriceHistory} open={!rangeOpen && showPriceHistory} toolbarActions={showPriceHistory ? studyActions : null} forcedScope={chartScopeFor(visibleData, isReplay)}
         /* B14 recovery carry: the dock REUSES this dashboard's existing map
            state (entry = live visibleData, stale during replay — no parallel
-           fetch) and docks the EXISTING Market component lazily. */
+           fetch), rendering the existing raw/adjusted map pair lazily. No second dashboard or leaderboard request. */
         docksMaps={{ [ticker]: { data: visibleData, stale: isReplay } }}
-        docksSidecar={(sidecar, symbol) => <TrinityView ticker={symbol} />} onChartContext={setFocusedChartContext} onRecordNodes={async () => {
+        docksSidecar={(sidecar, symbol) => sidecar.data?.ticker === symbol ? (
+          <section data-testid="dock-loaded-map" aria-label={`${symbol} loaded Market maps`}>
+            <p>{symbol} · loaded snapshot {sidecar.data.snapshotId || "identity unavailable"} · {sidecar.status === "stale" ? "recorded" : "same chart scope"}</p>
+            <p>Read-only loaded maps. Use Options desk for cell selection and contract review.</p>
+            <CompareWorkspace data={sidecar.data} ticker={symbol} spot={sidecar.data.spot}
+              metric={activeMetric} pair="rawdelta" rightBasis={activeMetric === "raw" ? "delta" : activeMetric}
+              density="compact" windowRows={fitRows} />
+          </section>
+        ) : <p role="status">No matching loaded Market snapshot for {symbol}.</p>} onChartContext={setFocusedChartContext} onRecordNodes={async () => {
           // G11: refresh the heatmap desk (server records the fresh build as
           // a side effect), then poll price-history scopes until the new
           // snapshot is readable. Bounded, explicit, user-initiated spend.

@@ -4828,3 +4828,9 @@ input[class*="bg-slate-800"], select[class*="bg-slate-800"], textarea[class*="bg
    never shrinks under its label and never clips. App.js is protected; this is
    the CSS-only geometry fix. */
 .ap-header-actions .related-workspace-toggle { flex: none; min-width: max-content; white-space: nowrap; }
+
+/* Desktop Stock chart: keep the existing study filters, but give the
+   primary plot more width than the secondary context rail. */
+@media(min-width:900px) {
+ .heatseeker-layout:has(.skylit-full-dashboard[data-study="price"]) .heatseeker-sidebar-left { width:220px; min-width:220px; max-width:220px; flex:0 0 220px; }
+}

@@ -85,8 +85,12 @@ def resolve_focused_chart(rows, *, focus, scope, cursor) -> dict:
     candidates = [row for row in rows if scope_id(row) == scope]
     if not candidates:
         return {"status": "refused", "reason": "scope_not_recorded"}
+    valid_clocks = [row for row in candidates
+                    if epoch(row.get("asof_ts")) is not None and epoch(row.get("received_at")) is not None]
+    if not valid_clocks:
+        return {"status": "unavailable", "reason": "recorded scope has no valid observation clocks"}
     ticker_rows = [
-        row for row in candidates
+        row for row in valid_clocks
         if max(epoch(row.get("asof_ts")), epoch(row.get("received_at"))) <= float(cursor)
         if focus == str(row.get("ticker") or "").upper()
     ]
@@ -100,6 +104,8 @@ def resolve_focused_chart(rows, *, focus, scope, cursor) -> dict:
         return {"status": "unavailable",
                 "reason": f"recorded observation is out of age at this cursor ({int(age)}s)"}
     gaps: list[str] = []
+    if len(valid_clocks) != len(candidates):
+        gaps.append("malformed_recorded_clock")
     nodes = recorded_nodes(chosen)
     if not nodes:
         gaps.append("recorded_without_nodes")

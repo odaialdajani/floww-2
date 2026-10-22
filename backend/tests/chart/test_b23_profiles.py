@@ -156,14 +156,14 @@ def test_admit_delta_running_rows_correction_supersede_and_gaps():
     cursor = _ny_ts(2026, 10, 21, 10, 31)
     rows = [
         {"ticker": "SPY", "buy": 10, "sell": 4,
-         "event_time": cursor + 10, "received_at": cursor - 30},
+         "event_time": cursor - 60 + 10, "received_at": cursor - 30},
         {"ticker": "SPY", "buy": 20, "sell": 4, "corrected": True,
-         "event_time": cursor + 10, "received_at": cursor - 10},
+         "event_time": cursor - 60 + 10, "received_at": cursor - 10},
         {"ticker": "QQQ", "buy": 99, "sell": 1,
-         "event_time": cursor + 20, "received_at": cursor - 20},
-        {"ticker": "SPY", "event_time": cursor + 30, "received_at": cursor - 15},
+         "event_time": cursor - 60 + 20, "received_at": cursor - 20},
+        {"ticker": "SPY", "event_time": cursor - 60 + 30, "received_at": cursor - 15},
         {"ticker": "SPY", "buy": 50, "sell": 0,
-         "event_time": cursor + 40, "received_at": cursor + 5},
+         "event_time": cursor - 60 + 40, "received_at": cursor + 5},
         {"ticker": "SPY", "buy": 2, "sell": 1, "unclassified": 7,
          "event_time": _ny_ts(2026, 10, 21, 9, 20), "received_at": cursor - 200},
     ]
@@ -200,9 +200,9 @@ def test_admit_delta_session_reset_and_no_eligible_rows():
 
     reset_rows = [
         {"ticker": "SPY", "buy": 10, "sell": 2, "session_reset": True,
-         "event_time": cursor + 5, "received_at": cursor - 20},
+         "event_time": cursor - 60 + 5, "received_at": cursor - 20},
         {"ticker": "SPY", "buy": 1, "sell": 6, "unclassified": 5,
-         "event_time": cursor + 15, "received_at": cursor - 10},
+         "event_time": cursor - 60 + 15, "received_at": cursor - 10},
     ]
     env = admit_delta(reset_rows, **kw)
     assert env["rows"][0]["close"] == 8
@@ -262,11 +262,11 @@ def test_admit_delta_counts_unclassified_only_bar_and_drops_empty_bars():
               units="usd", entitlement="delayed-15m")
     env = admit_delta([
         {"ticker": "SPY", "unclassified": 5,
-         "event_time": cursor + 10, "received_at": cursor - 30},
+         "event_time": cursor - 60 + 10, "received_at": cursor - 30},
         {"ticker": "SPY", "buy": 3, "sell": 1,
-         "event_time": cursor + 30, "received_at": cursor - 30},
+         "event_time": cursor - 60 + 30, "received_at": cursor - 30},
         {"ticker": "SPY",
-         "event_time": cursor + 40, "received_at": cursor - 30},
+         "event_time": cursor - 60 + 40, "received_at": cursor - 30},
     ], **kw)
     assert env["status"] == "available"
     assert env["totals"] == {"delta": 2.0, "classified_volume": 4.0,
@@ -417,4 +417,5 @@ def test_naked_claim_refuses_no_eligible_bars():
         [{"time": _ny_ts(2026, 10, 21, 10, 25), "low": 101.0, "high": 102.0,
           "received_at": cursor - 10}],
         cursor=cursor, coverage={"low": 90.0, "high": 110.0})
-    assert unvisited["claims"][0]["naked"] is True
+    assert unvisited["claims"][0]["naked"] is None
+    assert unvisited["claims"][0]["reason"] == "temporal-coverage-unproven"

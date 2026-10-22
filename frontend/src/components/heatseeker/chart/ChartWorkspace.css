@@ -84,3 +84,17 @@
 .profiles-panel { display: flex; flex-direction: column; gap: 3px; margin: 6px 0; padding: 6px 10px; border: 1px solid #2c3a46; border-radius: 6px; background: #0d151d; }
 .profiles-panel span { font-size: 11px; color: #b9c6d2; }
 .profiles-panel span[data-testid="profile-ib"] { color: #dce8f2; }
+
+/* Desktop composition keeps the plotted instrument ahead of diagnostics. */
+.workspace-controls { display:flex; align-items:center; flex-wrap:wrap; gap:6px; padding:0 0 6px; }
+.workspace-controls .touch-replay { margin:0; min-height:32px; padding:4px 10px; font-size:12px; }
+.workspace-controls [data-testid="atlas-toggle"] { font:inherit; font-size:12px; color:#c7b5e8; border:1px solid #435260; background:#131820; border-radius:4px; padding:4px 9px; min-height:32px; }
+.workspace-controls .pane-layout-picker { margin:0; }
+.workspace-evidence { margin:8px 0; padding-top:6px; border-top:1px solid #26303a; }
+.workspace-evidence > summary { cursor:pointer; color:#b5c4d0; font-size:12px; min-height:30px; display:flex; align-items:center; }
+.workspace-evidence > summary::before { content:'▸ '; margin-right:6px; color:#d3b877; }
+.workspace-evidence[open] > summary::before { content:'▾ '; }
+.workspace-evidence .chart-context-strip { font-size:12px; overflow-wrap:anywhere; line-height:1.5; }
+.workspace-evidence .flow-pane { font-size:12px; padding:6px 0; }
+.chart-watermark { font-size:12px; }
+[data-testid="workspace-quality"] { display:flex; flex-wrap:wrap; gap:4px 14px; font-size:12px; color:#9bafbc; }

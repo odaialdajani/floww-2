@@ -21,7 +21,7 @@ function savedViewLabel(scope,index){
  return mode+" | "+sorted.length+" "+(sorted.length===1?"expiry":"expiries")+" | "+sorted[0]+(sorted.length>1?" to "+sorted.at(-1):"");
 }
 
-export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen, onOpenChange, primary = false, toolbarActions = null, exposureLine = null, darkLevels = null, flowBars = null, alertLines = null, showAtlas = true, forcedScope = null, onRecordNodes = null, cvdLine = null, onQuality = null, onEnvelopes = null, fitMode = "fit-visible", onReplayState = null, replaySourceId = null, replayEpoch = null }) {
+export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen, onOpenChange, primary = false, toolbarActions = null, exposureLine = null, darkLevels = null, flowBars = null, alertLines = null, showAtlas = true, forcedScope = null, onRecordNodes = null, cvdLine = null, onQuality = null, onEnvelopes = null, fitMode = "fit-visible", onReplayState = null, onReplayController = null, replaySourceId = null, replayEpoch = null }) {
   const [localOpen, setLocalOpen] = useState(false);
   const open = controlledOpen ?? (primary || localOpen);
   const setOpen = value => { setLocalOpen(value); onOpenChange?.(value); };
@@ -112,17 +112,15 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
   // B16 pointer/keyboard geometry: the drawing layer projects LOGICAL anchors
   // through the real loaded frames' time/price domain. Zoom/resize changes
   // pixels, never anchor meaning.
-  const drawingViewport = viewportFor(frames, 600, 320);
-  const nudgeStep = drawingViewport
-    ? { dt: (drawingViewport.tMax - drawingViewport.tMin) / 100, dp: (drawingViewport.pMax - drawingViewport.pMin) / 100 }
-    : { dt: 60000, dp: 0.5 };
+  const drawingViewportRef = useRef(null);
   const layerPoint = event => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    // jsdom reports zero rects; fall back to viewBox coords so the geometry
-    // path stays testable. Real browsers always have non-zero rects.
-    const x = rect.width ? event.clientX - rect.left : event.clientX;
-    const y = rect.height ? event.clientY - rect.top : event.clientY;
-    return unprojectPoint({ x, y }, drawingViewport);
+    const vp=drawingViewportRef.current;
+    if(!vp)return null;
+    const svg=event.currentTarget.ownerSVGElement || event.currentTarget;
+    const rect=svg.getBoundingClientRect();
+    const x=(rect.width?(event.clientX-rect.left)*vp.svgWidth/rect.width:event.clientX)-vp.left;
+    const y=(rect.height?(event.clientY-rect.top)*vp.svgHeight/rect.height:event.clientY)-vp.top;
+    return unprojectPoint({x,y},vp);
   };
   const commitDraft = point => {
     const nextAnchors = [...draftAnchors, point];
@@ -132,24 +130,28 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
     } else setDraftAnchors(nextAnchors);
   };
   const onDrawingLayerPointerDown = event => {
+    const drawingViewport=drawingViewportRef.current;
     if (!drawingViewport) return;
     // While dragging a selected drawing, pointer events never start a pan:
     // the layer owns the gesture (arbitration contract: suppressesPan).
     if (dragState) { event.stopPropagation(); return; }
     const raw = layerPoint(event);
     if (!raw) return;
-    const point = magnetPoint(raw, frames, 0.25, drawingViewport);
+    const point = magnetPoint(raw, drawingViewport.frames, 0.25, drawingViewport);
     if (draftTool) { event.stopPropagation(); commitDraft(point); }
   };
   const onDrawingElementPointerDown = (event, drawing) => {
+    const drawingViewport=drawingViewportRef.current;
     if (!drawingViewport || !canEdit(drawing)) { if (drawing) setSelectedDrawing(drawing.id); return; }
     event.stopPropagation();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
     setSelectedDrawing(drawing.id);
     const start = layerPoint(event);
     if (!start) return;
     setDragState({ id: drawing.id, anchors: drawing.anchors.map(a => ({ ...a })), start, suppressPan: true });
   };
   const onDrawingLayerPointerMove = event => {
+    const drawingViewport=drawingViewportRef.current;
     if (!dragState || !drawingViewport) return;
     event.stopPropagation();
     const now = layerPoint(event);
@@ -177,11 +179,16 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
       const dir = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, 1], ArrowDown: [0, -1] }[event.key];
       if (!dir) return;
       event.preventDefault();
+      // The renderer can zoom without rerendering its parent. Read its
+      // current domain at the gesture, rather than a parent-render snapshot.
+      const vp=drawingViewportRef.current;
+      if(!vp)return;
+      const nudgeStep={dt:(vp.tMax-vp.tMin)/100,dp:(vp.pMax-vp.pMin)/100};
       persistDrawings(reduceDrawings(drawings, { type: "nudge", id: selectedDrawing, dt: dir[0] * nudgeStep.dt, dp: dir[1] * nudgeStep.dp }));
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, drawings, selectedDrawing, draftTool, nudgeStep]);
+  }, [open, drawings, selectedDrawing, draftTool]);
   const comparisonScope = typeof payload?.query_key === "string" ? payload.query_key : "";
   // B06 workspace quality contract (inert without a listener): the pane
   // reports its own data-quality truth — latest observed reading time,
@@ -205,9 +212,9 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
   // renders a previous read's truth.
   useEffect(() => {
     if (!onEnvelopes) return;
-    onEnvelopes(payload && typeof payload === "object" && payload.envelopes
-      && typeof payload.envelopes === "object" ? payload.envelopes : null);
-  }, [onEnvelopes, payload]);
+    onEnvelopes(status === "ready" && payload?.ticker === ticker.toUpperCase() && payload.envelopes
+      && typeof payload.envelopes === "object" ? {...payload.envelopes, owner:{ticker:payload.ticker,scope:payload.query_key || ""}} : null);
+  }, [onEnvelopes, payload, status, ticker]);
   // B15 replay algebra reporting (inert without a listener, like onQuality):
   // the pane reports its REAL frames through the replay algebra — cursor,
   // partial/completed bar (a bar completes only once its window closes past
@@ -229,7 +236,7 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
     // emission (older backend) availability is honestly unknown: null.
     const barSeconds = [60, 300, 900, 1800, 3600].includes(minutes * 60) ? minutes * 60 : null;
     const events = frames.map(f => ({ id: f.time, event_time: Date.parse(f.time), available_at: f.end_time ? Date.parse(f.end_time) : null, open: f.open, close: f.close }));
-    const bar = barSeconds ? barAt(events, cursor, barSeconds) : null;
+    const bar = barSeconds ? barAt(events, cursor, barSeconds * 1000) : null;
     const visible = frames.slice(0, position + 1).map(f => ({ time: Date.parse(f.time), high: f.high, low: f.low }));
     const extrema = sweepExtrema(visible, cursor);
     const snapshot = visibleSnapshot(frames.map(f => ({ id: f.time, known_at: Date.parse(f.time), close: f.close })), cursor);
@@ -325,6 +332,13 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
     }), 250);
     return () => clearInterval(id);
   }, [playing, open, frames.length]);
+  useEffect(() => {
+    if(!onReplayController)return undefined;
+    onReplayController({source:replaySourceId,
+      toggle:()=>{if(!frames.length)return;if(!playing&&position>=frames.length-1)setPosition(0);setPlaying(!playing);},
+      pause:()=>setPlaying(false)});
+    return ()=>onReplayController(null);
+  },[onReplayController,replaySourceId,frames.length,playing,position]);
   const pauseInteraction = useCallback(() => setPlaying(false), []);
   // 2026-10-18 compact toolbar: symbol/interval stay prominent; the loaded
   // history range AND session coverage stay visible as text, while their two
@@ -369,9 +383,26 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
   const retryNote = retryRemaining>0?` Retry is available in ${retryRemaining} seconds.`:"";
   const empty = status==="loading"?<p role="status">Loading recorded history...</p>:<div><p role="alert">{status==="error"?"History could not be loaded.":payload?.price_status==="unavailable"?(failure?failure+retryNote:"Price history is unavailable right now."):"No valid price candles were returned for this period."}</p><button type="button" aria-label="Retry price history" disabled={retryRemaining>0} onClick={reloadHistory}>{retryRemaining?`Retry in ${retryRemaining}s`:"Retry history"}</button></div>;
   const readingStatus = !frames.length?"Data details":payload?.node_status==="unavailable"?"Saved lines unavailable":missingMapScope?"Saved map scope missing":(payload.candles_with_recorded_nodes??"Unknown")+"/"+frames.length+" saved";
+  const renderDrawingLayer = drawingViewport => {
+    drawingViewportRef.current=drawingViewport;
+      return <g className="drawing-layer" data-testid="drawing-layer" data-domain="renderer" transform={`translate(${drawingViewport.left},${drawingViewport.top})`} clipPath={`url(#drawings-${drawingViewport.clipId})`}
+        data-arbitration={dragState ? "drawing-drag" : "idle"} role="img" aria-label="Drawing layer"
+        onPointerDown={onDrawingLayerPointerDown} onPointerMove={onDrawingLayerPointerMove} onPointerUp={onDrawingLayerPointerUp} onPointerLeave={onDrawingLayerPointerUp}>
+        <defs><clipPath id={`drawings-${drawingViewport.clipId}`}><rect width={drawingViewport.width} height={drawingViewport.height}/></clipPath><marker id={`arrow-${drawingViewport.clipId}`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#7fa6c0"/></marker></defs>
+        <rect x="0" y="0" width={drawingViewport.width} height={drawingViewport.height} fill="transparent" pointerEvents={draftTool ? "all" : "none"} />
+        {drawings.filter(d=>d.visible!==false).map(d=>{const g=geometryFor(d.tool,d.anchors,drawingViewport);
+          if(!g)return null;
+          const common={"data-testid":"drawing-shape","data-drawing-id":d.id,"data-selected":d.id===selectedDrawing,stroke:d.id===selectedDrawing?"#e3c16a":"#7fa6c0",strokeWidth:d.id===selectedDrawing?2:1.2,fill:"none",pointerEvents:"stroke",onPointerDown:e=>onDrawingElementPointerDown(e,d)};
+          if(g.kind==="rect")return <rect key={d.id} {...common} x={g.x} y={g.y} width={Math.max(g.width,2)} height={Math.max(g.height,2)} />;
+          if(g.kind==="label")return <text key={d.id} {...common} x={g.x} y={g.y} fontSize="12" fill="#dce8f2">{d.text||"text"}</text>;
+          return <polyline key={d.id} {...common} markerEnd={d.tool==="arrow"?`url(#arrow-${drawingViewport.clipId})`:undefined} points={g.points.map(pt=>`${pt.x},${pt.y}`).join(" ")} />;})}
+        {draftAnchors.map((a,i)=>{const pt=geometryFor("text",[a],drawingViewport);
+          return pt?<circle key={"draft-"+i} data-testid="draft-anchor" cx={pt.x} cy={pt.y} r="4" fill="#e3c16a" />:null;})}
+      </g>;
+  };
   return <section className="panel price-node-history" data-open={open} style={{margin:"12px 0",padding:12}} data-testid="price-node-history">
     {!primary&&<button type="button" className="skylit-trade-mode-btn" aria-expanded={open} onClick={()=>{setOpen(!open);setPlaying(false);}}>Price chart + historical nodes</button>}
-    {open&&<RecordedPriceChart ticker={ticker} frames={frames.slice(0,position+1)} fitAllFrames={fitMode==="fit-all"?frames:null} revision={ticker+":"+days+":"+minutes+":"+payload?.query_key+":"+reload} onInteract={pauseInteraction} metricCoverage={payload?.metric_line_coverage} toolbarControls={controls} toolbarActions={toolbarActions} historyPeriodControls={historyPeriodControls} historyControls={historyControls} replayControls={replayControls} dataDetails={details} readingStatus={readingStatus} emptyContent={empty} showAtlas={showAtlas} exposureLine={exposureLine??payload?.exposure_line??null} darkLevels={darkLevels} alertLines={alertLines??null} cvdLine={cvdLine??payload?.cvd_line??null} contractBars={payload?.contract_bars??null} contractSymbol={payload?.contract_symbol??(contract||null)} contractStatus={payload?.contract_status??null} flowBars={Array.isArray(flowBars)&&flowBars.length===frames.length?flowBars.slice(0,position+1):flowBars}/>}
+    {open&&<RecordedPriceChart renderDrawingLayer={renderDrawingLayer} ticker={ticker} frames={frames.slice(0,position+1)} fitAllFrames={fitMode==="fit-all"?frames:null} revision={ticker+":"+days+":"+minutes+":"+payload?.query_key+":"+reload} onInteract={pauseInteraction} metricCoverage={payload?.metric_line_coverage} toolbarControls={controls} toolbarActions={toolbarActions} historyPeriodControls={historyPeriodControls} historyControls={historyControls} replayControls={replayControls} dataDetails={details} readingStatus={readingStatus} emptyContent={empty} showAtlas={showAtlas} exposureLine={exposureLine??payload?.exposure_line??null} darkLevels={darkLevels} alertLines={alertLines??null} cvdLine={cvdLine??payload?.cvd_line??null} contractBars={payload?.contract_bars??null} contractSymbol={payload?.contract_symbol??(contract||null)} contractStatus={payload?.contract_status??null} flowBars={Array.isArray(flowBars)&&flowBars.length===frames.length?flowBars.slice(0,position+1):flowBars}/>}
     {open&&forcedScope!=null&&!followMap&&<p role="note">Saved-view review — these recorded expiry dates are not the current map scope.</p>}
     {/* P1-5 (UX review): secondary strips below the chart collapse into slim
         lines — drawings behind a one-line disclosure, velocity as an inline
@@ -383,19 +414,7 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
           time/price domain; creation picks a tool then places anchors
           (OHLC-magnet); a selected drawing drags with pan suppressed;
           arrows nudge; Escape cancels; Undo pops. */}
-      {drawingViewport&&<svg className="drawing-layer" data-testid="drawing-layer" viewBox="0 0 600 320" width="600" height="320"
-        data-arbitration={dragState ? "drawing-drag" : "idle"} role="img" aria-label="Drawing layer"
-        onPointerDown={onDrawingLayerPointerDown} onPointerMove={onDrawingLayerPointerMove} onPointerUp={onDrawingLayerPointerUp} onPointerLeave={onDrawingLayerPointerUp}>
-        <rect x="0" y="0" width="600" height="320" fill="#0d151d" stroke="#232c36" />
-        {drawings.filter(d=>d.visible!==false).map(d=>{const g=geometryFor(d.tool,d.anchors,drawingViewport);
-          if(!g)return null;
-          const common={"data-testid":"drawing-shape","data-drawing-id":d.id,"data-selected":d.id===selectedDrawing,stroke:d.id===selectedDrawing?"#e3c16a":"#7fa6c0",strokeWidth:d.id===selectedDrawing?2:1.2,fill:"none",onPointerDown:e=>onDrawingElementPointerDown(e,d)};
-          if(g.kind==="rect")return <rect key={d.id} {...common} x={g.x} y={g.y} width={Math.max(g.width,2)} height={Math.max(g.height,2)} />;
-          if(g.kind==="label")return <text key={d.id} {...common} x={g.x} y={g.y} fontSize="12" fill="#dce8f2">{d.text||"text"}</text>;
-          return <polyline key={d.id} {...common} points={g.points.map(pt=>`${pt.x},${pt.y}`).join(" ")} />;})}
-        {draftAnchors.map((a,i)=>{const pt=geometryFor("text",[a],drawingViewport);
-          return pt?<circle key={"draft-"+i} data-testid="draft-anchor" cx={pt.x} cy={pt.y} r="4" fill="#e3c16a" />:null;})}
-      </svg>}
+
       <DrawingRail drawings={drawings} selectedId={selectedDrawing}
       tools={DRAWING_TOOLS_6.map(id=>({id,anchors:anchorsFor(id)}))} draftTool={draftTool}
       onToolPick={id=>{setDraftTool(draftTool===id?null:id);setDraftAnchors([]);}}

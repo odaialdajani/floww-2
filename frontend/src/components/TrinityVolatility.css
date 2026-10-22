@@ -172,3 +172,16 @@
   font-family: inherit;
 }
 .tv-retry:hover { background: #2aba8a; }
+
+/* Read the plots first; source/method/nearest-observation details remain
+   readable below them and wrap at the actual card width. */
+.tv-root { overflow-y:auto; }
+.tv-header { flex-wrap:wrap; }
+.tv-sub,.tv-controls,.tv-cell-h,.tv-legend,.tv-cell-h-notes,.tv-status,.tv-error-note { font-size:12px; line-height:1.5; color:#abb6c5; }
+.tv-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr)); flex:none; align-items:start; }
+.tv-cell-b { min-height:280px; height:280px; flex:none; }
+.tv-legend { flex-wrap:wrap; overflow:visible; }
+.tv-status-row,.tv-cell-h-notes { overflow-wrap:anywhere; }
+.tv-cell-h { min-height:46px; }
+.tv-controls select { font-size:12px; min-height:30px; }
+.tv-loading,.tv-error,.tv-error-panel,.tv-renderer-panel { opacity:1; }

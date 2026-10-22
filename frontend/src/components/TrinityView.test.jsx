@@ -79,6 +79,16 @@ test("standalone market view retains its stock control", async () => {
   expect(screen.getByLabelText("Focused symbol")).toBeVisible();
 });
 
+test('comparison maps precede optional exposure profile in the desktop reading order', async () => {
+  await act(async()=>render(<TrinityView ticker="SPY" />));
+  const maps=screen.getByTestId('triad-raw-adjusted');
+  const profile=screen.getByTestId('triad-signed-profile');
+  expect(maps.compareDocumentPosition(profile)&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  const disclosure=profile.closest('details');
+  expect(disclosure).not.toBeNull();
+  expect(disclosure.open).toBe(false);
+});
+
 test("renders backend packet values verbatim with units; no invented fields", async () => {
   await act(async () => { render(<TrinityView />); });
   await waitFor(() => expect(screen.getByTestId("triad-raw-adjusted")).toBeInTheDocument());

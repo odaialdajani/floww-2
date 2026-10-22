@@ -35,7 +35,7 @@ export function projectAnchor(anchor, vp) {
   if (!anchor || !vp) return null;
   const { t, p } = anchor;
   if (!Number.isFinite(t) || !Number.isFinite(p)) return null;
-  const x = ((t - vp.tMin) / (vp.tMax - vp.tMin)) * vp.width;
+  const x = vp.xForTime ? vp.xForTime(t) : ((t - vp.tMin) / (vp.tMax - vp.tMin)) * vp.width;
   const y = vp.height - ((p - vp.pMin) / (vp.pMax - vp.pMin)) * vp.height;
   return { x, y };
 }
@@ -43,7 +43,7 @@ export function projectAnchor(anchor, vp) {
 // Pixel -> logical (pointer geometry starts here).
 export function unprojectPoint({ x, y }, vp) {
   if (!vp || !Number.isFinite(x) || !Number.isFinite(y)) return null;
-  const t = vp.tMin + (x / vp.width) * (vp.tMax - vp.tMin);
+  const t = vp.timeForX ? vp.timeForX(x) : vp.tMin + (x / vp.width) * (vp.tMax - vp.tMin);
   const p = vp.pMin + ((vp.height - y) / vp.height) * (vp.pMax - vp.pMin);
   return { t, p };
 }
@@ -87,8 +87,11 @@ export function geometryFor(tool, anchors, vp) {
   if (!Array.isArray(anchors) || !anchors.length) return null;
   const points = anchors.map(a => projectAnchor(a, vp)).filter(Boolean);
   if (!points.length) return null;
+  if (tool === 'horizontal') return {kind:'line',points:[{x:0,y:points[0].y},{x:vp.width,y:points[0].y}]};
+  if (tool === 'vertical') return {kind:'line',points:[{x:points[0].x,y:0},{x:points[0].x,y:vp.height}]};
   if (tool === 'rectangle') {
     const [a, b] = points;
+    if (!b) return null;
     return { kind: 'rect', x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), width: Math.abs(b.x - a.x), height: Math.abs(b.y - a.y) };
   }
   if (tool === 'text') return { kind: 'label', x: points[0].x, y: points[0].y };

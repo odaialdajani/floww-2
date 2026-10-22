@@ -4086,7 +4086,7 @@ try:
             # route-shaped reader over as-of rows; eligibility is decided
             # later at the ask cursor. No provider or live read.
             from routes.price_history import read_snapshots
-            return read_snapshots(db, ticker, first, last)
+            return read_snapshots(duckdb_engine, ticker, first, last)
 
         try:
             repository = AgentRepository(db)

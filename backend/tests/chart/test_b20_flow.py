@@ -24,16 +24,16 @@ def test_buckets():
 
 def test_admit_flow_bucket_derives_owning_interval_window_and_bucket_index():
     from services.chart_flow import admit_flow_bucket
-    cursor = _ny_ts(2026, 10, 21, 10, 31)
+    cursor = _ny_ts(2026, 10, 21, 10, 31, 50)
     rows = [
         {"ticker": "SPY", "side": "call", "premium": 120.0,
-         "event_time": cursor + 20, "received_at": cursor - 30},
+         "event_time": cursor - 50 + 20, "received_at": cursor - 1},
         {"ticker": "SPY", "side": "put", "premium": 40.0,
-         "event_time": cursor + 40, "received_at": cursor - 25},
+         "event_time": cursor - 50 + 40, "received_at": cursor - 1},
     ]
     env = admit_flow_bucket(rows, ticker="spy", cursor=cursor, bar_seconds=60)
     assert env["status"] == "available"
-    assert env["window"] == {"start": cursor, "end": cursor + 60}
+    assert env["window"] == {"start": cursor - 50, "end": cursor + 10}
     assert env["bucket_index"] == 61
     assert env["session"]["date"] == "2026-10-21"
     assert env["totals"]["call_premium"] == 120.0
@@ -75,14 +75,14 @@ def test_admit_flow_bucket_reports_foreign_future_previous_sessions_late_rows():
 
 def test_admit_flow_bucket_filters_actually_select_admitted_rows():
     from services.chart_flow import admit_flow_bucket
-    cursor = _ny_ts(2026, 10, 21, 10, 31)
+    cursor = _ny_ts(2026, 10, 21, 10, 31, 50)
     rows = [
         {"ticker": "SPY", "side": "call", "premium": 100.0,
-         "event_time": cursor + 10, "received_at": cursor - 30},
+         "event_time": cursor - 50 + 10, "received_at": cursor - 1},
         {"ticker": "SPY", "side": "call", "premium": 5.0,
-         "event_time": cursor + 20, "received_at": cursor - 30},
+         "event_time": cursor - 50 + 20, "received_at": cursor - 1},
         {"ticker": "SPY", "side": "put", "premium": 80.0,
-         "event_time": cursor + 30, "received_at": cursor - 30},
+         "event_time": cursor - 50 + 30, "received_at": cursor - 1},
     ]
     env = admit_flow_bucket(rows, ticker="SPY", cursor=cursor, bar_seconds=60,
                             filters={"min_premium": 50})
@@ -219,14 +219,14 @@ def test_admit_flow_bucket_holiday_cursor_refuses():
 
 def test_admit_flow_bucket_excludes_anomalous_premiums():
     from services.chart_flow import admit_flow_bucket
-    cursor = _ny_ts(2026, 10, 21, 10, 31)
+    cursor = _ny_ts(2026, 10, 21, 10, 31, 50)
     rows = [
         {"ticker": "SPY", "side": "put", "premium": -50.0,
-         "event_time": cursor + 10, "received_at": cursor - 30},
+         "event_time": cursor - 50 + 10, "received_at": cursor - 1},
         {"ticker": "SPY", "side": "call", "premium": 2e12,
-         "event_time": cursor + 20, "received_at": cursor - 30},
+         "event_time": cursor - 50 + 20, "received_at": cursor - 1},
         {"ticker": "SPY", "side": "call", "premium": 25.0,
-         "event_time": cursor + 40, "received_at": cursor - 30},
+         "event_time": cursor - 50 + 40, "received_at": cursor - 1},
     ]
     env = admit_flow_bucket(rows, ticker="SPY", cursor=cursor, bar_seconds=60)
     assert env["status"] == "available"
@@ -240,17 +240,17 @@ def test_admit_flow_bucket_excludes_anomalous_premiums():
 
 def test_gate_accepts_iso_clocks_and_naive_as_utc():
     from services.chart_flow import admit_flow_bucket
-    cursor = _ny_ts(2026, 10, 21, 10, 31)  # 2026-10-21T14:31:00Z
+    cursor = _ny_ts(2026, 10, 21, 10, 31, 59)  # 2026-10-21T14:31:59Z
     rows = [
         {"ticker": "SPY", "side": "call", "premium": 30.0,
          "event_time": "2026-10-21T14:31:10+00:00",
-         "received_at": "2026-10-21T14:30:31+00:00"},
+         "received_at": "2026-10-21T14:31:55+00:00"},
         {"ticker": "SPY", "side": "put", "premium": 12.0,
          "event_time": "2026-10-21T14:31:40Z",
-         "received_at": "2026-10-21T14:30:32Z"},
+         "received_at": "2026-10-21T14:31:56Z"},
         {"ticker": "SPY", "side": "call", "premium": 3.0,
          "event_time": "2026-10-21T14:31:50",       # naive ISO is treated as UTC
-         "received_at": "2026-10-21T14:30:33"},
+         "received_at": "2026-10-21T14:31:57"},
     ]
     env = admit_flow_bucket(rows, ticker="SPY", cursor=cursor, bar_seconds=60)
     assert env["status"] == "available"
@@ -297,9 +297,9 @@ def test_flow_buckets_partition_session_without_double_count_or_loss():
     n_buckets = 0
     while cursor_epoch + bar <= session["end"]:
         rows.append({"ticker": "SPY", "side": "call", "premium": 10.0 + n_buckets,
-                     "event_time": cursor_epoch + 120, "received_at": cursor_epoch})
+                     "event_time": cursor_epoch + 120, "received_at": cursor_epoch + 121})
         rows.append({"ticker": "SPY", "side": "put", "premium": 5.0 + n_buckets,
-                     "event_time": cursor_epoch + 240, "received_at": cursor_epoch})
+                     "event_time": cursor_epoch + 240, "received_at": cursor_epoch + 241})
         n_buckets += 1
         cursor_epoch += bar
     rows.append({"ticker": "QQQ", "side": "call", "premium": 50.0,
@@ -308,7 +308,7 @@ def test_flow_buckets_partition_session_without_double_count_or_loss():
     total_puts = 5.0 * n_buckets + (n_buckets * (n_buckets - 1)) // 2
     admitted = {"count": 0, "call": 0.0, "put": 0.0}
     for i in range(n_buckets):
-        env = admit_flow_bucket(rows, ticker="SPY", cursor=session["start"] + i * bar,
+        env = admit_flow_bucket(rows, ticker="SPY", cursor=session["start"] + (i + 1) * bar - 1,
                                 bar_seconds=bar)
         assert env["status"] == "available"
         assert env["bucket_index"] == i
@@ -339,9 +339,9 @@ def test_flow_buckets_walk_early_close_session():
     for i in range(expected_buckets):
         events.append({"ticker": "SPY", "side": "call", "premium": 2.0,
                        "event_time": session["start"] + i * bar + bar - 1,
-                       "received_at": session["start"] + i * bar})
+                       "received_at": session["start"] + (i + 1) * bar - 1})
     for i in range(expected_buckets):
-        env = admit_flow_bucket(events, ticker="SPY", cursor=session["start"] + i * bar,
+        env = admit_flow_bucket(events, ticker="SPY", cursor=session["start"] + (i + 1) * bar - 1,
                                 bar_seconds=bar)
         assert env["status"] == "available"
         assert env["session"]["end"] == _ny_ts(2025, 12, 24, 13, 0)

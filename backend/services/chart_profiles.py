@@ -160,10 +160,15 @@ def admit_initial_balance(bars, *, ticker, cursor, bar_seconds, session_date,
              for i in range((opening_minutes * 60) // bar_seconds)]
     expected = [slot for slot in slots if slot + bar_seconds <= cursor_epoch]
     index, gaps = {}, {"malformed_bar": 0, "missing_receipt": 0, "late_receipt": 0,
-                       "outside_opening_window": 0}
+                       "outside_opening_window": 0, "foreign_instrument": 0}
     for bar in bars or []:
         if not isinstance(bar, dict):
             gaps["malformed_bar"] += 1
+            continue
+        row_instrument = next((bar[key] for key in ("ticker", "symbol", "instrument") if key in bar), None)
+        if row_instrument is not None and (not isinstance(row_instrument, str)
+                                          or row_instrument.strip().upper() != instrument["ticker"]):
+            gaps["foreign_instrument"] += 1
             continue
         ts = _first_number(bar, ("time", "ts", "bar_start"))
         high = _number(bar.get("high"))
@@ -263,17 +268,23 @@ def naked_levels_claim(levels, bars, *, cursor, coverage=None) -> dict:
         if receipt > cursor_epoch:
             gaps["late_receipt"] += 1
             continue
-        ordered.append({"ts": ts, "low": bar_low, "high": bar_high})
+        ordered.append({"ts": ts, "low": bar_low, "high": bar_high,
+                        "end": _first_epoch(bar, ("end_time",)), "receipt": receipt})
     ordered.sort(key=lambda bar: bar["ts"])
     claims = []
     for level in levels or []:
-        price = _number((level or {}).get("price"))
-        start = (level or {}).get("session_start")
-        if price is None or start is None:
+        if not isinstance(level, dict):
             gaps["malformed_level"] += 1
             continue
+        price = _number((level or {}).get("price"))
+        start = (level or {}).get("session_start")
+        start_epoch = resolve_epoch(start)
+        if price is None or start_epoch is None:
+            gaps["malformed_level"] += 1
+            continue
+        eligible = [bar for bar in ordered if start_epoch <= bar["ts"] <= cursor_epoch]
         touched = None
-        for bar in ordered:
+        for bar in eligible:
             if bar["low"] <= price <= bar["high"]:
                 touched = bar["ts"]
                 break
@@ -282,11 +293,32 @@ def naked_levels_claim(levels, bars, *, cursor, coverage=None) -> dict:
                            "naked": None, "status": "not-claimable",
                            "reason": "level-outside-known-range"})
             continue
-        if touched is None and not ordered:
+        if touched is None and not eligible:
             claims.append({"price": price, "session_start": start, "visible_until": None,
                            "naked": None, "status": "not-claimable",
                            "reason": "no-eligible-bars-known"})
             continue
+        if touched is None:
+            step = coverage.get("bar_seconds")
+            range_start = resolve_epoch(coverage.get("start"))
+            range_end = resolve_epoch(coverage.get("end"))
+            complete = (isinstance(step, int) and not isinstance(step, bool)
+                        and step in SUPPORTED_BAR_SECONDS and range_start is not None
+                        and range_end is not None and range_start <= start_epoch
+                        and range_end >= cursor_epoch and cursor_epoch >= start_epoch
+                        and (cursor_epoch - start_epoch) % step == 0)
+            if complete:
+                slots = {bar["ts"]: bar for bar in eligible
+                         if bar["end"] == bar["ts"] + step
+                         and bar["end"] <= bar["receipt"] <= cursor_epoch}
+                expected = int((cursor_epoch - start_epoch) / step)
+                complete = (0 < expected <= len(slots)
+                            and all(start_epoch + i * step in slots for i in range(expected)))
+            if not complete:
+                claims.append({"price": price, "session_start": start, "visible_until": None,
+                               "naked": None, "status": "not-claimable",
+                               "reason": "temporal-coverage-unproven"})
+                continue
         claims.append({"price": price, "session_start": start, "visible_until": touched,
                        "naked": touched is None, "status": "claim",
                        "basis": "known-range coverage over ordered, cursor-gated bars"})

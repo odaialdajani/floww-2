@@ -336,3 +336,16 @@
  .triad-drawer .review-inspector-panel .skylit-metric-value{font-size:12px;}
  .triad-drawer .review-inspector-tabs [role="tab"]{min-height:32px;padding:5px 3px;font-size:12px;}
 }
+
+/* Desktop comparison is the primary Market reading. Secondary profile is
+   retained under its own disclosure, after both source-aligned maps. */
+.trinity-layout .triad-profile-disclosure { margin:8px 12px; border:1px solid #303030; border-radius:4px; background:#111; }
+.triad-profile-disclosure > summary { padding:8px 10px; cursor:pointer; font-size:12px; color:#c7c7c7; }
+.triad-profile-disclosure:not([open]) > .triad-profile { display:none; }
+.triad-profile-disclosure > .triad-profile { margin:0; max-height:300px; }
+.trinity-layout .triad-pane-header { white-space:normal; overflow-wrap:anywhere; line-height:1.45; min-height:40px; padding:6px 10px; font-size:12px; }
+@media(min-width:900px) {
+ .trinity-layout .triad-pair { height:clamp(300px,48dvh,620px); }
+ .trinity-layout .heatmap-landmarks { padding:6px 12px; }
+ .trinity-layout .heatmap-landmarks-heading { display:flex; align-items:center; flex-wrap:wrap; gap:6px 14px; }
+}

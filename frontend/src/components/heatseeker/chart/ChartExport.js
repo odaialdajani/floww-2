@@ -11,22 +11,43 @@ export function clipboardState(error) {
   return error ? 'denied' : 'copied';
 }
 
-// Composite export: one SVG describing the whole composition — every pane
-// with its instrument and fit mode, the data-quality stamp, and the
-// source/proxy/replay watermark. Layers honor the export plan flags.
-export function composeExportSvg({ layoutId = 'single', panes = [], fitMode = 'fit-visible', watermarkText = '', quality = null, plan = exportPlan() } = {}) {
-  const width = 1200;
-  const paneW = 1160;
-  const paneH = 220;
-  const height = 80 + panes.length * (paneH + 16) + 60;
-  const escapeXml = (text) => String(text ?? '').replace(/&/g, '\u0026amp;').replace(/</g, '\u0026lt;').replace(/>/g, '\u0026gt;').replace(/"/g, '\u0026quot;');
-  const paneRects = panes.map((pane, index) => {
-    const y = 70 + index * (paneH + 16);
-    const focused = pane.focused ? ' (focused)' : '';
-    return `<g><rect x="20" y="${y}" width="${paneW}" height="${paneH}" fill="#101820" stroke="${pane.focused ? '#e3c16a' : '#232c36'}" stroke-width="2"/><text x="34" y="${y + 28}" fill="#dce8f2" font-size="18" font-family="monospace">${escapeXml(pane.symbol)}${escapeXml(focused)} · fit ${escapeXml(fitMode)}</text><text x="34" y="${y + 54}" fill="#8ba3b0" font-size="13" font-family="monospace">${plan.engine.includePrimitives ? 'primitives:on' : 'primitives:off'} · crosshair:${plan.engine.includeCrosshair ? 'on' : 'off'}</text></g>`;
+// Capture the actual rendered SVG layers, including candles, saved nodes,
+// drawings, volume and CVD. Resolved styles make the image standalone.
+export function captureChartSvgs(root, plan=exportPlan()) {
+  if(!root)return [];
+  const slots=[...root.querySelectorAll('.pane-slot')];
+  return (slots.length?slots:[root]).map(slot=>{
+    const nodes=[...slot.querySelectorAll('.recorded-price-chart svg')];
+    return nodes.map(svg=>{
+      const copy=svg.cloneNode(true),originals=[svg,...svg.querySelectorAll('*')],copies=[copy,...copy.querySelectorAll('*')];
+      const props=['fill','stroke','stroke-width','color','opacity','font-family','font-size','font-weight','text-anchor'];
+      originals.forEach((el,i)=>{const styles=window.getComputedStyle(el);props.forEach(key=>{const value=styles.getPropertyValue(key);if(value)copies[i].style.setProperty(key,value);});});
+      const box=(svg.getAttribute('viewBox')||'').split(/\s+/).map(Number);
+      const width=box[2]||svg.getBoundingClientRect().width,height=box[3]||svg.getBoundingClientRect().height;
+      if(!(width>0&&height>0))return null;
+      copy.removeAttribute('xmlns');copy.removeAttribute('class');
+      if(!plan.engine.includeCrosshair)copy.querySelectorAll('[data-export-layer="crosshair"]').forEach(el=>el.remove());
+      if(!plan.engine.includePrimitives)copy.querySelectorAll('[data-testid="drawing-layer"]').forEach(el=>el.remove());
+      copy.setAttribute('width',String(width));copy.setAttribute('height',String(height));
+      copy.style.width=width+'px';copy.style.height=height+'px';
+      return {svg:new XMLSerializer().serializeToString(copy),width,height};
+    }).filter(Boolean);
+  });
+}
+
+// Layout identity alone cannot substitute for an image of the chart.
+export function composeExportSvg({layoutId='single',panes=[],fitMode='fit-visible',watermarkText='',quality=null,charts=[],plan=exportPlan()}={}) {
+  if(!charts.length||!charts.some(layers=>layers.length))throw new Error('No rendered charts available for export');
+  if(charts.length!==panes.length || charts.some(layers=>!layers.length))throw new Error('Chart pane unavailable — export requires every pane');
+  const escapeXml=text=>String(text??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const width=Math.max(800,...charts.flat().map(layer=>layer.width))+40;
+  let offset=64;
+  const content=charts.map((layers,index)=>{
+    const pane=panes[index]||{},heading=`${pane.symbol||'Chart'}${pane.focused?' (focused)':''} · fit ${fitMode}`;
+    let result=`<text x="20" y="${offset}" fill="#dce8f2" font-size="14">${escapeXml(heading)}</text>`;offset+=14;
+    for(const layer of layers){result+=`<g transform="translate(20 ${offset})">${layer.svg}</g>`;offset+=layer.height+6;}
+    offset+=24;return result;
   }).join('');
-  const qualityStamp = quality
-    ? `<text x="20" y="${height - 44}" fill="#8ba3b0" font-size="13" font-family="monospace">quality ${escapeXml(quality.status ?? 'unknown')} · latest ${escapeXml(quality.sourceTime ?? 'time unknown')} · ${escapeXml(quality.coverage ?? '')}</text>`
-    : '';
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect width="${width}" height="${height}" fill="#0b1219"/><text x="20" y="40" fill="#f2d795" font-size="22" font-family="monospace">FLOWW chart export · ${escapeXml(layoutId)} composition</text>${paneRects}${qualityStamp}<text x="20" y="${height - 18}" fill="#6f8896" font-size="13" font-family="monospace">${escapeXml(watermarkText)}</text></svg>`;
+  const stamp=(quality?`quality ${quality.status??'unknown'} · latest ${quality.sourceTime??'time unknown'} · ${quality.coverage??''} · `:'')+`primitives:${plan.engine.includePrimitives?'on':'off'} · crosshair:${plan.engine.includeCrosshair?'on':'off'}`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${offset+60}" viewBox="0 0 ${width} ${offset+60}"><rect width="100%" height="100%" fill="#111111"/><text x="20" y="30" fill="#f2d795" font-size="18">FLOWW chart export · ${escapeXml(layoutId)} composition</text>${content}<text x="20" y="${offset+12}" fill="#aab6c0" font-size="12">${escapeXml(stamp)}</text><text x="20" y="${offset+36}" fill="#aab6c0" font-size="12">${escapeXml(watermarkText)}</text></svg>`;
 }

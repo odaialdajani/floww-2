@@ -89,6 +89,16 @@ import useScreenContext from "../../agent/useScreenContext";
 import coverageFixture from "../../fixtures/integration/coverage-read.v1.json";
 import {skylitViewScope,readSkylitView,writeSkylitView} from "./skylitViewPreferences";
 
+test('chart layouts are reachable from the normal Stock chart without a hidden browser flag', async () => {
+  window.__FLOWW_CHART_WORKSPACE__=false;
+  await act(async()=>render(<SkylitDashboardView ticker="SPY" data={selectionMap()} spot={650} defaultStudy="price" />));
+  expect(screen.queryByTestId('chart-workspace')).not.toBeInTheDocument();
+  await act(async()=>fireEvent.click(screen.getByRole('button',{name:'Chart layouts'})));
+  expect(screen.getByTestId('chart-workspace')).toBeInTheDocument();
+  await act(async()=>fireEvent.click(screen.getByRole('button',{name:'Chart layouts'})));
+  expect(screen.queryByTestId('chart-workspace')).not.toBeInTheDocument();
+});
+
 test('another cell in the same wall resets exact contract inputs, but a tab switch does not', async () => {
   const data=selectionMap();
   data.grid.strikes=[650,651]; data.grid.grid['2026-09-18']['651']=100;
@@ -1740,4 +1750,23 @@ test('flag-on workspace docks the live map entry through the sidecar policy (B14
     expect(dock.getAttribute('data-symbol')).toBeTruthy();
     expect(screen.getByTestId('dock-subs').textContent).toMatch(/ of 10 subscriptions/);
   } finally { window.__FLOWW_CHART_WORKSPACE__ = false; }
+});
+
+test('opening the chart dock reuses the loaded snapshot without fetching another Market dashboard', async () => {
+  window.__FLOWW_CHART_WORKSPACE__=true;
+  try {
+    await act(async()=>render(<SkylitDashboardView ticker="SPY" data={selectionMap()} spot={650} defaultStudy="price" />));
+    await act(drain);
+    axios.get.mockClear();
+    await act(async()=>fireEvent.click(screen.getByTestId('dock-sidecar').querySelector('summary')));
+    await act(drain);
+    const urls=axios.get.mock.calls.map(([url])=>String(url));
+    expect(urls.filter(url=>url.includes('/heatmap/') || url.includes('/solstice/scan/leaderboard'))).toEqual([]);
+    expect(screen.getByTestId('dock-loaded-map')).toHaveTextContent('SPY');
+    const maps=screen.getByTestId('dock-loaded-map');
+    expect(maps.querySelectorAll('[data-testid="mock-heatmap"]')).toHaveLength(2);
+    expect(maps).toHaveTextContent('Read-only loaded maps');
+    await act(async()=>fireEvent.click(maps.querySelectorAll('[data-testid="mock-heatmap-cell"]')[1]));
+    expect(screen.queryByRole('tab',{name:'Contract'})).not.toBeInTheDocument();
+  } finally { window.__FLOWW_CHART_WORKSPACE__=false; }
 });

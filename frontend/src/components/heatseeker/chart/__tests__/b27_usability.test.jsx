@@ -69,6 +69,7 @@ test('B27 export plan keeps layer flags; clipboard states are explicit', () => {
 
 test('B27 composed SVG export: real composition, watermarks, valid XML, escaped', () => {
   const svg = composeExportSvg({
+    charts: [[{svg:'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 480"><path d="M0 1L2 3"/><rect data-testid="captured-candle" x="20" y="30" width="5" height="20"/><rect x="40" y="40" width="5" height="10"/></svg>',width:800,height:480}],[{svg:'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 480"><path d="M0 1L2 3"/></svg>',width:800,height:480}]],
     layoutId: 'three',
     panes: [{ symbol: 'SPY<&>"X"', focused: true }, { symbol: 'QQQ', focused: false }],
     fitMode: 'fit-all',
@@ -87,7 +88,7 @@ test('B27 composed SVG export: real composition, watermarks, valid XML, escaped'
   expect(parsed.querySelector('parsererror')).toBe(null);
   const texts = Array.from(parsed.querySelectorAll('text')).map(t => t.textContent);
   expect(texts.some(t => t.includes('SPY<&>"X" (focused)'))).toBe(true);
-  expect(parsed.querySelectorAll('rect').length).toBeGreaterThanOrEqual(3); // bg + 2 panes
+  expect(parsed.querySelectorAll('rect').length).toBeGreaterThanOrEqual(3); // background + actual captured candle bodies
 });
 
 test('B27 mounted keyboard map: actions fire, typing never does, escape closes', async () => {

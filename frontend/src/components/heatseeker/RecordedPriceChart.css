@@ -241,3 +241,17 @@
 .recorded-chart-replay-row{white-space:nowrap;}
 .recorded-chart-replay-row .price-history-replay{flex-wrap:nowrap;}
 .recorded-chart-replay-row .price-history-replay input{flex:1;min-width:120px;}
+
+/* One primary action row, then the owning candle readout. Wrapping is
+   based on the pane, so both desktop rails cannot squeeze/clamp OHLC. */
+.recorded-chart-tools { gap:6px; padding:4px 0 6px; }
+.recorded-chart-tools .recorded-chart-readout { order:6; flex:1 1 600px; width:auto; min-height:30px; display:flex; flex-wrap:wrap; justify-content:flex-start; gap:4px 14px; padding:0; }
+.recorded-chart-readout > span { overflow:visible; text-overflow:clip; white-space:normal; }
+.recorded-chart-readout strong { white-space:normal; }
+.recorded-chart-tools .recorded-chart-scale { order:2; }
+.recorded-chart-tools .recorded-chart-popover:not(.recorded-chart-data) { order:3; }
+.recorded-chart-tools .recorded-chart-actions { order:4; margin-left:auto; }
+
+.recorded-chart-tools button, .recorded-chart-tools summary, .recorded-chart-tools select { font-size:12px; min-height:30px; padding:4px 6px; }
+.recorded-chart-tools .recorded-chart-actions { gap:5px; }
+.recorded-chart-tools .price-history-summary { flex:0 0 auto; }

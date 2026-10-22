@@ -8,7 +8,7 @@ const bound=(value,low,high)=>Math.max(low,Math.min(high,value));
 const axisTime=value=>new Date(value).toLocaleString('en-US',{timeZone:'America/New_York',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false});
 const closeDetails=element=>{const details=element.closest('details');if(details){details.open=false;details.querySelector('summary')?.focus();}};
 
-export default function RecordedPriceChart({ticker,frames,revision='',onInteract,metricCoverage={},toolbarControls=null,toolbarActions=null,historyPeriodControls=null,historyControls=null,replayControls=null,dataDetails=null,readingStatus="Data details",emptyContent=null,showAtlas=true,exposureLine=null,darkLevels=null,flowBars=null,alertLines=null,cvdLine=null,contractBars=null,contractSymbol=null,contractStatus=null,fitAllFrames=null}) {
+export default function RecordedPriceChart({ticker,frames,revision='',onInteract,metricCoverage={},toolbarControls=null,toolbarActions=null,historyPeriodControls=null,historyControls=null,replayControls=null,dataDetails=null,readingStatus="Data details",emptyContent=null,showAtlas=true,exposureLine=null,darkLevels=null,flowBars=null,alertLines=null,cvdLine=null,contractBars=null,contractSymbol=null,contractStatus=null,fitAllFrames=null,renderDrawingLayer=null}) {
  const data=useMemo(()=>checkedCandles(frames),[frames]);
  const premiumCloses=useMemo(()=>contractClosesForFrames(data,contractBars),[data,contractBars]);
  const surface=useRef(null),pointers=useRef(new Map()),gesture=useRef(null),previousLength=useRef(0);
@@ -207,8 +207,27 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
        const peak=Math.max(...prof.rows.map(r=>r.volume),1),bw=64,bx=Math.max(left,right-bw-4);
        return <g data-testid="volume-profile"><title>Volume profile (bar-range approximation)</title>{prof.rows.map((r,ri)=>{const isPoc=r.price===prof.poc.price&&r.volume===prof.poc.volume;
         return <rect key={'vp:'+ri} data-testid={isPoc?'profile-poc':'profile-row'} x={bx+(bw-Math.max(1,(r.volume/peak)*bw))} y={y(r.price)-2} width={Math.max(1,(r.volume/peak)*bw)} height={4} fill={isPoc?'#e8bd65':'#5a6b7d'} opacity={isPoc?0.95:0.6}><title>{'Volume '+price(r.price)+': '+Math.round(r.volume).toLocaleString('en-US')+' shares'}</title></rect>;})}</g>;})()}
-      {hover!==null&&selected&&<><line x1={left+(hover+0.5)*spacing} x2={left+(hover+0.5)*spacing} y1={top} y2={bottom} stroke="#a8b3be" strokeDasharray="3 4"/><line x1={left} x2={right} y1={y(selected.close)} y2={y(selected.close)} stroke="#a8b3be" strokeDasharray="3 4"/></>}
+      {hover!==null&&selected&&<g data-export-layer="crosshair"><line x1={left+(hover+0.5)*spacing} x2={left+(hover+0.5)*spacing} y1={top} y2={bottom} stroke="#a8b3be" strokeDasharray="3 4"/><line x1={left} x2={right} y1={y(selected.close)} y2={y(selected.close)} stroke="#a8b3be" strokeDasharray="3 4"/></g>}
     </g>
+    {renderDrawingLayer && renderDrawingLayer({
+      width:plotWidth,height:plotHeight,left,top,svgWidth:size.width,svgHeight:size.height,clipId:id,
+      pMin:range.low,pMax:range.high,frames:visible,
+      tMin:Date.parse(visible[0].time),tMax:Date.parse(visible.at(-1).time),
+      // The renderer spaces bars equally across overnight/weekend gaps.
+      // Drawings use that same piecewise time-to-bar transform.
+      xForTime:time=>{
+        const times=visible.map(f=>Date.parse(f.time));
+        if(times.length===1)return plotWidth/2;
+        let i=times.findIndex(v=>v>=time);if(i<0)i=times.length-1;if(i===0)i=1;
+        const fraction=(time-times[i-1])/(times[i]-times[i-1]);
+        return (i-0.5+fraction)*spacing;
+      },
+      timeForX:x=>{
+        const at=x/spacing-0.5,i=bound(Math.floor(at),0,Math.max(0,visible.length-2));
+        const first=Date.parse(visible[i].time),last=Date.parse(visible[Math.min(i+1,visible.length-1)].time);
+        return first+(at-i)*(last-first);
+      }
+    })}
     <line x1={right} x2={right} y1={top} y2={bottom} stroke="#3d4853"/>
     {(()=>{
      const budget=Math.min(visible.length,5,Math.max(1,Math.floor(plotWidth/112)));

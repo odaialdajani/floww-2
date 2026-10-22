@@ -61,7 +61,7 @@ test('an explicit caller envelope still wins over the recorded one', async () =>
   try {
     await mount({
       ibEnvelope: {
-        status: 'available', bounds: { low: 99, high: 103 },
+        status: 'available', scope:'', instrument: {ticker:'SPY'}, cursor: Date.parse('2026-09-10T14:01:00Z')/1000, bounds: { low: 99, high: 103 },
         coverage: { covered: 2, expected_total: 2, complete: true },
         approximation: 'bar-resolution',
         certification: { basis: 'explicit-caller-envelope', certified_by_hash: false },

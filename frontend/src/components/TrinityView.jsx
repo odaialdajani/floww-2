@@ -424,7 +424,6 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
       <HeatmapLandmarks data={payload} />
       <div className={drawerOpen ? "triad-review-workspace" : ""}>
       <div className="triad-review-analysis">
-      <StrikeExposureProfile data={payload} basis={basis} wall={selectedWall} onSelect={onGridCell} />
       <div className="triad-pair" data-testid="triad-raw-adjusted" data-mobile-pane={mobilePane}>
         <div className="triad-pane" data-testid="triad-pane-raw">
           <div className="triad-pane-header" title="Raw structural GEX — gex_net_v1/gex_gross_v1, USD per 1% spot move">
@@ -450,6 +449,11 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
           )}
         </div>
       </div>
+
+      <details className="triad-profile-disclosure" data-testid="triad-profile-disclosure">
+        <summary>Signed exposure profile · raw and adjusted</summary>
+      <StrikeExposureProfile data={payload} basis={basis} wall={selectedWall} onSelect={onGridCell} />
+      </details>
 
       {spxMissing && (
         <div className="triad-capability" data-testid="triad-spx-capability">

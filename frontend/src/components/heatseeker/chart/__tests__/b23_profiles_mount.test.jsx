@@ -117,7 +117,7 @@ test('R21-04 MOUNTED: available ib envelope shows server bounds and coverage', a
     render(<ChartWorkspace
       ticker="SPY" open useNew
       ibEnvelope={{
-        status: 'available',
+        status: 'available', scope:'', instrument: {ticker:'SPY'}, cursor: Date.parse('2026-09-10T14:01:00Z')/1000,
         bounds: { low: 98, high: 103 },
         coverage: { covered: 4, expected_total: 4, complete: true, opening_minutes: 60 },
         approximation: 'bar-resolution',

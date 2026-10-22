@@ -7,7 +7,7 @@ import { createPanes, panesReducer } from './chartReducer';
 import { createLayout, migrate, sanitizeImport, serialize } from './persistence/layoutSchema';
 import { listLocal, loadLocal, saveLocal, scheduleAutosave } from './persistence/layoutStore';
 import { DEFAULT_SHORTCUTS, LONG_PRESS_MS, actionFor, keyOf, nextFitMode, rebind, watermark } from './ChartShortcuts';
-import { clipboardState, composeExportSvg, exportPlan } from './ChartExport';
+import { captureChartSvgs, composeExportSvg, exportPlan } from './ChartExport';
 import { createReplayState, replayStep } from './replay/replayReducer';
 import FlowPane, { bucketHash } from './indicators/FlowPane';
 import { initialBalance, nakedLevels, poc, tickRows, valueArea } from './indicators/ProfilePrimitives';
@@ -74,6 +74,8 @@ export default function ChartWorkspace({
   const [rebindAction, setRebindAction] = useState(null);
   const [fitMode, setFitMode] = useState('fit-visible');
   const [replaying, setReplaying] = useState(false);
+  const replayControllerRef=useRef(null);
+  const handleReplayController=useCallback(controller=>{replayControllerRef.current=controller;},[]);
   const [exportNote, setExportNote] = useState('');
   // B15 replay algebra consumer: the focused pane's replay reports flow
   // through replayReducer — the cursor, the partial/completed bar, extrema
@@ -98,12 +100,16 @@ export default function ChartWorkspace({
     // focused pane's reports bind. (The pane carries its own source id, so
     // this callback keeps ONE stable identity — a per-render closure here
     // would re-fire the pane's report effect forever.)
-    if (!report) { setReplayBinding(null); return; }
+    if (!report) { setReplayBinding(null); setReplaying(false); return; }
     if (!focused || report.source !== focused.id) return;
+    setReplaying(report.playing === true);
     setReplayBinding({ paneId: focused.id, paneSymbol: focused.symbol, report });
     replayDispatch({ type: 'seek', cursor: report.cursor });
     for (const event of report.delta || []) replayDispatch({ type: 'admit', event });
   }, []);
+  const savedLayoutCursor = useRef(null);
+  const cycleLayoutRef = useRef(null);
+  const workspaceRef = useRef(null);
   const restored = useRef(false);
   const longPressTimer = useRef(null);
   const lastContextEmit = useRef(null);
@@ -128,7 +134,7 @@ export default function ChartWorkspace({
   // missing pane identity is REFUSED with the contract's reason, never
   // silently blank. The ask gate refuses on the same reason.
   const chartDescriptor = liveReport
-    ? bindContext({ focus: contextPane.symbol, query: 'focused-chart', scope: liveReport.scope, cursor: liveReport.cursor, generation: liveReport.generation })
+    ? bindContext({ focus: contextPane.symbol, query: 'focused-chart', scope: liveReport.scope, cursor: liveReport.cursor / 1000, generation: liveReport.generation })
     : { status: 'refused', reason: replayBinding ? 'pane changed' : 'no focused pane report' };
   const chartCurrent = liveReport
     ? { generation: liveReport.generation, scope: liveReport.scope, pane_removed: false }
@@ -154,9 +160,19 @@ export default function ChartWorkspace({
   // contracts); with neither source present the legacy local algebra runs
   // exactly as committed — callers that never ask envelopes are byte-stable.
   const recordedEnvelopes = envelopes && typeof envelopes === 'object' ? envelopes : null;
-  const ibSource = ibEnvelope ?? (recordedEnvelopes ? recordedEnvelopes.initial_balance : null);
-  const nakedSource = nakedEnvelope ?? (recordedEnvelopes ? recordedEnvelopes.naked : null);
-  const flowSource = flowEnvelope ?? (recordedEnvelopes ? recordedEnvelopes.flow : null);
+  const atFocusedCursor = (envelope, inheritedScope) => {
+    if (!envelope || envelope.status !== 'available') return envelope;
+    const symbol=envelope.instrument?.ticker ?? envelope.ticker;
+    if(symbol!==contextPane?.symbol)return {status:'refused',reason:'envelope instrument does not match focused chart'};
+    if(!liveReport || !Number.isFinite(envelope.cursor) || envelope.cursor*1000!==liveReport.cursor)
+      return {status:'refused',reason:'envelope cursor does not match selected chart cursor'};
+    const scope=envelope.scope ?? inheritedScope;
+    if(typeof scope!=='string' || scope!==liveReport.scope)return {status:'refused',reason:'envelope scope does not match focused chart'};
+    return envelope;
+  };
+  const ibSource = atFocusedCursor(ibEnvelope ?? (recordedEnvelopes ? recordedEnvelopes.initial_balance : null), ibEnvelope == null ? recordedEnvelopes?.owner?.scope : undefined);
+  const nakedSource = atFocusedCursor(nakedEnvelope ?? (recordedEnvelopes ? recordedEnvelopes.naked : null), nakedEnvelope == null ? recordedEnvelopes?.owner?.scope : undefined);
+  const flowSource = atFocusedCursor(flowEnvelope ?? (recordedEnvelopes ? recordedEnvelopes.flow : null), flowEnvelope == null ? recordedEnvelopes?.owner?.scope : undefined);
 
   const applyPersisted = (data) => {
     if (!data || typeof data !== 'object') return false;
@@ -200,8 +216,13 @@ export default function ChartWorkspace({
   // guards), a pending rebind captures the next key with typed refusals,
   // Escape closes overlays. Handlers read the latest state via a ref so the
   // listener stays mounted once.
+  const toggleReplay=()=>{
+    const controller=replayControllerRef.current;
+    if(controller?.source===contextPane?.id)controller.toggle();
+    else setLayoutNote('Replay unavailable — load the focused chart first.');
+  };
   const keyboardRef = useRef({});
-  keyboardRef.current = { shortcuts, rebindAction, atlas, layoutsOpen, replaying };
+  keyboardRef.current = { shortcuts, rebindAction, atlas, layoutsOpen, replaying, toggleReplay };
   useEffect(() => {
     const onKeyDown = (event) => {
       const k = keyboardRef.current;
@@ -224,20 +245,15 @@ export default function ChartWorkspace({
         // bottom-sheet on phone) before Atlas before the replay banner.
         if (k.layoutsOpen) setLayoutsOpen(false);
         else if (k.atlas) setAtlas(false);
-        else if (k.replaying) setReplaying(false);
+        else if (k.replaying) replayControllerRef.current?.pause();
         return;
       }
       event.preventDefault();
       if (action === 'atlas') setAtlas(v => !v);
       else if (action === 'layouts') setLayoutsOpen(v => !v);
-      else if (action === 'replay') setReplaying(v => !v);
+      else if (action === 'replay') k.toggleReplay();
       else if (action === 'fitMode') setFitMode(nextFitMode);
-      else if (action === 'cycleLayout') {
-        const names = listLocal().filter(n => n !== WORKSPACE_LAYOUT_KEY);
-        if (!names.length) { setLayoutNote('No saved layouts to cycle.'); return; }
-        const raw = loadLocal(names[0]);
-        if (raw !== null) { const { layout } = migrate(raw); if (applyPersisted(layout)) setLayoutNote('Loaded ' + names[0] + '.'); }
-      }
+      else if (action === 'cycleLayout') cycleLayoutRef.current?.();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
@@ -275,17 +291,11 @@ export default function ChartWorkspace({
   });
 
   const exportImage = async () => {
-    const svg = composeExportSvg({ layoutId, panes, fitMode, watermarkText, quality, plan: exportPlan() });
     try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(svg);
-        setExportNote(clipboardState(null) === 'copied' ? 'Export image copied.' : '');
-      } else {
-        setExportNote('Export denied — clipboard unavailable.');
-      }
-    } catch {
-      setExportNote('Export denied — clipboard refused.');
-    }
+      const svg=composeExportSvg({layoutId,panes,fitMode,watermarkText,quality,plan:exportPlan(),charts:captureChartSvgs(workspaceRef.current)});
+      if(navigator.clipboard?.writeText){await navigator.clipboard.writeText(svg);setExportNote('Export image copied.');}
+      else setExportNote('Export denied — clipboard unavailable.');
+    }catch(error){setExportNote('Export denied — '+(error?.message||'clipboard refused.'));}
   };
 
   const exportLayoutIdentity = async () => {
@@ -332,24 +342,72 @@ export default function ChartWorkspace({
   };
 
   const cycleLayout = () => {
-    const names = listLocal().filter(n => n !== WORKSPACE_LAYOUT_KEY);
-    if (!names.length) { setLayoutNote('No saved layouts to cycle.'); return; }
-    const raw = loadLocal(names[0]);
-    if (raw === null) { setLayoutNote('Saved layout could not be read.'); return; }
-    const { layout } = migrate(raw);
-    if (applyPersisted(layout)) setLayoutNote('Loaded ' + names[0] + '.');
+    const names=listLocal().filter(name=>name!==WORKSPACE_LAYOUT_KEY);
+    if(!names.length){setLayoutNote('No saved layouts to cycle.');return;}
+    const next=names[(names.indexOf(savedLayoutCursor.current)+1)%names.length];
+    const raw=loadLocal(next);
+    if(raw===null){setLayoutNote('Saved layout could not be read.');return;}
+    const {layout}=migrate(raw);
+    if(applyPersisted(layout)){savedLayoutCursor.current=next;setLayoutNote('Loaded '+next+'.');}
   };
+  cycleLayoutRef.current=cycleLayout;
 
   return (
-    <div data-testid="chart-workspace" data-ticker={ticker}>
+    <div ref={workspaceRef} data-testid="chart-workspace" data-ticker={ticker}>
       <ChartPane symbol={ticker} interval="incumbent" status={quality?.status ?? 'loading'}>
         {/* B27 Replay control sits ABOVE the chips row on every viewport,
             with a touch-sized target and a visible replay state. */}
+        <div className="workspace-controls" aria-label="Workspace controls">
         <button type="button" data-testid="replay-touch" className="touch-replay" aria-pressed={replaying}
-          onClick={() => setReplaying(v => !v)}>
+          onClick={toggleReplay}>
           {replaying ? 'Pause replay' : 'Replay'}
         </button>
         {replaying && <p className="replay-banner" data-testid="replay-banner">Replay active — recorded session view.</p>}
+        <button type="button" data-testid="atlas-toggle" aria-pressed={atlas} onClick={() => setAtlas((v) => !v)}>
+          {atlas ? 'Hide Atlas overlay' : 'Show Atlas overlay'}
+        </button>
+        {/* B11 mounted pane manager: layout presets drive the visible pane
+            count; every layout change invalidates pane evidence atomically
+            (generations advance together, late results are rejected). */}
+        <div className="pane-layout-picker" role="group" aria-label="Chart pane layout">
+          {LAYOUT_PRESETS.map(p => (
+            <button
+              key={p.id}
+              type="button"
+              data-testid={'layout-' + p.id}
+              aria-pressed={layoutId === p.id}
+              onClick={() => { setLayoutId(p.id); dispatch({ type: 'layout', layout: p.id, symbol: ticker }); }}
+            >
+              {p.label}
+            </button>
+          ))}
+          {/* B27 two auto-fit modes, persisted with the composition. */}
+          <button type="button" data-testid="fit-mode" aria-label="Auto-fit mode"
+            onClick={() => setFitMode(nextFitMode)}>
+            Auto-fit: {fitMode}
+          </button>
+        </div>
+        </div>
+        <div onPointerDown={startLongPress} onPointerUp={cancelLongPress} onPointerLeave={cancelLongPress} onPointerCancel={cancelLongPress}>
+          <PaneLayouts
+            layout={layoutId}
+            panes={panes}
+            onFocus={(id) => dispatch({ type: 'focus', id })}
+            renderPane={(pane) => (pane.id === focusedPane.id
+              ? <PriceNodeHistory {...history}
+                  ticker={pane.symbol}
+                  forcedScope={pane.symbol === ticker ? forcedScope : null}
+                  exposureLine={pane.symbol === ticker ? exposureLine : null}
+                  darkLevels={pane.symbol === ticker ? darkLevels : null}
+                  flowBars={pane.symbol === ticker ? flowBars : null}
+                  cvdLine={pane.symbol === ticker ? cvdLine : null}
+                  onQuality={setQuality} onEnvelopes={setEnvelopes} onReplayController={handleReplayController} onReplayState={handlePaneReplayState} replaySourceId={pane.id}
+                  replayEpoch={layoutId + ':' + pane.generation} />
+              : <PriceNodeHistory ticker={pane.symbol} open={open} primary={false} showAtlas={showAtlas} fitMode={fitMode} />)}
+          />
+        </div>
+        <details className="workspace-evidence" data-testid="workspace-evidence">
+          <summary>Flow, profiles and chart evidence</summary>
         {/* B20 filtered premium flow at the replay cursor's bucket: the pane
             renders the FOCUSED bar's published trades (classified sides only,
             multi-leg tickets grouped economically). Totals and drilldown share
@@ -419,7 +477,7 @@ export default function ChartWorkspace({
                 ? dark.map(levelLabel).join(' | ')
                 : 'no dark-pool prints published — aggregates are never shown as single prints'}</span>
               {nakedServer ? <span data-testid="profile-naked">{nakedServer.status === 'available'
-                ? `${(nakedServer.levels || []).filter(l => l && l.naked).length} naked level(s) beyond the cursor · server-admitted`
+                ? `${(nakedServer.claims || nakedServer.levels || []).filter(l => l && l.naked === true).length} naked level(s) untouched through the cursor · server-admitted`
                 : `Naked levels ${nakedServer.status} — ${nakedServer.reason || 'unavailable'}`}</span>
                 : naked.length > 0 && <span data-testid="profile-naked">{naked.filter(l => l.naked).length} naked level(s) beyond the cursor</span>}
             </div>
@@ -456,48 +514,7 @@ export default function ChartWorkspace({
             <span>live {Object.values(replay.caches.live || {}).reduce((n, m) => n + Object.keys(m || {}).length, 0)} · replay {Object.values(replay.caches.replay || {}).reduce((n, m) => n + Object.keys(m || {}).length, 0)} · replay events never enter live caches</span>
           </div>
         )}
-        <button type="button" data-testid="atlas-toggle" aria-pressed={atlas} onClick={() => setAtlas((v) => !v)}>
-          {atlas ? 'Hide Atlas overlay' : 'Show Atlas overlay'}
-        </button>
-        {/* B11 mounted pane manager: layout presets drive the visible pane
-            count; every layout change invalidates pane evidence atomically
-            (generations advance together, late results are rejected). */}
-        <div className="pane-layout-picker" role="group" aria-label="Chart pane layout">
-          {LAYOUT_PRESETS.map(p => (
-            <button
-              key={p.id}
-              type="button"
-              data-testid={'layout-' + p.id}
-              aria-pressed={layoutId === p.id}
-              onClick={() => { setLayoutId(p.id); dispatch({ type: 'layout', layout: p.id, symbol: ticker }); }}
-            >
-              {p.label}
-            </button>
-          ))}
-          {/* B27 two auto-fit modes, persisted with the composition. */}
-          <button type="button" data-testid="fit-mode" aria-label="Auto-fit mode"
-            onClick={() => setFitMode(nextFitMode)}>
-            Auto-fit: {fitMode}
-          </button>
-        </div>
-        <div onPointerDown={startLongPress} onPointerUp={cancelLongPress} onPointerLeave={cancelLongPress} onPointerCancel={cancelLongPress}>
-          <PaneLayouts
-            layout={layoutId}
-            panes={panes}
-            onFocus={(id) => dispatch({ type: 'focus', id })}
-            renderPane={(pane) => (pane.id === focusedPane.id
-              ? <PriceNodeHistory {...history}
-                  ticker={pane.symbol}
-                  forcedScope={pane.symbol === ticker ? forcedScope : null}
-                  exposureLine={pane.symbol === ticker ? exposureLine : null}
-                  darkLevels={pane.symbol === ticker ? darkLevels : null}
-                  flowBars={pane.symbol === ticker ? flowBars : null}
-                  cvdLine={pane.symbol === ticker ? cvdLine : null}
-                  onQuality={setQuality} onEnvelopes={setEnvelopes} onReplayState={handlePaneReplayState} replaySourceId={pane.id}
-                  replayEpoch={layoutId + ':' + pane.generation} />
-              : <PriceNodeHistory ticker={pane.symbol} open={open} primary={false} showAtlas={showAtlas} fitMode={fitMode} />)}
-          />
-        </div>
+        </details>
         {/* B27 source/proxy/replay watermark: rendered live and composed into
             every export. */}
         <span className="chart-watermark" data-testid="chart-watermark">{watermarkText || 'source:saved-observations'}</span>

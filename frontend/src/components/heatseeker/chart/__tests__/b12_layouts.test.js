@@ -32,6 +32,18 @@ const { createLayout: make, migrate: mig, sanitizeImport: sanitize, KNOWN_TOOLS 
 beforeEach(() => { clearStore(); armPayload(); if (typeof window !== 'undefined') window.__FLOWW_CHART_WORKSPACE__ = true; });
 afterEach(() => { if (typeof window !== 'undefined') window.__FLOWW_CHART_WORKSPACE__ = false; });
 
+test('cycling visits each saved layout and wraps, by button and shortcut', async () => {
+  save('first', make({layoutId:'split',symbols:['SPY','QQQ']}));
+  save('second', make({layoutId:'three',symbols:['SPY','QQQ','IWM']}));
+  render(<W ticker="SPY" open useNew />);
+  await act(async()=>screen.getByTestId('layout-cycle').click());
+  expect(screen.getByTestId('pane-layout')).toHaveAttribute('data-layout','split');
+  await act(async()=>screen.getByTestId('layout-cycle').click());
+  expect(screen.getByTestId('pane-layout')).toHaveAttribute('data-layout','three');
+  await act(async()=>fireEvent.keyDown(window,{key:'c'}));
+  expect(screen.getByTestId('pane-layout')).toHaveAttribute('data-layout','split');
+});
+
 test('B12 durable storage: layouts live in localStorage and survive a module-less reload', () => {
   const layout = make({ layoutId: 'three', symbols: ['SPY', 'QQQ', 'HOOD'], focusedIndex: 2 });
   const text = save('durable', layout);

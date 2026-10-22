@@ -181,7 +181,7 @@ def gate_recorded_rows(rows, *, ticker, cursor, window_start=None, window_end=No
         if receipt > cursor:
             gaps["late_receipt"] += 1
             continue
-        if window_end is not None and event >= window_end:
+        if event > cursor or (window_end is not None and event >= window_end):
             gaps["future_event"] += 1
             continue
         if window_start is not None and event < window_start:
@@ -248,10 +248,11 @@ def admit_flow_bucket(rows, *, ticker, cursor, bar_seconds, filters=None,
     session = session_bounds(cursor)
     if session is None:
         return refused("cursor-not-in-regular-session")
-    window_start = float(cursor)
-    window_end = window_start + float(bar_seconds)
-    bucket_index = int((window_start - session["start"]) / bar_seconds)
-    admitted, gaps = gate_recorded_rows(rows, ticker=name, cursor=window_start,
+    cursor_epoch = float(cursor)
+    bucket_index = int((cursor_epoch - session["start"]) // bar_seconds)
+    window_start = session["start"] + bucket_index * bar_seconds
+    window_end = min(window_start + float(bar_seconds), session["end"])
+    admitted, gaps = gate_recorded_rows(rows, ticker=name, cursor=cursor_epoch,
                                         window_start=window_start,
                                         window_end=window_end, session=session)
     filtered_out = 0
@@ -280,7 +281,7 @@ def admit_flow_bucket(rows, *, ticker, cursor, bar_seconds, filters=None,
         "certified_by_hash": False,
         "caller_scope_hash": caller_scope_hash if isinstance(caller_scope_hash, str) else None,
     }
-    envelope = {"status": "available", "ticker": name, "cursor": window_start,
+    envelope = {"status": "available", "ticker": name, "cursor": cursor_epoch,
                 "bar_seconds": bar_seconds,
                 "window": {"start": window_start, "end": window_end},
                 "bucket_index": bucket_index, "session": session,
