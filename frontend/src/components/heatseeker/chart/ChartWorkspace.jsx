@@ -146,7 +146,7 @@ export default function ChartWorkspace({
     onChartContext({ descriptor: chartDescriptor, current: chartCurrent });
     return undefined;
   }, [chartDescriptor, chartCurrent, onChartContext]); // eslint-disable-line react-hooks/exhaustive-deps
-  const history = { ticker, open, primary, toolbarActions, forcedScope, onRecordNodes, showAtlas, exposureLine, darkLevels, flowBars, cvdLine };
+  const history = { ticker, open, primary, toolbarActions, forcedScope, onRecordNodes, showAtlas, exposureLine, darkLevels, flowBars, cvdLine, fitMode };
 
   // R21-03/04 supply wiring: the focused pane's own price-history fetch
   // publishes its recorded admission envelopes through onEnvelopes. An
@@ -495,7 +495,7 @@ export default function ChartWorkspace({
                   cvdLine={pane.symbol === ticker ? cvdLine : null}
                   onQuality={setQuality} onEnvelopes={setEnvelopes} onReplayState={handlePaneReplayState} replaySourceId={pane.id}
                   replayEpoch={layoutId + ':' + pane.generation} />
-              : <PriceNodeHistory ticker={pane.symbol} open={open} primary={false} showAtlas={showAtlas} />)}
+              : <PriceNodeHistory ticker={pane.symbol} open={open} primary={false} showAtlas={showAtlas} fitMode={fitMode} />)}
           />
         </div>
         {/* B27 source/proxy/replay watermark: rendered live and composed into

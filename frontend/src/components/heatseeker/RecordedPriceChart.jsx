@@ -8,13 +8,19 @@ const bound=(value,low,high)=>Math.max(low,Math.min(high,value));
 const axisTime=value=>new Date(value).toLocaleString('en-US',{timeZone:'America/New_York',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false});
 const closeDetails=element=>{const details=element.closest('details');if(details){details.open=false;details.querySelector('summary')?.focus();}};
 
-export default function RecordedPriceChart({ticker,frames,revision='',onInteract,metricCoverage={},toolbarControls=null,toolbarActions=null,historyPeriodControls=null,historyControls=null,replayControls=null,dataDetails=null,readingStatus="Data details",emptyContent=null,showAtlas=true,exposureLine=null,darkLevels=null,flowBars=null,alertLines=null,cvdLine=null,contractBars=null,contractSymbol=null,contractStatus=null}) {
+export default function RecordedPriceChart({ticker,frames,revision='',onInteract,metricCoverage={},toolbarControls=null,toolbarActions=null,historyPeriodControls=null,historyControls=null,replayControls=null,dataDetails=null,readingStatus="Data details",emptyContent=null,showAtlas=true,exposureLine=null,darkLevels=null,flowBars=null,alertLines=null,cvdLine=null,contractBars=null,contractSymbol=null,contractStatus=null,fitAllFrames=null}) {
  const data=useMemo(()=>checkedCandles(frames),[frames]);
  const premiumCloses=useMemo(()=>contractClosesForFrames(data,contractBars),[data,contractBars]);
  const surface=useRef(null),pointers=useRef(new Map()),gesture=useRef(null),previousLength=useRef(0);
  const [size,setSize]=useState({width:800,height:480});
  const [view,setView]=useState(()=>({start:Math.max(0,data.length-80),count:80}));
  const [manualPrice,setManualPrice]=useState(null),[hover,setHover]=useState(null),[metrics,setMetrics]=useState(['gex','vex','charm']),[allNodes,setAllNodes]=useState(false);
+ // UI-05 real fit: when the caller hands a fit-all history set, the price
+ // scale spans the FULL loaded history (candles + their node levels) while
+ // the drawn candles stay the visible window. Without it the range comes
+ // from the visible slice exactly as before — callers unaffected.
+ const fitData=useMemo(()=>Array.isArray(fitAllFrames)&&fitAllFrames.length?checkedCandles(fitAllFrames):null,[fitAllFrames]);
+ const fitLevels=useMemo(()=>fitData?fitData.flatMap(frame=>savedLevels(frame,metrics,allNodes)):[],[fitData,metrics,allNodes]);
   const [exporting,setExporting]=useState(false),[exportError,setExportError]=useState(''),[vwapOn,setVwapOn]=useState(true),[bandsOn,setBandsOn]=useState(false),[profileOn,setProfileOn]=useState(true),[envelopeOn,setEnvelopeOn]=useState(false),[cvdOn,setCvdOn]=useState(true);
  const id=useId().replace(/[^a-zA-Z0-9_-]/g,'');
  useEffect(()=>{
@@ -27,7 +33,7 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
  useEffect(()=>{const old=previousLength.current;setView(current=>{const count=current.count||80;const next=clampWindow(!old||current.start+Math.min(count,old)>=old?{start:Math.max(0,data.length-count),count}:current,data.length);return {...next,count};});previousLength.current=data.length;setHover(null);},[data.length]);
  const windowView=clampWindow(view,data.length),visible=data.slice(windowView.start,windowView.start+windowView.count);
  const allLevels=useMemo(()=>visible.flatMap(frame=>savedLevels(frame,metrics,allNodes)),[visible,metrics,allNodes]);
- const range=manualPrice||priceRange(visible,allLevels),selected=visible[hover??Math.max(0,visible.length-1)];
+ const range=manualPrice||priceRange(fitData&&fitData.length?fitData:visible,fitData&&fitData.length?fitLevels:allLevels),selected=visible[hover??Math.max(0,visible.length-1)];
  const selectedLevels=savedLevels(selected,metrics,allNodes);
  const availableMetrics=useMemo(()=>Object.keys(NODE_LABELS).filter(metric=>metricCoverage?.[metric]?.checked_candles>0||data.some(frame=>savedLevels(frame,[metric],true).length)),[data,metricCoverage]);
  const left=12,right=Math.max(left+1,size.width-76),top=16,bottom=Math.max(top+1,size.height-38),plotWidth=right-left,plotHeight=bottom-top;
