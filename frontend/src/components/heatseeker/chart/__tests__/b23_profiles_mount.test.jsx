@@ -42,9 +42,12 @@ test('B23 MOUNTED: profiles panel reads real bars honestly at the replay cursor'
     const slider = screen.getByLabelText('Replay position');
     await act(async () => { fireEvent.change(slider, { target: { value: '0' } }); });
     await act(async () => { await new Promise(r => setTimeout(r, 200)); });
-    expect(screen.getByTestId('profiles-panel').getAttribute('data-ib-periods')).toBe('1');
-    expect(screen.getByTestId('profile-ib').textContent).toContain('99');
-    expect(screen.getByTestId('profile-ib').textContent).toContain('102');
+    // R21-04 mirror: 1 visible bar of the 2-bar opening window is a
+    // TRUNCATED opening — honestly incomplete with the named reason, never
+    // a confident range over partial coverage.
+    expect(screen.getByTestId('profiles-panel').getAttribute('data-ib-periods')).toBe('0');
+    expect(screen.getByTestId('profiles-panel').getAttribute('data-ib-status')).toBe('incomplete');
+    expect(screen.getByTestId('profile-ib').textContent).toContain('opening-history-truncated');
   } finally { window.__FLOWW_CHART_WORKSPACE__ = false; }
 });
 

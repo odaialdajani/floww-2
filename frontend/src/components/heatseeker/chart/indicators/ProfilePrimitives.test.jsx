@@ -55,7 +55,11 @@ test("naked levels end at first revisit and never at a future observation", () =
   ];
   const out = nakedLevels(levels, bars);
   expect(out[0]).toEqual({ price: 100.0, visible_from: "2026-10-06", visible_until: "t2", naked: false });
-  expect(out[1].naked).toBe(true);
+  // R21-04 mirror: 200 is OUTSIDE every observed bar (90-101) — it can
+  // never be certified untouched, so it is honestly not-claimable rather
+  // than claimed "naked" on data that cannot support the claim.
+  expect(out[1].naked).toBeNull();
+  expect(out[1].reason).toBe("level-outside-known-range");
   expect(out[1].visible_until).toBeNull();
   expect(nakedLevels([{ price: 1.0 }], bars)).toEqual([]); // no observed session start
 
@@ -66,10 +70,17 @@ test("naked levels end at first revisit and never at a future observation", () =
     { time: "t3", low: 199.0, high: 201.0 },
   ];
   const atCursor = nakedLevels(levels, futureBars, { cursor: "t2" });
-  expect(atCursor[0].naked).toBe(true);
+  // At the cursor only t2 is knowable (range 90-95): neither 100 nor 200 is
+  // inside the KNOWN range, so neither can be certified untouched — honest
+  // not-claimable (R21-04 mirror), and the future t3 session closes nothing.
+  expect(atCursor[0].naked).toBeNull();
+  expect(atCursor[0].reason).toBe("level-outside-known-range");
   expect(atCursor[0].visible_until).toBeNull();
-  expect(atCursor[1].naked).toBe(true);
+  expect(atCursor[1].naked).toBeNull();
+  expect(atCursor[1].reason).toBe("level-outside-known-range");
   const beyond = nakedLevels(levels, futureBars);
+  // with t3 knowable the range covers 90-201: 100 is IN range and never
+  // revisited — honestly naked; t3 does close 200.
   expect(beyond[0].naked).toBe(true); // no known bar ever revisits 100
   expect(beyond[1]).toEqual({ price: 200.0, visible_from: "2026-10-06", visible_until: "t3", naked: false });
 });
@@ -82,9 +93,30 @@ test("initial balance uses opening bars only and never future ones", () => {
   ];
   const ib = initialBalance(bars, { periods: 2 });
   expect(ib).toEqual({ status: "ok", low: 98, high: 103, periods: 2, approximation: "bar-resolution" });
-  // cursor before the third bar: the future bar stays out of the range
+  // cursor before the third bar: the future bar stays out of the range —
+  // a TRUNCATED opening window is never "ok" (R21-04 mirror of the backend's
+  // opening-history-truncated refusal; the observed bounds stay attached)
   expect(initialBalance(bars, { periods: 3, cursor: "t2" })).toEqual({
-    status: "ok", low: 98, high: 103, periods: 2, approximation: "bar-resolution",
+    status: "incomplete", reason: "opening-history-truncated",
+    low: 98, high: 103, periods: 2, expectedPeriods: 3, approximation: "bar-resolution",
   });
   expect(initialBalance([], {}).status).toBe("unknown");
+});
+
+
+// R21-04 mirror: the client primitives name the same honest refusals as the
+// backend admission contracts — never a softer local version.
+test("naked levels outside the known range are not-claimable, never naked", () => {
+  const bars = [{ time: "t1", low: 99, high: 103 }, { time: "t2", low: 98, high: 104 }];
+  // touched inside the range stays a closed level
+  const touched = nakedLevels([{ price: 100, session_start: "s" }], bars);
+  expect(touched[0].naked).toBe(false);
+  // a level outside every observed bar can NEVER be certified untouched
+  const outside = nakedLevels([{ price: 500, session_start: "s" }], bars);
+  expect(outside[0].naked).toBeNull();
+  expect(outside[0].reason).toBe("level-outside-known-range");
+  // no knowable bars at all: honest not-claimable for every level
+  const none = nakedLevels([{ price: 100, session_start: "s" }], [], {});
+  expect(none[0].naked).toBeNull();
+  expect(none[0].reason).toBe("not-claimable");
 });

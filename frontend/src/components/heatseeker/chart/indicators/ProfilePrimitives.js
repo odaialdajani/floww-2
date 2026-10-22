@@ -41,18 +41,34 @@ export function valueArea(rows, pct = 0.7) {
 // unknown range is never proof of untouched, and bars beyond the cursor are
 // future sessions that never close a level.
 export function nakedLevels(levels, bars, { cursor = null } = {}) {
+  // R21-04 mirror: only bars knowable at the cursor close a level, and a
+  // level outside every observed bar can NEVER be certified untouched —
+  // honest not-claimable (naked: null), matching the backend's
+  // level-outside-known-range / not-claimable refusals.
+  const knowable = (bars || []).filter((b) => b
+    && b.time != null
+    && (cursor == null || b.time <= cursor)
+    && typeof b.low === "number" && typeof b.high === "number");
+  const range = knowable.length
+    ? { low: Math.min(...knowable.map((b) => b.low)), high: Math.max(...knowable.map((b) => b.high)) }
+    : null;
   const out = [];
   for (const level of (levels || [])) {
     const price = level == null ? null : level.price;
     const start = level == null ? null : level.session_start;
     if (typeof price !== "number" || !start) continue;
+    if (!range) {
+      out.push({ price, visible_from: start, visible_until: null, naked: null, reason: "not-claimable" });
+      continue;
+    }
+    if (price < range.low || price > range.high) {
+      out.push({ price, visible_from: start, visible_until: null, naked: null, reason: "level-outside-known-range" });
+      continue;
+    }
     let end = null;
-    for (const bar of (bars || [])) {
-      if (cursor != null && (!(bar != null && bar.time != null) || bar.time > cursor)) break;
-      const low = bar == null ? null : bar.low;
-      const high = bar == null ? null : bar.high;
-      if (typeof low === "number" && typeof high === "number" && low <= price && price <= high) {
-        end = bar.time != null ? bar.time : null;
+    for (const bar of knowable) {
+      if (bar.low <= price && price <= bar.high) {
+        end = bar.time;
         break;
       }
     }
@@ -94,11 +110,17 @@ export function initialBalance(bars, { periods = 2, cursor = null } = {}) {
     && typeof b.low === "number" && typeof b.high === "number");
   const used = eligible.slice(0, Math.max(0, periods));
   if (!used.length) return { status: "unknown", reason: "no eligible opening bars" };
-  return {
-    status: "ok",
+  const bounds = {
     low: Math.min(...used.map((b) => b.low)),
     high: Math.max(...used.map((b) => b.high)),
-    periods: used.length,
-    approximation: "bar-resolution",
   };
+  // R21-04 mirror: a truncated opening window is never "ok" — the backend
+  // refuses opening-history-truncated; the client names the same honesty
+  // and keeps the observed bounds attached for the honest display.
+  if (used.length < periods) {
+    return { status: "incomplete", reason: "opening-history-truncated",
+      ...bounds, periods: used.length, expectedPeriods: periods,
+      approximation: "bar-resolution" };
+  }
+  return { status: "ok", ...bounds, periods: used.length, approximation: "bar-resolution" };
 }
