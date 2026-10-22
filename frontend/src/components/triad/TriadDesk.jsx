@@ -65,7 +65,7 @@ export default function TriadDesk({ ticker }) {
     });
     const load = async () => {
       const listed = await json(expiriesUrl(ticker));
-      if (listed?.version !== 'coverage.v1' || listed.ticker !== ticker
+      if (listed?.version !== 'coverage-read.v1' || listed.ticker !== ticker
         || listed.window?.min_dte !== 0 || listed.window?.max_dte !== 7 || !Array.isArray(listed.expiries)) {
         throw new Error('Expiry response does not identify the requested symbol and 0–7 day window.');
       }

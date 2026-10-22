@@ -5,7 +5,7 @@ import TriadExposure from './TriadExposure';
 
 const date = '2026-10-19';
 const listed = (ticker = 'SPY', rows = [{ expiry: date, dte: 0, admitted: true }]) => ({
-  version: 'coverage.v1', ticker, window: { min_dte: 0, max_dte: 7 }, expiries: rows,
+  version: 'coverage-read.v1', ticker, window: { min_dte: 0, max_dte: 7 }, expiries: rows,
   range_map: { admitted_expiries: rows.map(r => r.expiry) },
 });
 const contract = (type = 'call', extra = {}) => ({
