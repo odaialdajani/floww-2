@@ -87,7 +87,7 @@ function AskFlow({ subject = "", overlayMetric = "raw", displayMode = "live", co
       </span>
     );
   }
-  const block = admissionBlock({ context: agent.context, overlayMetric, displayMode });
+  const block = admissionBlock({ context: agent.context, overlayMetric, displayMode, chartContext });
   const busy = ["asking", "running", "reconnecting", "cancelling"].includes(agent.state);
   const ask = (q) => {
     trigger.current?.focus();
@@ -95,7 +95,13 @@ function AskFlow({ subject = "", overlayMetric = "raw", displayMode = "live", co
     if (block) { setNote(block); return; }
     setNote(null);
     agent.setOpen(true);
-    agent.askQuestion(subject ? `${q} (${subject})` : q);
+    // R21-05 consumer half: forward the bound focused-chart descriptor with
+    // the ask — the admission gate above already resolved it against the LIVE
+    // pane, and the server re-resolves every fact from the recorded store at
+    // the descriptor's cursor. The descriptor carries no evidence values.
+    const forward = chartContext && chartContext.descriptor && typeof chartContext.descriptor === "object"
+      ? { chartContext: chartContext.descriptor } : {};
+    agent.askQuestion(subject ? `${q} (${subject})` : q, forward);
   };
   return (
     <span ref={host} className={`lodestar-ask${compact ? " compact" : ""}`} data-testid={testId}>

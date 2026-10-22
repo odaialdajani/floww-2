@@ -155,3 +155,28 @@ test('question menu supports arrows and Escape without sending anything',()=>{
  fireEvent.keyDown(items[1],{key:'Escape'});expect(screen.queryByRole('menu')).toBeNull();expect(trigger).toHaveFocus();
  view.unmount();
 });
+
+// R21-05 consumer half: a RESOLVED focused-chart context must be forwarded
+// WITH the ask (the server re-resolves every fact from the recorded store at
+// the descriptor's cursor) — the old ask dropped it after the gate admitted.
+// Proven at the transport: the /ask POST body carries the bound descriptor.
+test('focused-chart ask forwards the bound descriptor through the transport', async () => {
+  const askBodies = [];
+  global.fetch = jest.fn(async (url, init) => {
+    if (String(url).endsWith('/ask')) askBodies.push(JSON.parse((init && init.body) || '{}'));
+    return { ok: true, json: async () => String(url).endsWith('/session') ? {}
+      : { turn_id: 'focused-turn', status: 'completed', ticker: 'SPY', text: 'Stored research only', contract: null, executable: false } };
+  });
+  // A prior test's range context must not leak into this gate; the real
+  // screen publishes the selected ticker for non-market questions.
+  publishScreenContext({ contextVersion: 1, page: 'heatseeker', ticker: 'SPY', navigationOnly: true });
+  const descriptor = { status: 'bound', focus: 'SPY', query: 'focused-chart',
+    scope: 'saved-view:abc', cursor: 1792612800000, generation: 'SPY:15:1:abc:0' };
+  const current = { paneId: 'pane-0', symbol: 'SPY', layoutId: 'single',
+    scope: 'saved-view:abc', cursor: 1792612800000, generation: 'SPY:15:1:abc:0' };
+  render(<AgentProvider><AskFlow subject="SPY" overlayMetric="raw" displayMode="price-history" compact chartContext={{ descriptor, current }} /></AgentProvider>);
+  fireEvent.click(screen.getByTestId('ask-lodestar-btn'));
+  fireEvent.click(screen.getByRole('menu').querySelector('button'));
+  await waitFor(() => expect(askBodies.length).toBeGreaterThan(0));
+  expect(askBodies[0].chart_context).toEqual(descriptor);
+});
