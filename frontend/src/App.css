@@ -272,6 +272,38 @@
   .heatseeker-sidebar-left.open {
     position: static !important;
   }
+
+  /* S1 optional filter rail (desktop >=1024 only; tablet is unchanged):
+     the rail HONORS the existing Filters toggle — closed (the default
+     state) hides the column and the chart takes the full main track;
+     open shows the static filters column, never the mobile overlay. */
+  .heatseeker-sidebar-left {
+    display: none !important;
+  }
+
+  .heatseeker-sidebar-left.open {
+    display: block !important;
+    inset: auto !important;
+  }
+
+  /* S1: the Filters/Analytics toggles stay REACHABLE at desktop — a slim
+     static strip under the layout, never a fixed overlay on the plot. */
+  .mobile-toggle-bar {
+    position: static;
+    display: flex;
+    gap: 0.5rem;
+    padding: 0.35rem 0.75rem;
+    border-top: 1px solid var(--border);
+    grid-column: 1 / -1;
+    background: var(--bg-2);
+    z-index: auto;
+  }
+
+  /* S1 chart-first desktop: tighter main padding so the plot starts at or
+     above the 220px line at 1470x950 (tablet keeps 0.75rem). */
+  .heatseeker-main {
+    padding: 0.5rem;
+  }
 }
 
 /* ===== PWA STANDALONE ===== */
