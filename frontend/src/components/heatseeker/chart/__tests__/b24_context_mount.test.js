@@ -132,3 +132,40 @@ test('R21-06: focus/layout transitions revoke the chart context atomically; late
     expect(emitted[emitted.length - 1].descriptor.status).toBe('bound');
   } finally { window.__FLOWW_CHART_WORKSPACE__ = false; }
 });
+
+// Joint-freeze checklist: the NULL emission and the unrecorded cursor. When
+// the focused pane's payload has NO frames at the cursor (an unrecorded
+// cursor — no reading exists), the pane emits null and the workspace must
+// REVOKE the binding immediately — the ask gate stays closed on the real
+// refusal, never on a lingering fabricated binding.
+test('R21-06 joint-freeze: a null emission (unrecorded cursor) revokes the binding, not lingers', async () => {
+  jest.setTimeout(15000);
+  const axios = require('axios');
+  const FRAMES = [
+    { time: '2026-09-10T14:00:00+00:00', open: 100, high: 102, low: 99, close: 101, nodes: [] },
+    { time: '2026-09-10T14:01:00+00:00', open: 101, high: 103, low: 100, close: 102, nodes: [] },
+  ];
+  axios.get.mockImplementation(async () => ({ data: { ticker: 'SPY', frames: FRAMES, candles_with_recorded_nodes: 0, scopes: [], query_key: 'SPY:4:day:None:False' } }));
+  window.__FLOWW_CHART_WORKSPACE__ = true;
+  try {
+    const emitted = [];
+    render(<ChartWorkspace ticker="SPY" open useNew onChartContext={p => emitted.push(p)} />);
+    await screen.findByTestId('chart-context');
+    await act(async () => { await new Promise(r => setTimeout(r, 300)); });
+    expect(emitted[emitted.length - 1].descriptor.status).toBe('bound');
+    // The pane re-reads and gets NOTHING at the cursor (unrecorded): it
+    // emits null — the workspace must revoke, and the gate sees a refusal.
+    axios.get.mockImplementation(async () => ({ data: { ticker: 'SPY', frames: [], candles_with_recorded_nodes: 0, scopes: [], query_key: 'SPY:4:day:None:False' } }));
+    await act(async () => { screen.getByRole('button', { name: 'Reload history' }).click(); });
+    await act(async () => { await new Promise(r => setTimeout(r, 400)); });
+    const strip = screen.getByTestId('chart-context');
+    expect(strip.getAttribute('data-status')).not.toBe('bound');
+    const last = emitted[emitted.length - 1];
+    expect(last.descriptor.status).toBe('refused');
+    // the ask gate stays closed on the honest refusal — no fabricated binding
+    const { admissionBlock } = require('../../AskFlow');
+    const gate = admissionBlock({ context: { ticker: 'SPY' }, overlayMetric: 'raw', displayMode: 'price-history',
+      chartContext: { descriptor: last.descriptor, current: last.current } });
+    expect(gate).toContain('refused');
+  } finally { window.__FLOWW_CHART_WORKSPACE__ = false; }
+});
