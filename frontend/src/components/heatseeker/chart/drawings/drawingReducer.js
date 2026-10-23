@@ -1,9 +1,12 @@
 // B16 logical drawings: anchors survive zoom, drag suppresses pan, OHLC magnet,
 // cancel/undo/delete/lock/hide. Tools: horizontal/trend/vertical/rectangle/text/arrow.
+// B17: the nine evidence-backed registry tools — brush, fib and horizontal-ray
+// create and render through the SAME reducer/geometry as the basics.
 // Anchors are LOGICAL {t,p} values (epoch ms, price) — never pixels. Projection
 // maps them through the current viewport, so zoom/resize changes where they
 // render but never what they mean.
-export const TOOLS = ['horizontal', 'trend', 'vertical', 'rectangle', 'text', 'arrow'];
+import { fibPrices } from './advancedTools';
+export const TOOLS = ['horizontal', 'trend', 'vertical', 'rectangle', 'text', 'arrow', 'horizontal-ray', 'brush', 'fib'];
 export function createDrawing(tool, anchors) {
   if (!TOOLS.includes(tool)) throw new Error('unsupported-tool');
   return { id: Math.random().toString(36).slice(2), tool, anchors, visible: true, locked: false, revision: 1 };
@@ -88,6 +91,21 @@ export function geometryFor(tool, anchors, vp) {
   const points = anchors.map(a => projectAnchor(a, vp)).filter(Boolean);
   if (!points.length) return null;
   if (tool === 'horizontal') return {kind:'line',points:[{x:0,y:points[0].y},{x:vp.width,y:points[0].y}]};
+  if (tool === 'horizontal-ray') return {kind:'line',points:[{x:points[0].x,y:points[0].y},{x:vp.width,y:points[0].y}]};
+  if (tool === 'fib') {
+    // B17: the seven evidence-backed levels across the anchors' span. High/low
+    // come from the two anchor prices — the SAME math as advancedTools.fibPrices.
+    const [a, b] = anchors;
+    if (!b) return null;
+    const high = Math.max(Number(a.p), Number(b.p));
+    const low = Math.min(Number(a.p), Number(b.p));
+    const levels = fibPrices(high, low).map(level => ({
+      ratio: level.ratio,
+      price: level.price,
+      points: [{ x: points[0].x, y: points[0].y === null ? 0 : projectAnchor({ t: a.t, p: level.price }, vp).y }, { x: points[1].x, y: projectAnchor({ t: b.t, p: level.price }, vp).y }],
+    }));
+    return { kind: 'fib', levels };
+  }
   if (tool === 'vertical') return {kind:'line',points:[{x:points[0].x,y:0},{x:points[0].x,y:vp.height}]};
   if (tool === 'rectangle') {
     const [a, b] = points;

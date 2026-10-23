@@ -4,7 +4,7 @@ import { API } from "../../config/api";
 import RecordedPriceChart from "./RecordedPriceChart";
 import DrawingRail from "./chart/drawings/DrawingRail";
 import { loadDrawings, saveDrawings } from "./chart/drawings/drawingPersistence";
-import { reduceDrawings, createDrawing, geometryFor, magnetPoint, nudgeDrawing, canEdit, suppressesPan, unprojectPoint, viewportFor, TOOLS as DRAWING_TOOLS_6 } from "./chart/drawings/drawingReducer";
+import { reduceDrawings, createDrawing, geometryFor, magnetPoint, nudgeDrawing, canEdit, suppressesPan, unprojectPoint, viewportFor, TOOLS as REDUCER_TOOLS } from "./chart/drawings/drawingReducer";
 import { barAt, sweepExtrema, visibleSnapshot } from "./chart/replay/replayReducer";
 import { anchorsFor } from "./chart/drawings/toolRegistry";
 import { shouldHandleShortcut } from "./chart/ChartShortcuts";
@@ -146,7 +146,9 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
     if (dragState) { event.stopPropagation(); return; }
     const raw = layerPoint(event);
     if (!raw) return;
-    const point = magnetPoint(raw, drawingViewport.frames, 0.25, drawingViewport);
+    // B17: brush is a FREE draw — the registry says magnet:false, so its
+    // anchors never snap to OHLC. The six basics keep their incumbent path.
+    const point = draftTool === "brush" ? raw : magnetPoint(raw, drawingViewport.frames, 0.25, drawingViewport);
     if (draftTool) { event.stopPropagation(); commitDraft(point); }
   };
   const onDrawingElementPointerDown = (event, drawing) => {
@@ -404,6 +406,10 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
           const common={"data-testid":"drawing-shape","data-drawing-id":d.id,"data-selected":d.id===selectedDrawing,stroke:d.id===selectedDrawing?"#e3c16a":"#7fa6c0",strokeWidth:d.id===selectedDrawing?2:1.2,fill:"none",pointerEvents:"stroke",onPointerDown:e=>onDrawingElementPointerDown(e,d)};
           if(g.kind==="rect")return <rect key={d.id} {...common} x={g.x} y={g.y} width={Math.max(g.width,2)} height={Math.max(g.height,2)} />;
           if(g.kind==="label")return <text key={d.id} {...common} x={g.x} y={g.y} fontSize="12" fill="#dce8f2">{d.text||"text"}</text>;
+          if(g.kind==="fib")return <g key={d.id} {...common} fill="none">{g.levels.map((level,li)=>(<g key={d.id+":"+li} data-testid="fib-level" data-ratio={level.ratio}>
+            <polyline {...common} points={level.points.map(pt=>`${pt.x},${pt.y}`).join(" ")} />
+            <text x={level.points[1].x+4} y={level.points[1].y} fontSize="9" fill={d.id===selectedDrawing?"#e3c16a":"#8fa6ba"}>{level.ratio}</text>
+          </g>))}</g>;
           return <polyline key={d.id} {...common} markerEnd={d.tool==="arrow"?`url(#arrow-${drawingViewport.clipId})`:undefined} points={g.points.map(pt=>`${pt.x},${pt.y}`).join(" ")} />;})}
         {draftAnchors.map((a,i)=>{const pt=geometryFor("text",[a],drawingViewport);
           return pt?<circle key={"draft-"+i} data-testid="draft-anchor" cx={pt.x} cy={pt.y} r="4" fill="#e3c16a" />:null;})}
@@ -425,7 +431,7 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
           arrows nudge; Escape cancels; Undo pops. */}
 
       <DrawingRail drawings={drawings} selectedId={selectedDrawing}
-      tools={DRAWING_TOOLS_6.map(id=>({id,anchors:anchorsFor(id)}))} draftTool={draftTool}
+      tools={REDUCER_TOOLS.map(id=>({id,anchors:anchorsFor(id)}))} draftTool={draftTool}
       onToolPick={id=>{setDraftTool(draftTool===id?null:id);setDraftAnchors([]);}}
       onUndo={()=>persistDrawings(reduceDrawings(drawings,{type:"undo"}))}
       onCancelDraft={()=>{setDraftTool(null);setDraftAnchors([]);}}
