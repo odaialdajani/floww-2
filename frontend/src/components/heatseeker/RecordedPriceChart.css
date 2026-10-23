@@ -13,7 +13,7 @@
 .recorded-candle-up{color:#57c5b0;}.recorded-candle-down{color:#e48d94;}.recorded-price-label,.recorded-time-label{font-family:var(--font-mono,Consolas,monospace);font-size:12px;fill:#aebcc9;user-select:none;}
 .recorded-chart-footer{display:flex;justify-content:space-between;flex-wrap:wrap;gap:7px;margin-top:10px;color:#a7b5c2;}.recorded-chart-footer small{font-size:12px;line-height:1.6;}
 .recorded-chart-nodes{display:flex;flex-wrap:wrap;gap:10px 16px;font-size:12px;margin:10px 0 2px;padding-top:10px;border-top:1px solid #293640;}.recorded-chart-nodes b{font-weight:500;}
-.price-node-history{min-width:0;flex:0 0 auto;}.price-node-history[data-open=true]{padding:14px!important;}
+.price-node-history{min-width:0;flex:0 0 auto;}.price-node-history[data-open=true]{padding:8px!important;}
 .price-history-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:10px 14px;margin-top:12px;}.price-history-toolbar strong{font-size:15px;font-weight:600;}.price-history-toolbar label{display:flex;align-items:center;gap:6px;font-size:12px;color:#bdcbd7;}.price-history-toolbar select{max-width:100%;}
 .price-history-coverage{margin:10px 0 4px;font-size:12px;line-height:1.6;color:#aebdcb;}.price-history-details{font-size:12px;margin:8px 0;color:#aebdcb;}.price-history-details summary{cursor:pointer;color:#cdd8e1;}.price-history-details p{margin:8px 0;line-height:1.6;}
 .price-history-replay{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding-top:10px;margin-top:10px;border-top:1px solid #293640;font-size:12px;}.price-history-replay input{flex:1;min-width:140px;accent-color:#8ebcae;}
