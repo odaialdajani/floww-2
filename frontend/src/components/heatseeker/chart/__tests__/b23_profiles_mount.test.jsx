@@ -133,3 +133,26 @@ test('R21-04 MOUNTED: available ib envelope shows server bounds and coverage', a
     expect(screen.getByTestId('profile-ib').textContent).toContain('recorded opening-window');
   } finally { delete window.__FLOWW_CHART_WORKSPACE__; }
 });
+
+// B23 TPO/session zones: the profiles panel renders the bar-resolution TPO
+// period ladder and the session envelope — labeled as the approximation they
+// are, honest when nothing is knowable.
+test('B23 MOUNTED: TPO periods and session zones render with their approximation labels', async () => {
+  armPayload(FRAMES);
+  window.__FLOWW_CHART_WORKSPACE__ = true;
+  try {
+    render(<ChartWorkspace ticker="SPY" open useNew />);
+    await waitFor(() => expect(screen.getByTestId('recorded-price-chart')).toBeInTheDocument());
+    await act(async () => { await new Promise(r => setTimeout(r, 200)); });
+    const tpo = screen.getByTestId('profile-tpo');
+    expect(tpo.textContent).toContain('TPO');
+    expect(tpo.textContent).toContain('bar-resolution');
+    // the two 14:00/14:01 frames fall in ONE 30-minute period: A only
+    expect(tpo.textContent).toContain('A');
+    expect(tpo.textContent).not.toContain('B');
+    const zones = screen.getByTestId('profile-session');
+    expect(zones.textContent).toContain('Session 99');
+    expect(zones.textContent).toContain('103');
+    expect(zones.textContent).toContain('2 bars known');
+  } finally { window.__FLOWW_CHART_WORKSPACE__ = false; }
+});

@@ -124,3 +124,56 @@ export function initialBalance(bars, { periods = 2, cursor = null } = {}) {
   }
   return { status: "ok", ...bounds, periods: used.length, approximation: "bar-resolution" };
 }
+
+// B23 TPO periods — BAR-RESOLUTION approximation only: group the bars
+// knowable at the cursor into fixed 30-minute periods, each contributing its
+// own high/low range and a letter. A bar's activity is its whole period's;
+// this is never tick-true TPO and the label says so. Bars beyond the cursor
+// never join a period; nothing knowable is honest unavailable.
+export function tpoPeriods(bars, { periodMinutes = 30, cursor = null } = {}) {
+  const eligible = (bars || []).filter((b) => b
+    && b.time != null
+    && (cursor == null || Number(b.time) <= Number(cursor))
+    && typeof b.low === "number" && typeof b.high === "number");
+  if (!eligible.length) return { status: "unavailable", reason: "no eligible bars known at the cursor" };
+  const periodMs = periodMinutes * 60000;
+  const groups = new Map();
+  for (const b of eligible) {
+    const start = Math.floor(Number(b.time) / periodMs) * periodMs;
+    if (!groups.has(start)) groups.set(start, { start, low: Infinity, high: -Infinity, bars: 0 });
+    const g = groups.get(start);
+    g.low = Math.min(g.low, b.low);
+    g.high = Math.max(g.high, b.high);
+    g.bars += 1;
+  }
+  const periods = [...groups.values()].sort((a, b) => a.start - b.start)
+    .map((g, i) => ({ ...g, letter: String.fromCharCode(65 + (i % 26)) }));
+  return { status: "ok", periods, periodMinutes, approximation: "bar-resolution",
+    note: "bar-resolution TPO approximation — a bar is its whole period; never tick-true TPO" };
+}
+
+// B23 session zones — BAR-RESOLUTION envelope of the bars knowable at the
+// cursor: high/low plus the first/last KNOWN bar times. A partial session
+// describes only what is known; open/close stay honestly absent when the
+// bars carry none (missing is never zero).
+export function sessionZones(bars, { cursor = null } = {}) {
+  const eligible = (bars || []).filter((b) => b
+    && b.time != null
+    && (cursor == null || Number(b.time) <= Number(cursor))
+    && typeof b.low === "number" && typeof b.high === "number");
+  if (!eligible.length) return { status: "unavailable", reason: "no eligible bars known at the cursor" };
+  const highs = eligible.map((b) => b.high);
+  const lows = eligible.map((b) => b.low);
+  return {
+    status: "ok",
+    approximation: "bar-resolution",
+    high: Math.max(...highs),
+    low: Math.min(...lows),
+    bars: eligible.length,
+    firstKnownTime: Number(eligible[0].time),
+    lastKnownTime: Number(eligible[eligible.length - 1].time),
+    open: typeof eligible[0].open === "number" ? eligible[0].open : null,
+    close: typeof eligible[eligible.length - 1].close === "number" ? eligible[eligible.length - 1].close : null,
+    note: "zones cover only bars knowable at the cursor — a partial session is not the whole session",
+  };
+}

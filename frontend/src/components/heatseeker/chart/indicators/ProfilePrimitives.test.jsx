@@ -1,5 +1,5 @@
 // B23 profile primitives mirror tests: synthetic only.
-import { initialBalance, nakedLevels, poc, tickRows, valueArea } from "./ProfilePrimitives";
+import { initialBalance, nakedLevels, poc, tickRows, valueArea, tpoPeriods, sessionZones } from "./ProfilePrimitives";
 
 test("tick bins fold equal prices without inventing a side", () => {
   const out = tickRows(
@@ -119,4 +119,52 @@ test("naked levels outside the known range are not-claimable, never naked", () =
   const none = nakedLevels([{ price: 100, session_start: "s" }], [], {});
   expect(none[0].naked).toBeNull();
   expect(none[0].reason).toBe("not-claimable");
+});
+
+
+// B23 TPO/session zones — bar-resolution approximation (per the block row,
+// the labeled bar approximation proceeds without the classified-tape
+// contract; it is NEVER claimed as tick-true TPO).
+test("tpoPeriods groups knowable bars into 30-minute periods with letters", () => {
+  const bars = [
+    { time: 0, low: 99, high: 101 },
+    { time: 15 * 60000, low: 100, high: 102 },
+    { time: 31 * 60000, low: 98, high: 103 },   // second period
+    { time: 62 * 60000, low: 97, high: 104 },   // third period
+  ];
+  const tpo = tpoPeriods(bars);
+  expect(tpo.status).toBe("ok");
+  expect(tpo.periods).toHaveLength(3);
+  expect(tpo.periods.map(g => g.letter)).toEqual(["A", "B", "C"]);
+  expect(tpo.periods[0].low).toBe(99);
+  expect(tpo.periods[0].high).toBe(102);       // both bars of period A
+  expect(tpo.approximation).toBe("bar-resolution");
+  // bars beyond the cursor never join a period
+  const atCursor = tpoPeriods(bars, { cursor: 20 * 60000 });
+  expect(atCursor.periods).toHaveLength(1);
+  // nothing knowable -> honest unavailable, never an empty ok
+  expect(tpoPeriods([]).status).toBe("unavailable");
+});
+
+test("sessionZones covers only bars knowable at the cursor", () => {
+  const bars = [
+    { time: 0, low: 99, high: 101 },
+    { time: 30 * 60000, low: 100, high: 105 },
+    { time: 60 * 60000, low: 98, high: 103 },
+  ];
+  const zones = sessionZones(bars);
+  expect(zones.status).toBe("ok");
+  expect(zones.high).toBe(105);
+  expect(zones.low).toBe(98);
+  expect(zones.bars).toBe(3);
+  expect(zones.firstKnownTime).toBe(0);
+  expect(zones.lastKnownTime).toBe(60 * 60000);
+  // partial session: the cursor cuts the envelope honestly
+  const partial = sessionZones(bars, { cursor: 45 * 60000 });
+  expect(partial.high).toBe(105);
+  expect(partial.bars).toBe(2);
+  expect(sessionZones([]).status).toBe("unavailable");
+  // open/close stay honestly absent when the bars carry none
+  expect(zones.open).toBeNull();
+  expect(zones.close).toBeNull();
 });

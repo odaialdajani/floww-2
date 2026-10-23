@@ -10,7 +10,7 @@ import { DEFAULT_SHORTCUTS, LONG_PRESS_MS, actionFor, keyOf, nextFitMode, rebind
 import { captureChartSvgs, composeExportSvg, exportPlan } from './ChartExport';
 import { createReplayState, replayStep } from './replay/replayReducer';
 import FlowPane, { bucketHash } from './indicators/FlowPane';
-import { initialBalance, nakedLevels, poc, tickRows, valueArea } from './indicators/ProfilePrimitives';
+import { initialBalance, nakedLevels, poc, tickRows, valueArea, tpoPeriods, sessionZones } from './indicators/ProfilePrimitives';
 import { levelLabel, topLevels } from './indicators/DarkPoolLevels';
 import { candleDelta, sessionCvd } from './indicators/Footprint';
 import { bindContext } from './context/chartContext';
@@ -518,6 +518,8 @@ export default function ChartWorkspace({
           const cvd = classifiedBars ? sessionCvd(classifiedBars) : candleDelta();
           const dark = darkPoolPrints ? topLevels(darkPoolPrints, { topN: 3 }) : [];
           const naked = priorLevels ? nakedLevels(priorLevels, bars, { cursor: liveReport.cursor }) : [];
+          const tpo = tpoPeriods(bars, { cursor: liveReport.cursor });
+          const zones = sessionZones(bars, { cursor: liveReport.cursor });
           const fmt = n => (Number.isFinite(n) ? `${Math.round(n * 100) / 100}` : 'unknown');
           return (
             <div className="profiles-panel" data-testid="profiles-panel"
@@ -541,6 +543,12 @@ export default function ChartWorkspace({
               <span data-testid="profile-dark">{dark.length
                 ? dark.map(levelLabel).join(' | ')
                 : 'no dark-pool prints published — aggregates are never shown as single prints'}</span>
+              <span data-testid="profile-tpo">{tpo.status === 'ok'
+                ? `TPO ${tpo.periods.slice(0, 13).map(g => g.letter).join('')}${tpo.periods.length > 13 ? '…' : ''} · ${tpo.periods.length} × ${tpo.periodMinutes}m periods · ${tpo.approximation} (never tick-true)`
+                : `TPO unavailable — ${tpo.reason}`}</span>
+              <span data-testid="profile-session">{zones.status === 'ok'
+                ? `Session ${fmt(zones.low)}–${fmt(zones.high)} · ${zones.bars} bars known · ${zones.approximation} envelope`
+                : `Session unavailable — ${zones.reason}`}</span>
               {nakedServer ? <span data-testid="profile-naked">{nakedServer.status === 'available'
                 ? `${(nakedServer.claims || nakedServer.levels || []).filter(l => l && l.naked === true).length} naked level(s) untouched through the cursor · server-admitted`
                 : `Naked levels ${nakedServer.status} — ${nakedServer.reason || 'unavailable'}`}</span>
