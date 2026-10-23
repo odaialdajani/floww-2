@@ -21,13 +21,22 @@ function savedViewLabel(scope,index){
  return mode+" | "+sorted.length+" "+(sorted.length===1?"expiry":"expiries")+" | "+sorted[0]+(sorted.length>1?" to "+sorted.at(-1):"");
 }
 
-export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen, onOpenChange, primary = false, toolbarActions = null, exposureLine = null, darkLevels = null, flowBars = null, alertLines = null, showAtlas = true, forcedScope = null, onRecordNodes = null, cvdLine = null, onQuality = null, onEnvelopes = null, fitMode = "fit-visible", onReplayState = null, onReplayController = null, replaySourceId = null, replayEpoch = null }) {
+export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen, onOpenChange, primary = false, toolbarActions = null, exposureLine = null, darkLevels = null, flowBars = null, alertLines = null, showAtlas = true, forcedScope = null, onRecordNodes = null, cvdLine = null, onQuality = null, onEnvelopes = null, fitMode = "fit-visible", onReplayState = null, onReplayController = null, replaySourceId = null, replayEpoch = null, sync = null, onSyncEvent = null }) {
   const [localOpen, setLocalOpen] = useState(false);
   const open = controlledOpen ?? (primary || localOpen);
   const setOpen = value => { setLocalOpen(value); onOpenChange?.(value); };
   const [days, setDays] = useState(5);
   const [minutes, setMinutes] = useState(30);
   const [sessions, setSessions] = useState("regular");
+  // S2 link dimensions: the pane adopts a synced interval/session when the
+  // sync sequence advances (adoption never re-emits — no echo loop).
+  const lastSyncSeq = useRef(0);
+  useEffect(() => {
+    if (!sync || typeof sync !== 'object' || !sync.seq || sync.seq === lastSyncSeq.current) return;
+    lastSyncSeq.current = sync.seq;
+    if (sync.interval != null && sync.interval !== minutes) setMinutes(Number(sync.interval));
+    if (sync.session != null && sync.session !== sessions) setSessions(String(sync.session));
+  }, [sync]); // eslint-disable-line react-hooks/exhaustive-deps
   const [savedView, setSavedView] = useState({ticker,scope:"",followMap:true});
   const scope = savedView.ticker === ticker ? savedView.scope : "";
   const followMap = savedView.ticker === ticker ? savedView.followMap : true;
@@ -348,11 +357,11 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
     ?? `${days} sessions`;
   const historySessionLabel = sessions === "all" ? "all sessions" : "regular hours";
   const controls = <><strong className="price-chart-symbol">{ticker}</strong>
-    <select aria-label="Candle interval" title="Candle interval" value={minutes} onChange={e=>setMinutes(Number(e.target.value))}><option value={1}>1 min</option><option value={5}>5 min</option><option value={15}>15 min</option><option value={30}>30 min</option><option value={60}>1 hour</option></select>
+    <select aria-label="Candle interval" title="Candle interval" value={minutes} onChange={e=>{setMinutes(Number(e.target.value));onSyncEvent?.({interval:Number(e.target.value)});}}><option value={1}>1 min</option><option value={5}>5 min</option><option value={15}>15 min</option><option value={30}>30 min</option><option value={60}>1 hour</option></select>
     <span className="price-history-summary" data-testid="price-history-summary" title="Selected history period and session coverage">{historyDayLabel} · {historySessionLabel}</span></>;
   const historyPeriodControls = <>
     <label className="price-history-view">History period<select aria-label="History sessions" title="History period" value={days} onChange={e=>setDays(Number(e.target.value))}><option value={1}>1 session</option><option value={5}>1 week</option><option value={20}>1 month</option><option value={60}>3 months</option><option value={260}>1 year</option><option value={2600}>5 years</option></select></label>
-    <label className="price-history-view">Session coverage<select aria-label="Session coverage" title="Which trading sessions to load" value={sessions} onChange={e=>setSessions(e.target.value)}><option value="regular">Regular hours</option><option value="all">All sessions</option></select></label>
+    <label className="price-history-view">Session coverage<select aria-label="Session coverage" title="Which trading sessions to load" value={sessions} onChange={e=>{setSessions(e.target.value);onSyncEvent?.({session:e.target.value});}}><option value="regular">Regular hours</option><option value="all">All sessions</option></select></label>
   </>;
   const historyControls = <>
     {!usingMapScope&&payload?.scopes?.length>1&&<label className="price-history-view">Saved view<select aria-label="Saved node view" value={scope||payload.query_key||""} onChange={e=>setScope(e.target.value)}>{payload.scopes.map((saved,i)=><option key={saved} value={saved}>{savedViewLabel(saved,i)}</option>)}</select></label>}
@@ -402,7 +411,7 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
   };
   return <section className="panel price-node-history" data-open={open} style={{margin:"12px 0",padding:12}} data-testid="price-node-history">
     {!primary&&<button type="button" className="skylit-trade-mode-btn" aria-expanded={open} onClick={()=>{setOpen(!open);setPlaying(false);}}>Price chart + historical nodes</button>}
-    {open&&<RecordedPriceChart renderDrawingLayer={renderDrawingLayer} ticker={ticker} frames={frames.slice(0,position+1)} fitAllFrames={fitMode==="fit-all"?frames:null} revision={ticker+":"+days+":"+minutes+":"+payload?.query_key+":"+reload} onInteract={pauseInteraction} metricCoverage={payload?.metric_line_coverage} toolbarControls={controls} toolbarActions={toolbarActions} historyPeriodControls={historyPeriodControls} historyControls={historyControls} replayControls={replayControls} dataDetails={details} readingStatus={readingStatus} emptyContent={empty} showAtlas={showAtlas} exposureLine={exposureLine??payload?.exposure_line??null} darkLevels={darkLevels} alertLines={alertLines??null} cvdLine={cvdLine??payload?.cvd_line??null} contractBars={payload?.contract_bars??null} contractSymbol={payload?.contract_symbol??(contract||null)} contractStatus={payload?.contract_status??null} flowBars={Array.isArray(flowBars)&&flowBars.length===frames.length?flowBars.slice(0,position+1):flowBars}/>}
+    {open&&<RecordedPriceChart renderDrawingLayer={renderDrawingLayer} ticker={ticker} frames={frames.slice(0,position+1)} fitAllFrames={fitMode==="fit-all"?frames:null} revision={ticker+":"+days+":"+minutes+":"+payload?.query_key+":"+reload} onInteract={pauseInteraction} metricCoverage={payload?.metric_line_coverage} toolbarControls={controls} toolbarActions={toolbarActions} historyPeriodControls={historyPeriodControls} historyControls={historyControls} replayControls={replayControls} dataDetails={details} readingStatus={readingStatus} emptyContent={empty} showAtlas={showAtlas} exposureLine={exposureLine??payload?.exposure_line??null} darkLevels={darkLevels} alertLines={alertLines??null} cvdLine={cvdLine??payload?.cvd_line??null} contractBars={payload?.contract_bars??null} contractSymbol={payload?.contract_symbol??(contract||null)} contractStatus={payload?.contract_status??null} flowBars={Array.isArray(flowBars)&&flowBars.length===frames.length?flowBars.slice(0,position+1):flowBars} syncSeq={sync?.seq||0} syncView={sync?.time||null} syncPrice={sync?.price||null} syncCrosshair={sync?.crosshair!=null?sync.crosshair:null} onSync={onSyncEvent}/>}
     {open&&forcedScope!=null&&!followMap&&<p role="note">Saved-view review — these recorded expiry dates are not the current map scope.</p>}
     {/* P1-5 (UX review): secondary strips below the chart collapse into slim
         lines — drawings behind a one-line disclosure, velocity as an inline

@@ -1,4 +1,4 @@
-import React,{useEffect,useId,useMemo,useRef,useState} from 'react';
+import React,{useCallback,useEffect,useId,useMemo,useRef,useState} from 'react';
 import {chartTime,checkedCandles,clampWindow,contractClosesForFrames,NODE_COLORS,NODE_LABELS,pinchFactors,priceRange,savedLevels,zoomPrice,zoomTime} from './recordedPriceChartData';
 import {openingEnvelope,sessionEnvelope,sessionVwapBands,sessionVwapValues} from './chart/indicators/priceStudies';
 import {volumeProfile} from './chart/indicators/profile';
@@ -8,7 +8,7 @@ const bound=(value,low,high)=>Math.max(low,Math.min(high,value));
 const axisTime=value=>new Date(value).toLocaleString('en-US',{timeZone:'America/New_York',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false});
 const closeDetails=element=>{const details=element.closest('details');if(details){details.open=false;details.querySelector('summary')?.focus();}};
 
-export default function RecordedPriceChart({ticker,frames,revision='',onInteract,metricCoverage={},toolbarControls=null,toolbarActions=null,historyPeriodControls=null,historyControls=null,replayControls=null,dataDetails=null,readingStatus="Data details",emptyContent=null,showAtlas=true,exposureLine=null,darkLevels=null,flowBars=null,alertLines=null,cvdLine=null,contractBars=null,contractSymbol=null,contractStatus=null,fitAllFrames=null,renderDrawingLayer=null}) {
+export default function RecordedPriceChart({ticker,frames,revision='',onInteract,metricCoverage={},toolbarControls=null,toolbarActions=null,historyPeriodControls=null,historyControls=null,replayControls=null,dataDetails=null,readingStatus="Data details",emptyContent=null,showAtlas=true,exposureLine=null,darkLevels=null,flowBars=null,alertLines=null,cvdLine=null,contractBars=null,contractSymbol=null,contractStatus=null,fitAllFrames=null,renderDrawingLayer=null,syncSeq=0,syncView=null,syncPrice=null,syncCrosshair=null,onSync=null}) {
  const data=useMemo(()=>checkedCandles(frames),[frames]);
  const premiumCloses=useMemo(()=>contractClosesForFrames(data,contractBars),[data,contractBars]);
  const surface=useRef(null),pointers=useRef(new Map()),gesture=useRef(null),previousLength=useRef(0);
@@ -20,6 +20,16 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
  // the drawn candles stay the visible window. Without it the range comes
  // from the visible slice exactly as before — callers unaffected.
  const fitData=useMemo(()=>Array.isArray(fitAllFrames)&&fitAllFrames.length?checkedCandles(fitAllFrames):null,[fitAllFrames]);
+ // S2 link dimensions: user chart actions EMIT their dim to the owning pane
+ // (price/time/crosshair); an incoming sync ADOPTS view/price/crosshair
+ // without re-emitting (no echo). Adoption only fires on a new syncSeq.
+ const adopting=useRef(false);
+ const emit=useCallback(patch=>{if(onSync&&!adopting.current)onSync(patch);},[onSync]);
+ useEffect(()=>{if(!syncSeq)return;adopting.current=true;
+  if(syncView&&typeof syncView==='object')setView(syncView);
+  if(syncPrice&&typeof syncPrice==='object')setManualPrice(syncPrice);
+  if(syncCrosshair!=null)setHover(syncCrosshair);
+  adopting.current=false;},[syncSeq]); // eslint-disable-line react-hooks/exhaustive-deps
  const fitLevels=useMemo(()=>fitData?fitData.flatMap(frame=>savedLevels(frame,metrics,allNodes)):[],[fitData,metrics,allNodes]);
   const [exporting,setExporting]=useState(false),[exportError,setExportError]=useState(''),[vwapOn,setVwapOn]=useState(true),[bandsOn,setBandsOn]=useState(false),[profileOn,setProfileOn]=useState(true),[envelopeOn,setEnvelopeOn]=useState(false),[cvdOn,setCvdOn]=useState(true);
  const id=useId().replace(/[^a-zA-Z0-9_-]/g,'');
@@ -41,13 +51,13 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
  const notify=()=>onInteract?.();
  const point=event=>{const r=surface.current.getBoundingClientRect();return {x:(event.clientX-r.left)*size.width/r.width,y:(event.clientY-r.top)*size.height/r.height};};
  const current=useRef(null);current.current={view:windowView,range,total:data.length,left,right,top,bottom,plotWidth,plotHeight,size};
- const zoom=(axis,factor,anchor=0.5)=>{notify();setHover(null);if(axis==='price')setManualPrice(zoomPrice(range,factor,anchor));else setView(zoomTime(windowView,factor,anchor,data.length));};
+ const zoom=(axis,factor,anchor=0.5)=>{notify();setHover(null);if(axis==='price'){const next=zoomPrice(range,factor,anchor);setManualPrice(next);emit({price:next});}else{const next=zoomTime(windowView,factor,anchor,data.length);setView(next);emit({time:next});}};
  useEffect(()=>{
   const element=surface.current;if(!element)return undefined;
   const wheel=event=>{const state=current.current;if(!state?.total||!(event.ctrlKey||event.metaKey||event.shiftKey))return;event.preventDefault();onInteract?.();setHover(null);
    const rect=element.getBoundingClientRect(),x=(event.clientX-rect.left)*state.size.width/rect.width,yy=(event.clientY-rect.top)*state.size.height/rect.height;
-   if(event.shiftKey||x>=state.right)setManualPrice(zoomPrice(state.range,Math.exp(bound(event.deltaY,-120,120)*0.003),bound(1-(yy-state.top)/state.plotHeight,0,1)));
-   else setView(zoomTime(state.view,Math.exp(bound(event.deltaY,-120,120)*0.003),bound((x-state.left)/state.plotWidth,0,1),state.total));
+   if(event.shiftKey||x>=state.right){const next=zoomPrice(state.range,Math.exp(bound(event.deltaY,-120,120)*0.003),bound(1-(yy-state.top)/state.plotHeight,0,1));setManualPrice(next);emit({price:next});}
+   else{const next=zoomTime(state.view,Math.exp(bound(event.deltaY,-120,120)*0.003),bound((x-state.left)/state.plotWidth,0,1),state.total);setView(next);emit({time:next});}
   };element.addEventListener('wheel',wheel,{passive:false});return()=>element.removeEventListener('wheel',wheel);
  },[onInteract,Boolean(data.length)]);
  const begin=event=>{
@@ -60,7 +70,7 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
  };
  const move=event=>{
   const p=point(event);if(!pointers.current.has(event.pointerId)){
-   if(p.x>=left&&p.x<right&&p.y>=top&&p.y<bottom)setHover(bound(Math.floor((p.x-left)/spacing),0,Math.max(0,visible.length-1)));else setHover(null);return;
+   if(p.x>=left&&p.x<right&&p.y>=top&&p.y<bottom){const next=bound(Math.floor((p.x-left)/spacing),0,Math.max(0,visible.length-1));if(next!==hover){setHover(next);emit({crosshair:next});}}else if(hover!=null){setHover(null);emit({crosshair:null});}return;
   }
   pointers.current.set(event.pointerId,p);const base=gesture.current;if(!base)return;
   if(base.mode==='pinch'&&pointers.current.size>=2){const touch=[...pointers.current.values()].slice(0,2),factors=pinchFactors(base.touch,touch);

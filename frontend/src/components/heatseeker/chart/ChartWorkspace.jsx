@@ -3,7 +3,7 @@ import PriceNodeHistory from '../PriceNodeHistory';
 import ChartPane from './ChartPane';
 import AtlasChart from './AtlasChart';
 import PaneLayouts, { LAYOUT_PRESETS, layoutById } from './PaneLayouts';
-import { createPanes, panesReducer } from './chartReducer';
+import { createPanes, panesReducer, resolveSync, LINK_DIMS } from './chartReducer';
 import { createLayout, migrate, sanitizeImport, serialize } from './persistence/layoutSchema';
 import { listLocal, loadLocal, saveLocal, scheduleAutosave } from './persistence/layoutStore';
 import { DEFAULT_SHORTCUTS, LONG_PRESS_MS, actionFor, keyOf, nextFitMode, rebind, watermark } from './ChartShortcuts';
@@ -68,6 +68,33 @@ export default function ChartWorkspace({
   const [envelopes, setEnvelopes] = useState(null);
   const [layoutId, setLayoutId] = useState('single');
   const [panes, dispatch] = useReducer(panesReducer, undefined, () => createPanes(1, ticker));
+  // S2 link dimensions: a user event on one pane resolves onto every OTHER
+  // pane through the B11 reducer semantics (allowlist LINK_DIMS, price never
+  // crosses unlike symbols, no echo back to the origin) and lands as real
+  // props the receiving pane/chart adopt — actual chart events, not helper
+  // state. The sequence number advances per transaction so adoption is
+  // observable and idempotent.
+  const [syncByPane, setSyncByPane] = useState({});
+  const syncSeqRef = useRef(0);
+  const emitSync = (originId, patch) => {
+    const origin = panes.find(p => p.id === originId);
+    if (!origin || !patch || typeof patch !== 'object') return;
+    syncSeqRef.current += 1;
+    const seq = syncSeqRef.current;
+    setSyncByPane(prev => {
+      const next = { ...prev };
+      for (const pane of panes) {
+        if (pane.id === originId) continue;
+        const merged = resolveSync(origin, pane, patch, LINK_DIMS);
+        if (merged === pane) continue;
+        const applied = {};
+        for (const dim of LINK_DIMS) if (dim in patch && merged[dim] !== undefined) applied[dim] = merged[dim];
+        if (!Object.keys(applied).length) continue;
+        next[pane.id] = { ...(prev[pane.id] || {}), ...applied, seq };
+      }
+      return next;
+    });
+  };
   const [layoutNote, setLayoutNote] = useState('');
   const [layoutsOpen, setLayoutsOpen] = useState(false);
   const [shortcuts, setShortcuts] = useState(DEFAULT_SHORTCUTS);
@@ -402,8 +429,9 @@ export default function ChartWorkspace({
                   flowBars={pane.symbol === ticker ? flowBars : null}
                   cvdLine={pane.symbol === ticker ? cvdLine : null}
                   onQuality={setQuality} onEnvelopes={setEnvelopes} onReplayController={handleReplayController} onReplayState={handlePaneReplayState} replaySourceId={pane.id}
-                  replayEpoch={layoutId + ':' + pane.generation} />
-              : <PriceNodeHistory ticker={pane.symbol} open={open} primary={false} showAtlas={showAtlas} fitMode={fitMode} />)}
+                  replayEpoch={layoutId + ':' + pane.generation}
+                  sync={syncByPane[pane.id] || null} onSyncEvent={patch => emitSync(pane.id, patch)} />
+              : <PriceNodeHistory ticker={pane.symbol} open={open} primary={false} showAtlas={showAtlas} fitMode={fitMode} sync={syncByPane[pane.id] || null} onSyncEvent={patch => emitSync(pane.id, patch)} />)}
           />
         </div>
         <details className="workspace-evidence" data-testid="workspace-evidence">
