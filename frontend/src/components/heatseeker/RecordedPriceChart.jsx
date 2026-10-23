@@ -59,7 +59,7 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
    if(event.shiftKey||x>=state.right){const next=zoomPrice(state.range,Math.exp(bound(event.deltaY,-120,120)*0.003),bound(1-(yy-state.top)/state.plotHeight,0,1));setManualPrice(next);emit({price:next});}
    else{const next=zoomTime(state.view,Math.exp(bound(event.deltaY,-120,120)*0.003),bound((x-state.left)/state.plotWidth,0,1),state.total);setView(next);emit({time:next});}
   };element.addEventListener('wheel',wheel,{passive:false});return()=>element.removeEventListener('wheel',wheel);
- },[onInteract,Boolean(data.length)]);
+ },[onInteract,Boolean(data.length),emit]); // emit in deps: the listener must not keep a stale sync callback
  const begin=event=>{
   if(!data.length)return;notify();setHover(null);const p=point(event);pointers.current.set(event.pointerId,p);event.currentTarget.setPointerCapture?.(event.pointerId);
   if(pointers.current.size===2){const touch=[...pointers.current.values()];gesture.current={mode:'pinch',touch,view:windowView,range};}

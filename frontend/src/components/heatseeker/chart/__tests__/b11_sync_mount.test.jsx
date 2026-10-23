@@ -23,6 +23,12 @@ const arm = () => {
   });
 };
 
+// every test starts from a clean durable store — a previous test's saved
+// composition must never leak into the next mount as a fake "restored" state
+beforeEach(() => {
+  require('../persistence/layoutStore')._clear();
+});
+
 const mountSplit = async (ticker = 'SPY') => {
   const W = require('../ChartWorkspace').default;
   const view = render(<W ticker={ticker} open useNew />);
@@ -66,9 +72,13 @@ test('S2 MOUNTED: a price zoom on one pane reaches the other pane\'s real price 
   const charts = screen.getAllByTestId('recorded-price-chart');
   const aBefore = charts[0].getAttribute('data-price-low');
   const bBefore = charts[1].getAttribute('data-price-low');
-  // user price-zooms the FIRST pane's chart (shift+wheel on its surface)
+  // user price-zooms the FIRST pane's chart (shift+wheel on its surface).
+  // jsdom reports zero-sized rects, which would turn the wheel's coordinate
+  // math into NaN — a real browser delivers real geometry, so the test
+  // stubs the surface rect and sends real client coordinates.
   const surface = document.querySelectorAll('.recorded-chart-surface')[0];
-  await act(async () => { fireEvent.wheel(surface, { shiftKey: true, deltaY: -120 }); });
+  surface.getBoundingClientRect = () => ({ left: 0, top: 0, width: 800, height: 480 });
+  await act(async () => { fireEvent.wheel(surface, { shiftKey: true, deltaY: -120, clientX: 400, clientY: 240 }); });
   await act(async () => { await new Promise(r => setTimeout(r, 250)); });
   const aAfter = charts[0].getAttribute('data-price-low');
   const bAfter = charts[1].getAttribute('data-price-low');
@@ -106,7 +116,8 @@ test('S2 MOUNTED: price never syncs across unlike symbols', async () => {
   const bBefore = screen.getAllByTestId('recorded-price-chart')[1].getAttribute('data-price-low');
   // price-zoom the SPY pane (pane 0, the focused one)
   const surface = document.querySelectorAll('.recorded-chart-surface')[0];
-  await act(async () => { fireEvent.wheel(surface, { shiftKey: true, deltaY: -120 }); });
+  surface.getBoundingClientRect = () => ({ left: 0, top: 0, width: 800, height: 480 });
+  await act(async () => { fireEvent.wheel(surface, { shiftKey: true, deltaY: -120, clientX: 400, clientY: 240 }); });
   await act(async () => { await new Promise(r => setTimeout(r, 250)); });
   const charts2 = screen.getAllByTestId('recorded-price-chart');
   const aAfter = charts2[0].getAttribute('data-price-low');
@@ -114,4 +125,34 @@ test('S2 MOUNTED: price never syncs across unlike symbols', async () => {
   expect(aAfter).not.toBe(bAfter);       // the QQQ pane did NOT adopt SPY's zoom
   expect(bAfter).toBe(bBefore);
   view.unmount();
+});
+
+// S2 persistence: per-pane interval/session/view state survives a reload —
+// the durable store carries each pane's own state and the restored panes
+// adopt it at mount (their first REAL request already uses it).
+test('S2 MOUNTED: per-pane state survives a reload through the durable store', async () => {
+  arm();
+  const { _clear } = require('../persistence/layoutStore');
+  _clear();
+  const view1 = await mountSplit();
+  const select = screen.getAllByLabelText('Candle interval')[0];
+  await act(async () => { fireEvent.change(select, { target: { value: '5' } }); });
+  await act(async () => { await new Promise(r => setTimeout(r, 600)); }); // let the autosave fire
+  const axios = require('axios');
+  const fiveBefore = axios.get.mock.calls.filter(c => c[1]?.params?.interval_minutes === 5).length;
+  expect(fiveBefore).toBeGreaterThanOrEqual(2);
+  // full unmount + fresh mount = a reload
+  view1.unmount();
+  axios.get.mockClear();
+  const W = require('../ChartWorkspace').default;
+  render(<W ticker="SPY" open useNew />);
+  await waitFor(() => expect(screen.getAllByTestId('recorded-price-chart').length).toBeGreaterThan(0));
+  await act(async () => { await new Promise(r => setTimeout(r, 600)); });
+  // the restored composition is still the split, and the panes' persisted
+  // 5-minute interval drives their first REAL request
+  expect(screen.getAllByTestId('recorded-price-chart')).toHaveLength(2);
+  const fiveAfter = axios.get.mock.calls.filter(c => c[1]?.params?.interval_minutes === 5).length;
+  expect(fiveAfter).toBeGreaterThanOrEqual(2);
+  const selects = screen.getAllByLabelText('Candle interval');
+  expect(selects.every(s => s.value === '5')).toBe(true);
 });

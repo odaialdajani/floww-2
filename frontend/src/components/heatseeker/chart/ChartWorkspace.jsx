@@ -75,6 +75,10 @@ export default function ChartWorkspace({
   // state. The sequence number advances per transaction so adoption is
   // observable and idempotent.
   const [syncByPane, setSyncByPane] = useState({});
+  // S2 persistence: each pane's OWN interval/session/view/price state as
+  // last set or adopted — carried by the durable layout store and re-seeded
+  // into the sync bus on restore, so per-pane state survives a reload.
+  const [paneStates, setPaneStates] = useState({});
   const syncSeqRef = useRef(0);
   const emitSync = (originId, patch) => {
     const origin = panes.find(p => p.id === originId);
@@ -91,6 +95,21 @@ export default function ChartWorkspace({
         for (const dim of LINK_DIMS) if (dim in patch && merged[dim] !== undefined) applied[dim] = merged[dim];
         if (!Object.keys(applied).length) continue;
         next[pane.id] = { ...(prev[pane.id] || {}), ...applied, seq };
+      }
+      return next;
+    });
+    // record the origin's own change (and every adoption) for persistence
+    setPaneStates(prev => {
+      const next = { ...prev };
+      next[originId] = { ...(prev[originId] || {}), ...patch };
+      for (const pane of panes) {
+        if (pane.id === originId) continue;
+        const merged = resolveSync(origin, pane, patch, LINK_DIMS);
+        if (merged === pane) continue;
+        const applied = {};
+        for (const dim of LINK_DIMS) if (dim in patch && merged[dim] !== undefined) applied[dim] = merged[dim];
+        if (!Object.keys(applied).length) continue;
+        next[pane.id] = { ...(prev[pane.id] || {}), ...applied };
       }
       return next;
     });
@@ -210,6 +229,24 @@ export default function ChartWorkspace({
     const focusedIdx = Number.isInteger(data.focusedIndex) && data.focusedIndex >= 0 && data.focusedIndex < 3 ? data.focusedIndex : 0;
     dispatch({ type: 'focus', id: 'pane-' + focusedIdx });
     if (data.fitMode === 'fit-visible' || data.fitMode === 'fit-all') setFitMode(data.fitMode);
+    // S2: re-seed each pane's persisted interval/session/view/price into
+    // the sync bus (seq 1) — the panes adopt their own state at mount, so
+    // their first real request and renderer window already use it.
+    if (data.paneStates && typeof data.paneStates === 'object') {
+      setSyncByPane(prev => {
+        const next = { ...prev };
+        for (const [id, st] of Object.entries(data.paneStates)) {
+          if (!st || typeof st !== 'object') continue;
+          next[id] = { ...(prev[id] || {}), ...st, seq: 1 };
+        }
+        return next;
+      });
+      setPaneStates(data.paneStates);
+      // the restored panes adopt at seq 1; the FIRST user emission must get
+      // a seq ABOVE it or adopting panes would skip it as already applied
+      // (the first sync after any reload would silently drop).
+      syncSeqRef.current = Math.max(syncSeqRef.current, 1);
+    }
     return true;
   };
 
@@ -230,14 +267,14 @@ export default function ChartWorkspace({
   useEffect(() => {
     if (!restored.current) return undefined;
     const focusedIdx = Math.max(0, panes.findIndex(p => p.focused));
-    scheduleAutosave(WORKSPACE_LAYOUT_KEY, createLayout({
+    scheduleAutosave(WORKSPACE_LAYOUT_KEY, createLayout({ paneStates,
       layoutId,
       symbols: panes.map(p => p.symbol),
       focusedIndex: focusedIdx,
       fitMode,
     }));
     return undefined;
-  }, [layoutId, panes, fitMode]);
+  }, [layoutId, panes, fitMode, paneStates]);
 
   // B27 mounted keyboard map: typing fields never fire shortcuts (actionFor
   // guards), a pending rebind captures the next key with typed refusals,
@@ -361,7 +398,7 @@ export default function ChartWorkspace({
   const saveNamedLayout = () => {
     const name = 'layout-' + (listLocal().length + 1);
     try {
-      saveLocal(name, createLayout({ layoutId, symbols: panes.map(p => p.symbol), focusedIndex: focusedIdx, fitMode }));
+      saveLocal(name, createLayout({ layoutId, symbols: panes.map(p => p.symbol), focusedIndex: focusedIdx, fitMode, paneStates }));
       setLayoutNote('Saved ' + name + '.');
     } catch (error) {
       setLayoutNote('Save refused: ' + (error && error.message) + '.');
