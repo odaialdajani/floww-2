@@ -37,6 +37,10 @@
 .recorded-chart-popover>summary::-webkit-details-marker{display:none;}
 .recorded-chart-popover-content{position:absolute;top:calc(100% + 6px);left:0;z-index:170;width:min(400px,100cqw);max-height:60dvh;overflow:auto;background:#121b25;border:1px solid #526473;border-radius:5px;padding:12px;box-shadow:0 8px 25px #0008;color:#cddae5;font-size:12px;line-height:1.6;}
 .recorded-chart-popover-content small{display:block;margin-top:10px;color:#aebfcb;font-size:12px;line-height:1.6;}
+/* S1: the Tools and Data-details popovers sit at the band's right side —
+   open LEFTWARD (right:0) so the panel stays inside the chart pane at
+   every desktop width instead of past the viewport edge. */
+.recorded-chart-tools .recorded-chart-popover .recorded-chart-popover-content{left:auto;right:0;}
 .recorded-chart-popover-content .recorded-chart-layers{display:grid;gap:8px;border:0;padding:8px 0;margin:8px 0;}
 .recorded-chart-popover-content .recorded-chart-layers legend{font-size:12px;color:#bbcad6;padding:0;}
 .recorded-chart-popover-content select{max-width:100%;font-size:12px;background:#16212b;border:1px solid #536676;color:#e3edf4;border-radius:4px;padding:6px;}
