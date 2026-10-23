@@ -168,3 +168,18 @@ test("sessionZones covers only bars knowable at the cursor", () => {
   expect(zones.open).toBeNull();
   expect(zones.close).toBeNull();
 });
+
+// H3 b23 residual: sessionZones assumed time-sorted frames. The envelope is
+// order-independent by construction — first/last KNOWN must be true min/max.
+test("sessionZones order-independence: unsorted frames still report true first/last known", () => {
+  const bars = [
+    { time: 60 * 60000, low: 98, high: 103 },
+    { time: 0, low: 99, high: 101 },
+    { time: 30 * 60000, low: 100, high: 105 },
+  ];
+  const zones = sessionZones(bars);
+  expect(zones.firstKnownTime).toBe(0);
+  expect(zones.lastKnownTime).toBe(60 * 60000);
+  expect(zones.high).toBe(105);
+  expect(zones.low).toBe(98);
+});

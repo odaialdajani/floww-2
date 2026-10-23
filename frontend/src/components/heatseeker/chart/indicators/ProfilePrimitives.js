@@ -162,6 +162,9 @@ export function sessionZones(bars, { cursor = null } = {}) {
     && (cursor == null || Number(b.time) <= Number(cursor))
     && typeof b.low === "number" && typeof b.high === "number");
   if (!eligible.length) return { status: "unavailable", reason: "no eligible bars known at the cursor" };
+  // H3 hardening: the envelope is order-independent — sort by time so
+  // first/last KNOWN are the true min/max even for unsorted callers.
+  eligible.sort((a, b) => Number(a.time) - Number(b.time));
   const highs = eligible.map((b) => b.high);
   const lows = eligible.map((b) => b.low);
   return {
