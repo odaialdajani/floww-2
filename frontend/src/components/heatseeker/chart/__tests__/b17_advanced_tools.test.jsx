@@ -92,3 +92,35 @@ test('B17 MOUNTED: a persisted fib drawing renders seven labeled levels on the r
   const ratios = [...levels].map(l => l.getAttribute('data-ratio'));
   expect(ratios).toEqual(['0', '0.236', '0.382', '0.5', '0.618', '0.786', '1']);
 });
+
+// H3 b17 residual: the brush magnet:false bypass was correct in bytes but
+// unpinned. This is the pointer-path proof — a brush placed mid-candle keeps
+// its RAW anchors (never on OHLC), while a trend placed at the SAME pixel
+// snaps to OHLC. The contrast pins the dispatch branch, not just the helpers.
+test('B17 pointer path: brush anchors stay raw (off-OHLC); trend at the same pixel snaps', async () => {
+  arm();
+  const { saveDrawings: seed, loadDrawings } = require('../drawings/drawingPersistence');
+  window.localStorage.clear();
+  render(<PriceNodeHistory ticker="SPY" open />);
+  await waitFor(() => expect(screen.getByTestId('drawing-layer')).toBeInTheDocument());
+  await act(async () => { fireEvent.click(screen.getByText('Drawings')); });
+  const layer = screen.getByTestId('drawing-layer');
+  const OHLC = new Set([99, 100, 101, 102, 104, 105, 103, 101, 100]);
+  const place = async (tool, x1, y1, x2, y2) => {
+    window.localStorage.removeItem('floww.drawings.SPY');
+    await act(async () => { fireEvent.click(screen.getByTestId('rail-tool-' + tool)); });
+    await act(async () => { fireEvent.pointerDown(layer, { clientX: x1, clientY: y1, pointerId: 1 }); fireEvent.pointerUp(layer, { pointerId: 1 }); });
+    await act(async () => { fireEvent.pointerDown(layer, { clientX: x2, clientY: y2, pointerId: 1 }); fireEvent.pointerUp(layer, { pointerId: 1 }); });
+    return loadDrawings('SPY');
+  };
+  const brush = await place('brush', 200, 200, 400, 300);
+  expect(brush).toHaveLength(1);
+  expect(brush[0].tool).toBe('brush');
+  for (const a of brush[0].anchors) expect(OHLC.has(a.p)).toBe(false);  // raw, never snapped
+  const trend = await place('trend', 200, 200, 400, 300);
+  const trendDrawing = trend.find(d => d.tool === 'trend');
+  expect(trendDrawing).toBeDefined();
+  // the same pixel through the magnetized path lands ON candle values
+  expect(OHLC.has(trendDrawing.anchors[0].p)).toBe(true);
+  expect(OHLC.has(trendDrawing.anchors[1].p)).toBe(true);
+});
