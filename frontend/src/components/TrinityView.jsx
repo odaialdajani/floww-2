@@ -133,6 +133,21 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
   }, [drawerOpen]);
   const rawMapRef = useRef(null);
   const adjustedMapRef = useRef(null);
+  // M1 (2026-10-24): a basis change re-centers only the adjusted grid (its
+  // metric basis is part of the grid's centering key), which leaves the two
+  // maps at different strike offsets (measured 80px at 1470x950). The same
+  // divergence appears on every payload reload when the two panes' legends
+  // wrap differently (at 1024x768 the adjusted legend wraps one line deeper,
+  // its container is 25px shorter, and the grids' independent load-time
+  // centering lands same-strike rows 13px apart). Raw keeps the user's
+  // scroll, so on every basis or payload change the adjusted scroller is
+  // re-anchored to raw: matching strike rows stay within 1px. This effect
+  // runs after the grids' own layout-effect centering, so it is final.
+  useEffect(() => {
+    const raw = rawMapRef.current;
+    const adjusted = adjustedMapRef.current;
+    if (raw && adjusted && adjusted.scrollTop !== raw.scrollTop) adjusted.scrollTop = raw.scrollTop;
+  }, [basis, payload]);
   const syncMaps = event => {
     const source = event.currentTarget;
     const target = source === rawMapRef.current ? adjustedMapRef.current : rawMapRef.current;
@@ -335,8 +350,7 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
   }
 
   return (
-    <div className="trinity-layout" data-testid="trinity-view">
-      {replayControls}
+    <div className="trinity-layout" data-testid="triad-view">
       {replayId && !replayDisplay && <button type="button" onClick={() => onReplayDisplay(null)}>Leave recorded observation · Live</button>}
       {/* Market context (2026-10-18): secondary rank/research context and the
           activity explanation live in a native disclosure — no state, no
@@ -421,20 +435,21 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
           <button type="button" data-testid="triad-show-loaded" className="triad-empty-desk-action" onClick={() => setScope("loaded")}>Show all loaded expiries</button>
         </div>
       )}
-      <HeatmapLandmarks data={payload} />
       <div className={drawerOpen ? "triad-review-workspace" : ""}>
       <div className="triad-review-analysis">
       <div className="triad-pair" data-testid="triad-raw-adjusted" data-mobile-pane={mobilePane}>
         <div className="triad-pane" data-testid="triad-pane-raw">
           <div className="triad-pane-header" title="Raw structural GEX — gex_net_v1/gex_gross_v1, USD per 1% spot move">
-            Raw GEX · USD/1% move · {payload?.formula_version || "gex.v2"}
+            <span className="triad-pane-title">Raw GEX · USD/1% move · {payload?.formula_version || "gex.v2"}</span>
+            <PaneUnits testid="triad-pane-units-raw" text="Raw structural GEX — gex_net_v1/gex_gross_v1, USD per 1% spot move" />
           </div>
           <SkylitHeatmapGrid data={payload} spot={spot} ticker={ticker}
             viewMode="gex" metric="raw" showLandmarks={false} scrollRef={rawMapRef} onScroll={syncMaps} axes={pairAxes} scale={pairScale} onCellClick={(s, e) => onGridCell(s, e, "raw")} selected={cell ? { strike: cell.strike, expiry: cell.colKey } : null} wallBand={selectedWall} />
         </div>
         <div className="triad-pane" data-testid="triad-pane-adjusted">
           <div className="triad-pane-header" title={adjDef?.units || "No per-strike surface for this basis in the snapshot"}>
-            Adjusted · {adjDef?.label || basis}{adjAvailable ? ` · ${adjDef.units}` : " · unavailable"}
+            <span className="triad-pane-title">Adjusted · {adjDef?.label || basis}{adjAvailable ? " · USD/1% move" : " · unavailable"}</span>
+            <PaneUnits testid="triad-pane-units-adjusted" text={adjDef?.units || "No per-strike surface for this basis in the snapshot"} />
           </div>
           {adjAvailable ? (
             <SkylitHeatmapGrid data={payload} spot={spot} ticker={ticker}
@@ -450,6 +465,14 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
         </div>
       </div>
 
+      {/* UI-M03 (M1 2026-10-24): stored-session replay is supporting context,
+          so the strip follows the maps instead of preceding them — at the top
+          its 47px pushed the loaded map start to 341px@1470x950 / 374px@1024x768,
+          past the <=300px start budget. Every control is preserved; only the
+          reading order changed. Loading/error states keep the strip at the top
+          where no maps exist yet. */}
+      {replayControls}
+      <HeatmapLandmarks data={payload} />
       <details className="triad-profile-disclosure" data-testid="triad-profile-disclosure">
         <summary>Signed exposure profile · raw and adjusted</summary>
       <StrikeExposureProfile data={payload} basis={basis} wall={selectedWall} onSelect={onGridCell} />
@@ -486,6 +509,18 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
       </div>
     </div>
   );
+}
+
+// One pane-header line for both maps (M1): the short title keeps the header a
+// fixed-height single line so the adjusted title can never wrap deeper than
+// raw and offset its strike rows. The FULL units/metric/basis/note string is
+// preserved verbatim in this named details; its body overlays the grid
+// (absolutely positioned), so opening it never shifts row geometry.
+function PaneUnits({ testid, text }) {
+  return <details className="triad-pane-units" data-testid={testid}>
+    <summary title="Exact units, metric id, basis and producer note for this pane">Units & provenance</summary>
+    <div className="triad-pane-units-body"><p>{text}</p></div>
+  </details>;
 }
 
 function ContextStrip({ board, ticker, symbolInput, onSymbolInput, onSubmit, showStockControl = true, boardStatus }) {

@@ -142,6 +142,14 @@
   padding: 6px 10px;
   flex-shrink: 0;
 }
+/* M2 readability (Hermes-2, 2026-10-24): the three lens captions are bare
+   <small> tags inside 12px headers, so the browser's 0.8em default rendered
+   the honesty/approximation disclaimers ("nearest-observation approximation",
+   "call & put" scope) at 9.6px — the least readable text on the Volatility
+   tab. Floor every small inside the Volatility root at 11px, matching the
+   surrounding .tv-sub/.tv-status rhythm. Measured before: 3 nodes <10px;
+   target after: 0. */
+.tv-root small { font-size: 11px; }
 .tv-cell-h-notes > div { padding: 1px 0; }
 .tv-status { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
 .tv-status-row { margin: 0; padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,.04); display: flex; flex-direction: column; gap: 2px; }
