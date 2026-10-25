@@ -11,6 +11,7 @@ import { shouldHandleShortcut } from "./chart/ChartShortcuts";
 import { useChartData } from "./chart/useChartData";
 import { STUDIES, getStudy, createStudyInstance, validateStudySettings, studySpecs, paneEligibility } from "./chart/indicators/registry";
 import { loadStudyInstances, saveStudyInstances } from "./chart/persistence/studyStore";
+import { eligibleMappedPairsFor, parseMappedLevelsResponse } from "./chart/mappedLevelsClient";
 import { chartTime } from "./recordedPriceChartData";
 
 
@@ -213,6 +214,25 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
   const removeStudy = id => commitStudies(studyInstances.filter(s => s.instanceId !== id));
   const STUDY_COLORS = ["#e8bd65", "#5ec986", "#72d7df", "#c4a1ef", "#e06c75", "#8fd3e8"];
   const studyLineSpecs = useMemo(() => studyInstances.flatMap((inst, i) => studySpecs(inst, frames).map(spec => ({ ...spec, color: STUDY_COLORS[i % STUDY_COLORS.length] }))), [studyInstances, frames]);
+  // B09 mapped levels (b09_mapped_levels_contract v2): cross-instrument
+  // source->target mapping through the contract route — the backend is the ONE
+  // ratio authority; this caller never computes a ratio and never substitutes
+  // naked-levels claims. Only validated-family sources are selectable; the
+  // cursor is the pane's replay position (review-mode ratio lock).
+  const [mappedSource, setMappedSource] = useState(null);
+  const [mapped, setMapped] = useState(null);
+  useEffect(() => {
+    if (!mappedSource || !eligibleMappedPairsFor(ticker).includes(mappedSource)) { setMapped(null); return undefined; }
+    let cancelled = false;
+    const cursorFrame = frames[position];
+    const cursorSeconds = cursorFrame ? Math.floor(Date.parse(cursorFrame.time) / 1000) : null;
+    if (!cursorSeconds) { setMapped({ status: 'unavailable', reason: 'no cursor', shapes: [], legend: null, ratio: null }); return undefined; }
+    setMapped({ status: 'loading', shapes: [], legend: null, ratio: null });
+    axios.get(`${API}/heatseeker/mapped-levels/${encodeURIComponent(ticker.toUpperCase())}`, { params: { source: mappedSource, cursor: cursorSeconds, scope: payload?.query_key || '' } })
+      .then(res => { if (!cancelled) setMapped(parseMappedLevelsResponse(res?.data, cursorSeconds)); })
+      .catch(() => { if (!cancelled) setMapped({ status: 'unavailable', reason: 'route unavailable', shapes: [], legend: null, ratio: null }); });
+    return () => { cancelled = true; };
+  }, [mappedSource, ticker, position, payload?.query_key]);
   // B16 pointer/keyboard geometry: the drawing layer projects LOGICAL anchors
   // through the real loaded frames' time/price domain. Zoom/resize changes
   // pixels, never anchor meaning.
@@ -506,6 +526,26 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
         </div>
       </div>
     </details>
+    <details className="price-mapped-levels" data-testid="mapped-levels-panel">
+      <summary data-testid="mapped-levels-summary" role="button" aria-label="Mapped levels">Mapped levels{mapped?.status === 'available' ? ` · ${mapped.shapes.length}` : ''}</summary>
+      <div className="price-mapped-content">
+        {eligibleMappedPairsFor(ticker).length ? <>
+          <p className="price-mapped-hint">Cross-instrument levels mapped through the validated-family route — the ratio, its provenance and eligibility come from the backend.</p>
+          <label>Source
+            <select data-testid="mapped-levels-source" aria-label="Mapped-levels source" value={mappedSource || ''} onChange={e => setMappedSource(e.target.value || null)}>
+              <option value="">Off</option>
+              {eligibleMappedPairsFor(ticker).map(source => <option key={source} value={source}>{source} → {ticker.toUpperCase()}</option>)}
+            </select>
+          </label>
+          {mapped && mapped.status !== 'loading' && <p data-testid="mapped-levels-status" role={mapped.status === 'available' ? 'status' : 'note'}>{mapped.status === 'available' ? 'Available' : mapped.status === 'refused' ? `Refused — ${mapped.reason}` : `Unavailable — ${mapped.reason}`}</p>}
+          {mapped?.status === 'loading' && <p data-testid="mapped-levels-status" role="status">Loading mapped levels…</p>}
+          {mapped?.status === 'available' && <>
+            <p data-testid="mapped-levels-legend">◆ {mapped.legend.diamond} · ▲ {mapped.legend.triangle}</p>
+            <p data-testid="mapped-levels-ratio" title={JSON.stringify(mapped.ratio?.provenance || {})}>Ratio {mapped.ratio.value} · known at {mapped.ratio.knownAt}</p>
+          </>}
+        </> : <p data-testid="mapped-levels-status">No validated mapped-level family for {ticker.toUpperCase()} — futures and other pairs stay refused until a validated mapping exists.</p>}
+      </div>
+    </details>
   </>;
   // Replay affordances stay visible while Chart tools is closed: pause state
   // and candle time must remain readable during an active replay.
@@ -561,7 +601,7 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
   };
   return <section className="panel price-node-history" data-open={open} data-read-badge={readBadge} style={{margin:"12px 0",padding:12}} data-testid="price-node-history">
     {!primary&&<button type="button" className="skylit-trade-mode-btn" aria-expanded={open} onClick={()=>{setOpen(!open);setPlaying(false);}}>Price chart + historical nodes</button>}
-    {open&&<RecordedPriceChart renderDrawingLayer={renderDrawingLayer} ticker={ticker} frames={frames.slice(0,position+1)} fitAllFrames={fitMode==="fit-all"?frames:null} revision={ticker+":"+days+":"+minutes+":"+payload?.query_key+":"+reload} onInteract={pauseInteraction} metricCoverage={payload?.metric_line_coverage} toolbarControls={controls} toolbarActions={toolbarActions} historyPeriodControls={historyPeriodControls} historyControls={historyControls} replayControls={replayControls} dataDetails={details} readingStatus={readingStatus} emptyContent={empty} showAtlas={showAtlas} exposureLine={exposureLine??payload?.exposure_line??null} darkLevels={darkLevels} alertLines={alertLines??null} cvdLine={cvdLine??payload?.cvd_line??null} contractBars={payload?.contract_bars??null} contractSymbol={payload?.contract_symbol??(contract||null)} contractStatus={payload?.contract_status??null} flowBars={Array.isArray(flowBars)&&flowBars.length===frames.length?flowBars.slice(0,position+1):flowBars} syncSeq={sync?.seq||0} syncView={sync?.time||null} syncPrice={sync?.price||null} syncCrosshair={sync?.crosshair!=null?sync.crosshair:null} onSync={onSyncEvent} studyLines={studyLineSpecs}/>}
+    {open&&<RecordedPriceChart renderDrawingLayer={renderDrawingLayer} ticker={ticker} frames={frames.slice(0,position+1)} fitAllFrames={fitMode==="fit-all"?frames:null} revision={ticker+":"+days+":"+minutes+":"+payload?.query_key+":"+reload} onInteract={pauseInteraction} metricCoverage={payload?.metric_line_coverage} toolbarControls={controls} toolbarActions={toolbarActions} historyPeriodControls={historyPeriodControls} historyControls={historyControls} replayControls={replayControls} dataDetails={details} readingStatus={readingStatus} emptyContent={empty} showAtlas={showAtlas} exposureLine={exposureLine??payload?.exposure_line??null} darkLevels={darkLevels} alertLines={alertLines??null} cvdLine={cvdLine??payload?.cvd_line??null} contractBars={payload?.contract_bars??null} contractSymbol={payload?.contract_symbol??(contract||null)} contractStatus={payload?.contract_status??null} flowBars={Array.isArray(flowBars)&&flowBars.length===frames.length?flowBars.slice(0,position+1):flowBars} syncSeq={sync?.seq||0} syncView={sync?.time||null} syncPrice={sync?.price||null} syncCrosshair={sync?.crosshair!=null?sync.crosshair:null} onSync={onSyncEvent} studyLines={studyLineSpecs} mappedShapes={mapped?.status === 'available' ? mapped.shapes : null}/>}
     {open&&forcedScope!=null&&!followMap&&<p role="note">Saved-view review — these recorded expiry dates are not the current map scope.</p>}
     {/* P1-5 (UX review): secondary strips below the chart collapse into slim
         lines — drawings behind a one-line disclosure, velocity as an inline
