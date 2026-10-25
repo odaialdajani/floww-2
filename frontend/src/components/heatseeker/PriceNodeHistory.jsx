@@ -5,6 +5,7 @@ import RecordedPriceChart from "./RecordedPriceChart";
 import DrawingRail from "./chart/drawings/DrawingRail";
 import { loadPresets, savePresets, PRESET_STORAGE_VERSION } from "./chart/drawings/presetPersistence";
 import { defaultPresetFor, createPreset, updatePresetStyle, deletePreset, resetPresetStyleToBuiltIn, toggleStar, setActivePreset, applyPresetToDrawing } from "./chart/drawings/presetManager";
+import { buildPresetRenderSpec } from "./chart/drawings/presetRendering";
 import { loadDrawings, saveDrawings } from "./chart/drawings/drawingPersistence";
 import { reduceDrawings, createDrawing, geometryFor, magnetPoint, nudgeDrawing, canEdit, suppressesPan, unprojectPoint, viewportFor, TOOLS as REDUCER_TOOLS } from "./chart/drawings/drawingReducer";
 import { barAt, sweepExtrema, visibleSnapshot } from "./chart/replay/replayReducer";
@@ -629,6 +630,31 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
         <rect x="0" y="0" width={drawingViewport.width} height={drawingViewport.height} fill="transparent" pointerEvents={draftTool ? "all" : "none"} />
         {drawings.filter(d=>d.visible!==false).map(d=>{const g=geometryFor(d.tool,d.anchors,drawingViewport,d);
           if(!g)return null;
+          // B17/C130 ADAPTER MOUNT: non-risk drawings render through the
+          // frozen preset rendering adapter (buildPresetRenderSpec) — the
+          // same geometryFor transform, now consuming the FULL family style
+          // (fib ratios/levelColors/visibility/extensions/labels/reverse/log,
+          // line extensions, shape fillOpacity, label fontSize). Refusals
+          // fall back to the incumbent rendering so a drawing is never lost
+          // or unhit-testable; the risk box keeps its C090 semantic renderer.
+          const renderSpecPrimitive=(pr,pi,tidOverride)=>{
+            const part=pr.meta?.part;
+            const tid=tidOverride||(part==="level"?"fib-level":(part?"preset-"+part:"drawing-shape"));
+            if(pr.kind==="polyline")return <polyline key={pi} data-testid={tid} data-drawing-id={d.id} data-selected={d.id===selectedDrawing} data-ratio={pr.meta?.ratio} points={pr.points.map(pt=>`${pt.x},${pt.y}`).join(" ")} stroke={pr.stroke} strokeWidth={pr.strokeWidth} strokeDasharray={pr.dash} fill="none" pointerEvents="stroke" markerEnd={pr.marker==="arrow"?`url(#arrow-${drawingViewport.clipId})`:undefined} onPointerDown={e=>onDrawingElementPointerDown(e,d)} />;
+            if(pr.kind==="text")return <text key={pi} data-testid={tid} data-drawing-id={d.id} x={pr.x} y={pr.y} fontSize={pr.fontSize} fill={pr.fill} pointerEvents="none">{pr.text}</text>;
+            if(pr.kind==="rect"||pr.kind==="band")return <rect key={pi} data-testid={tid} data-drawing-id={d.id} x={pr.x} y={pr.y} width={Math.max(pr.width,2)} height={Math.max(pr.height,2)} fill={pr.fill||"none"} stroke={pr.stroke||"none"} strokeWidth={pr.strokeWidth} strokeDasharray={pr.dash} pointerEvents={pr.kind==="rect"&&pr.stroke!=="none"?"stroke":"none"} onPointerDown={pr.kind==="rect"?e=>onDrawingElementPointerDown(e,d):undefined} />;
+            return null;
+          };
+          if(d.tool!=="risk"){
+            const spec=buildPresetRenderSpec({tool:d.tool,anchors:d.anchors,viewport:drawingViewport,style:d.style,selected:d.id===selectedDrawing});
+            if(spec.status==="ok"&&Array.isArray(spec.primitives)&&spec.primitives.length){
+              const main=spec.primitives.find(p=>p.kind!=="text")||spec.primitives[0];
+              if(spec.primitives.length===1)return renderSpecPrimitive(spec.primitives[0],0,"drawing-shape");
+              return <g key={d.id} data-testid="drawing-shape" data-drawing-id={d.id} data-selected={d.id===selectedDrawing} fill="none" stroke={main.stroke} strokeWidth={main.strokeWidth} strokeDasharray={main.dash} pointerEvents="stroke" onPointerDown={e=>onDrawingElementPointerDown(e,d)}>
+                {spec.primitives.map((pr,pi)=>renderSpecPrimitive(pr,pi))}
+              </g>;
+            }
+          }
           const common={"data-testid":"drawing-shape","data-drawing-id":d.id,"data-selected":d.id===selectedDrawing,stroke:d.style?.color||(d.id===selectedDrawing?"#e3c16a":"#7fa6c0"),strokeWidth:d.style?.width||(d.id===selectedDrawing?2:1.2),strokeDasharray:d.style?.dash?"6 3":undefined,fill:"none",pointerEvents:"stroke",onPointerDown:e=>onDrawingElementPointerDown(e,d)};
           if(g.kind==="risk"){
             // CHART-C090: analysis-only entry/stop/target box — shaded stop->entry
