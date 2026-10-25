@@ -9,7 +9,7 @@ import { barAt, sweepExtrema, visibleSnapshot } from "./chart/replay/replayReduc
 import { anchorsFor } from "./chart/drawings/toolRegistry";
 import { shouldHandleShortcut } from "./chart/ChartShortcuts";
 import { useChartData } from "./chart/useChartData";
-import { STUDIES, getStudy, createStudyInstance, validateStudySettings, studySpecs } from "./chart/indicators/registry";
+import { STUDIES, getStudy, createStudyInstance, validateStudySettings, studySpecs, paneEligibility } from "./chart/indicators/registry";
 import { loadStudyInstances, saveStudyInstances } from "./chart/persistence/studyStore";
 import { chartTime } from "./recordedPriceChartData";
 
@@ -186,22 +186,31 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
     catch (error) { setStudyRefusal(error?.message === "study quota exceeded" ? "Study limit reached — remove one first." : "Study settings refused — check period and multiple."); }
   };
   const addStudy = kind => {
-    if (!getStudy(kind)) { setStudyRefusal("Unknown study."); return; }
-    const settings = kind === "bb" ? { period: Number(studyAddPeriod), multiple: Number(studyAddMultiple) } : { period: Number(studyAddPeriod) };
-    if (!validateStudySettings(kind, settings)) {
-      setStudyRefusal(kind === "bb" ? "Bollinger needs a whole period of at least 2 and a positive multiple." : "Period must be a whole number of at least 1.");
+    // pane source-eligibility first — a pane without the required source
+    // refuses creation with the typed reason (contract v2), never a zero render
+    const eligible = paneEligibility(kind, frames);
+    if (!eligible.ok) { setStudyRefusal(eligible.reason); return; }
+    const settings = kind === "bollinger" ? { period: Number(studyAddPeriod), multiple: Number(studyAddMultiple) }
+      : kind === "vwap" ? { source: "hlc3", bandBasis: "std", multipliers: [1, 2, 3], bands: false }
+      : kind === "volume" ? {}
+      : kind === "exposure-vwap" ? null
+      : { period: Number(studyAddPeriod) };
+    if (settings === null || !validateStudySettings(kind, settings)) {
+      setStudyRefusal(kind === "exposure-vwap" ? "Exposure VWAP needs an eligible board source — not creatable on the price pane."
+        : kind === "bollinger" ? "Bollinger needs a whole period 10..500 and a multiple 0.5..5."
+        : kind === "vwap" ? "VWAP settings refused." : "Period must be a whole number 1..500.");
       return;
     }
     commitStudies([...studyInstances, createStudyInstance(kind, settings, ticker)]);
   };
   const updateStudy = (id, patch) => {
-    const inst = studyInstances.find(s => s.id === id);
+    const inst = studyInstances.find(s => s.instanceId === id);
     if (!inst) return;
     const settings = { ...inst.settings, ...patch };
-    if (!validateStudySettings(inst.study, settings)) { setStudyRefusal("Refused — invalid settings; the previous value stays."); return; }
-    commitStudies(studyInstances.map(s => (s.id === id ? { ...s, settings } : s)));
+    if (!validateStudySettings(inst.kind, settings)) { setStudyRefusal("Refused — invalid settings; the previous value stays."); return; }
+    commitStudies(studyInstances.map(s => (s.instanceId === id ? { ...s, settings } : s)));
   };
-  const removeStudy = id => commitStudies(studyInstances.filter(s => s.id !== id));
+  const removeStudy = id => commitStudies(studyInstances.filter(s => s.instanceId !== id));
   const STUDY_COLORS = ["#e8bd65", "#5ec986", "#72d7df", "#c4a1ef", "#e06c75", "#8fd3e8"];
   const studyLineSpecs = useMemo(() => studyInstances.flatMap((inst, i) => studySpecs(inst, frames).map(spec => ({ ...spec, color: STUDY_COLORS[i % STUDY_COLORS.length] }))), [studyInstances, frames]);
   // B16 pointer/keyboard geometry: the drawing layer projects LOGICAL anchors
@@ -478,11 +487,11 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
       <summary data-testid="studies-panel-summary" role="button" aria-label="Studies">Studies{studyInstances.length ? ` · ${studyInstances.length}` : ""}</summary>
       <div className="price-studies-content">
         <p className="price-studies-hint">Chart studies computed from this pane's own candles. Missing data leaves a gap — never filled.</p>
-        {studyInstances.map(inst => <div key={inst.id} className="price-study-instance" data-testid={"study-instance-"+inst.id}>
-          <span className="price-study-name">{inst.study === "bb" ? `Bollinger ${inst.settings.period} · ${inst.settings.multiple}σ` : `${inst.study.toUpperCase()} ${inst.settings.period}`}</span>
-          <label>Period<input aria-label={"Study period "+inst.id} type="number" min="1" value={inst.settings.period} onChange={e=>updateStudy(inst.id,{period:Number(e.target.value)})} /></label>
-          {inst.study==="bb"&&<label>σ<input aria-label={"Study multiple "+inst.id} type="number" min="0.5" step="0.5" value={inst.settings.multiple} onChange={e=>updateStudy(inst.id,{multiple:Number(e.target.value)})} /></label>}
-          <button type="button" aria-label={"Remove study "+inst.id} onClick={()=>removeStudy(inst.id)}>Remove</button>
+        {studyInstances.map(inst => <div key={inst.instanceId} className="price-study-instance" data-testid={"study-instance-"+inst.instanceId}>
+          <span className="price-study-name">{inst.kind === "bollinger" ? `Bollinger ${inst.settings.period} · ${inst.settings.multiple}σ` : inst.kind === "vwap" ? `VWAP ${inst.settings.source}` : inst.kind === "volume" ? "Volume · measured" : `${inst.kind.toUpperCase()} ${inst.settings.period}`}</span>
+          {(inst.kind === "sma" || inst.kind === "ema" || inst.kind === "bollinger") && <label>Period<input aria-label={"Study period "+inst.instanceId} type="number" min="1" value={inst.settings.period} onChange={e=>updateStudy(inst.instanceId,{period:Number(e.target.value)})} /></label>}
+          {inst.kind==="bollinger"&&<label>σ<input aria-label={"Study multiple "+inst.instanceId} type="number" min="0.5" step="0.5" value={inst.settings.multiple} onChange={e=>updateStudy(inst.instanceId,{multiple:Number(e.target.value)})} /></label>}
+          <button type="button" aria-label={"Remove study "+inst.instanceId} onClick={()=>removeStudy(inst.instanceId)}>Remove</button>
         </div>)}
         {studyRefusal&&<p role="alert" data-testid="studies-refusal">{studyRefusal}</p>}
         <div className="price-study-add">
@@ -490,7 +499,10 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
           <label>σ (Bollinger)<input data-testid="study-add-multiple" aria-label="New Bollinger multiple" type="number" min="0.5" step="0.5" value={studyAddMultiple} onChange={e=>setStudyAddMultiple(e.target.value)} /></label>
           <button type="button" data-testid="study-add-sma" onClick={()=>addStudy("sma")}>Add SMA</button>
           <button type="button" data-testid="study-add-ema" onClick={()=>addStudy("ema")}>Add EMA</button>
-          <button type="button" data-testid="study-add-bb" onClick={()=>addStudy("bb")}>Add Bollinger</button>
+          <button type="button" data-testid="study-add-bollinger" onClick={()=>addStudy("bollinger")}>Add Bollinger</button>
+          <button type="button" data-testid="study-add-vwap" onClick={()=>addStudy("vwap")}>Add VWAP</button>
+          <button type="button" data-testid="study-add-volume" onClick={()=>addStudy("volume")}>Add Volume</button>
+          <button type="button" data-testid="study-add-exposure-vwap" title="Needs an eligible board source — currently not creatable on the price pane" onClick={()=>addStudy("exposure-vwap")}>Exposure VWAP</button>
         </div>
       </div>
     </details>

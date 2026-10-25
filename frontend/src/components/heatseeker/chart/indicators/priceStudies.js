@@ -30,11 +30,14 @@ export function ema(values, period) {
   return out;
 }
 
-// Bollinger bands (CHART-C048). PINNED CONVENTION: rolling arithmetic mean of
-// the same complete window the SMA uses, POPULATION standard deviation
-// (ddof=0), warmup = the full window of finite samples, upper/lower =
-// mean ± multiple·sigma. Any non-finite value in the input refuses the whole
-// series (complete-sample semantics, C047) — never a fabricated window.
+// Bollinger bands (CHART-C048, b08_registry_contract v2). PINNED CONVENTION:
+// rolling arithmetic mean over the same complete window the SMA uses,
+// POPULATION standard deviation (ddof=0). WARMUP (contract): no centre before
+// period-1; "no bands before 2*period-1 samples of variance" — the centre
+// renders from index period-1, the bands only once 2*period-1 samples exist
+// (index >= 2*period-2); earlier band slots carry null upper/lower/sigma.
+// Any non-finite value refuses the whole series (complete-sample semantics,
+// C047) — never a fabricated window.
 export function bollinger(values, period, multiple = 2) {
   const out = new Array(values.length).fill(null);
   if (!values.length || !(period >= 2) || typeof multiple !== 'number' || !Number.isFinite(multiple) || multiple <= 0) return out;
@@ -47,6 +50,8 @@ export function bollinger(values, period, multiple = 2) {
       sumSq += v * v;
     }
     const mean = sum / period;
+    const bandsReady = i >= 2 * (period - 1);
+    if (!bandsReady) { out[i] = { mean, upper: null, lower: null, sigma: null }; continue; }
     const variance = Math.max(0, sumSq / period - mean * mean);
     const sigma = Math.sqrt(variance);
     out[i] = { mean, upper: mean + multiple * sigma, lower: mean - multiple * sigma, sigma };
