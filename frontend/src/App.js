@@ -1007,8 +1007,8 @@ export default function App() {
                 {showLeftSidebar ? "▶ Hide Filters" : "◀ Filters"}
               </button>
             )}
-            <button className={`toggle-btn${showRightSidebar ? " open" : ""}`} onClick={() => { setShowRightSidebar(!showRightSidebar); setShowLeftSidebar(false); }}>
-              {showRightSidebar ? "Analytics ◀" : "Analytics ▶"}
+            <button type="button" className={`toggle-btn${analyticalRangeOpen ? " open" : ""}`} aria-pressed={analyticalRangeOpen} onClick={() => { setAnalyticalRangeOpen(value => !value); setShowLeftSidebar(false); }}>
+              {analyticalRangeOpen ? "Analytics · close range" : "Analytics · open range"}
             </button>
           </div>
         )}

@@ -809,6 +809,11 @@ function SkylitDashboard({
               : `${visibleData.exposure_basis} basis`}
           </span>
         ) : null}
+        <button type="button" className="skylit-trade-mode-btn" aria-pressed={rangeOpen} data-testid="analytical-range-toggle" title="Open the analytical range research workspace (14–60 DTE)" onClick={() => {
+          if (onAnalyticalRangeChange) onAnalyticalRangeChange(!rangeOpen);
+          else setLocalRangeOpen(!rangeOpen);
+          setExpanded(false); setDrawerOpen(false);
+        }}>Analytical range</button>
         <button type="button" className="skylit-trade-mode-btn skylit-study-switch" data-testid="skylit-study-switch" onClick={() => {
           if (rangeOpen) {
             if (onAnalyticalRangeChange) onAnalyticalRangeChange(false);

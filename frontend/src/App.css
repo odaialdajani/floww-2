@@ -2940,6 +2940,12 @@ button, select, input {
   font-family: "Inter", system-ui, sans-serif;
   color: #c9d1d9;
   overflow: hidden;
+  /* Desktop load stability: the container is programmatic-scroll only
+     (overflow hidden), so browser scroll anchoring can only ever MOVE it
+     during late-mounting content changes (the candle chart arriving after
+     the map). Anchoring off keeps the container exactly where the app/user
+     left it; deliberate user scrolling elsewhere is unaffected. */
+  overflow-anchor: none;
   width: 100%;
 }
 
