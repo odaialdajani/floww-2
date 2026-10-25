@@ -81,6 +81,8 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
   // pan-arbitration; arrow keys nudge. Anchors stay logical {t,p} —
   // projection is derived, so they survive zoom/resize.
   const [draftTool, setDraftTool] = useState(null);
+  // CHART-C090: Alt+L/Alt+S arm the risk box's side; the rail pick keeps the last side.
+  const [draftSide, setDraftSide] = useState("long");
   const [draftAnchors, setDraftAnchors] = useState([]);
   const [dragState, setDragState] = useState(null);
   const persistDrawings = next => {
@@ -184,7 +186,7 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
   const commitDraft = point => {
     const nextAnchors = [...draftAnchors, point];
     if (nextAnchors.length >= anchorsFor(draftTool)) {
-      persistDrawings(reduceDrawings(drawings, { type: "add", drawing: createDrawing(draftTool, nextAnchors) }));
+      persistDrawings(reduceDrawings(drawings, { type: "add", drawing: createDrawing(draftTool, nextAnchors, draftTool === "risk" ? { side: draftSide } : null) }));
       setDraftTool(null); setDraftAnchors([]);
     } else setDraftAnchors(nextAnchors);
   };
@@ -233,6 +235,18 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
     if (!open) return undefined;
     const onKey = event => {
       if (!shouldHandleShortcut(event)) return;
+      // CHART-C090: Alt+L/Alt+S arm the analysis risk box (long/short) — the
+      // shell's plain-key dispatch ignores modifier combos (actionFor guard).
+      if (event.altKey && !event.ctrlKey && !event.metaKey) {
+        const k = String(event.key || "").toLowerCase();
+        if (k === "l" || k === "s") {
+          event.preventDefault();
+          setDraftTool("risk");
+          setDraftSide(k === "l" ? "long" : "short");
+          setDraftAnchors([]);
+          return;
+        }
+      }
       if (event.key === "Escape" && draftTool) { setDraftTool(null); setDraftAnchors([]); return; }
       if (!selectedDrawing) return;
       const drawing = drawings.find(d => d.id === selectedDrawing);
