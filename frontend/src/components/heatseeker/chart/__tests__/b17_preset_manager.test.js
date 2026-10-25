@@ -4,7 +4,7 @@
 import {
   createPreset, updatePresetStyle, renamePreset, deletePreset, toggleStar,
   setActivePreset, defaultPresetFor, builtInPresetFor, presetsForTool,
-  dirtyPresetFor, applyPresetToDrawing,
+  dirtyPresetFor, applyPresetToDrawing, resetPresetStyleToBuiltIn,
 } from '../drawings/presetManager';
 import { PRESET_CAP, presetForNew, isDirty, applyPreset, defaultStyleForTool, sanitizePresetStyle, PRESET_STYLE_FIELDS } from '../drawings/presetSchema';
 import { FIB_LEVELS } from '../drawings/advancedTools';
@@ -217,4 +217,40 @@ test('C130: fib arrays loaded with mismatched lengths are normalized, never cras
   const overlong = sanitizePresetStyle('fib', { ratios: [0, 1], levelColors: ['#1', '#2', '#3'], showLevels: [true, true, true] });
   expect(overlong.levelColors).toHaveLength(2);
   expect(overlong.showLevels).toHaveLength(2);
+});
+
+test('C129: preset styles are stored in CANONICAL key order — no false dirty dots from key order', () => {
+  // isDirty compares JSON.stringify(style) — key ORDER sensitive. Two
+  // logically equal styles built in different orders (reducer patches vs a
+  // preset written width-first) must not fabricate a dirty dot: sanitize
+  // emits fields in the family's canonical order, so every stored preset
+  // style and every style copied from one is order-stable.
+  const shuffled = sanitizePresetStyle('trend', { width: 2, color: '#7fa6c0' });
+  expect(Object.keys(shuffled)).toEqual(['color', 'width']);
+  const canonical = sanitizePresetStyle('trend', { color: '#7fa6c0', width: 2 });
+  expect(JSON.stringify(shuffled)).toBe(JSON.stringify(canonical));
+  // end-to-end: a preset created from a width-first style, applied to a
+  // drawing, stays CLEAN against the preset (no phantom dirty dot)
+  const created = createPreset([], { name: 'A', tool: 'trend', style: { width: 2, color: '#7fa6c0' } });
+  const drawing = applyPresetToDrawing({ id: 'd1', tool: 'trend' }, created.preset);
+  expect(dirtyPresetFor(drawing, created.list)).toBe(null);
+});
+
+test('C131: built-in reset returns a USER preset to the family default; built-ins refuse', () => {
+  const list = createPreset([], { name: 'A', tool: 'trend', style: { color: '#e3c16a', width: 3, dash: true } }).list;
+  const drawing = { id: 'd1', tool: 'trend', style: { color: '#e3c16a', width: 3, dash: true } };
+  const reset = resetPresetStyleToBuiltIn(list, list[0].id);
+  expect(reset.ok).toBe(true);
+  expect(reset.list[0].style).toEqual(defaultStyleForTool('trend'));
+  // canonical order survives the reset (order-stable isDirty contract)
+  expect(Object.keys(reset.list[0].style)).toEqual(['color', 'width', 'dash', 'extendLeft', 'extendRight', 'showLabels']);
+  // a pure op: the drawing is untouched by the preset reset
+  expect(drawing.style).toEqual({ color: '#e3c16a', width: 3, dash: true });
+  // built-ins are already the default — reset refuses
+  const builtin = builtInPresetFor('trend');
+  const refused = resetPresetStyleToBuiltIn([builtin], builtin.id);
+  expect(refused.ok).toBe(false);
+  expect(refused.list).toBeUndefined();
+  // unknown id refuses
+  expect(resetPresetStyleToBuiltIn(list, 'nope').ok).toBe(false);
 });

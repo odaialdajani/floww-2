@@ -66,3 +66,8 @@ export function cloudSyncStatus() {
     claim: 'Local device only — presets are stored on this device per chart scope; no cloud or account sync is claimed or performed.',
   };
 }
+
+// CHART-C131 "local-only explicitly labelled": the short UI label every
+// mounted preset section shows. Single-sourced here so the module's honesty
+// and the visible label can never drift apart.
+export const LOCAL_ONLY_LABEL = 'Local to this device — no cloud or account sync claimed.';

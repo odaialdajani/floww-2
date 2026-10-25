@@ -101,6 +101,17 @@ export function deletePreset(list, id) {
   return { ok: true, list: clean.filter((p) => p.id !== id) };
 }
 
+// CHART-C131 "built-in reset": a USER preset's style returns to the family
+// built-in default. Built-ins refuse — they ARE the default. Pure op: like
+// every manager operation it touches the preset list only, never drawings.
+export function resetPresetStyleToBuiltIn(list, id) {
+  const clean = Array.isArray(list) ? list : [];
+  const target = clean.find((p) => p && p.id === id);
+  if (!target) return { ok: false, error: 'preset not found: ' + id };
+  if (isBuiltIn(target)) return { ok: false, error: 'built-in presets are already the default' };
+  return { ok: true, list: clean.map((p) => (p.id === id ? { ...p, style: defaultStyleForTool(p.tool) } : p)) };
+}
+
 // Star is multi (any number starred); the starred tier wins per tool.
 // Built-ins refuse — they are the fallback tier, not user-managed state
 // (symmetric with setActivePreset), so a caller-materialized built-in can

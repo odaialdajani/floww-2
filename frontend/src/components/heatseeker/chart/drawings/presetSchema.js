@@ -85,9 +85,13 @@ export function sanitizePresetStyle(toolId, style) {
   if (!family) return null; // unsupported tool — caller refuses upstream
   const fields = PRESET_STYLE_FIELDS[family];
   const source = family === 'fib' ? normalizeFibArrays(style || {}) : (style || {});
+  // Emit in the family's CANONICAL field order, not the input's key order:
+  // isDirty compares JSON.stringify(style), which is order-sensitive — a
+  // width-first input vs a color-first input must not fabricate a dirty dot
+  // between two logically equal styles.
   const out = {};
-  for (const key of Object.keys(source)) {
-    if (fields.includes(key)) out[key] = source[key];
+  for (const key of fields) {
+    if (Object.prototype.hasOwnProperty.call(source, key)) out[key] = source[key];
   }
   return out;
 }
