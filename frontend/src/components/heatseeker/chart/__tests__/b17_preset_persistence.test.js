@@ -66,6 +66,20 @@ test('local device half: quota, bytes and secrets refusal; no account gate anywh
   expect(loadPresets('SPY')[0].name).toBe('no-account');
 });
 
+test('local device half: an oversized store is refused whole, never truncated', () => {
+  // a store whose serialized form exceeds the byte cap is refused — the
+  // caller surfaces the refusal instead of losing presets silently
+  const huge = Array.from({ length: 20 }, (_, i) => preset('big' + i, 'fib', {
+    ratios: [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1],
+    levelColors: ['#7fa6c000' + i, '#e3c16a00' + i, '#5ec98600' + i, '#d6565600' + i, '#c4a1ef00' + i, '#5a9bd400' + i, '#9a9a9a00' + i],
+    showLevels: [true, true, true, true, true, true, true],
+    fillOpacity: 0.15, width: 2, dash: false, extensions: false, trendline: true, labels: false, logScale: false, reverse: false,
+    note: 'x'.repeat(4000) + i,
+  }));
+  expect(() => savePresets('SPY', huge)).toThrow(/quota/i);
+  expect(localStorage.getItem('floww.drawing.presets.SPY')).toBe(null);
+});
+
 test('cloud sync stays honest-external: no cloud or account claim is made locally', () => {
   const status = cloudSyncStatus();
   expect(status.available).toBe(false);

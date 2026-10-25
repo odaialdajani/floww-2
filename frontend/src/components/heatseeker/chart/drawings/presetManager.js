@@ -102,9 +102,14 @@ export function deletePreset(list, id) {
 }
 
 // Star is multi (any number starred); the starred tier wins per tool.
+// Built-ins refuse — they are the fallback tier, not user-managed state
+// (symmetric with setActivePreset), so a caller-materialized built-in can
+// never accumulate a phantom star that vanishes on the next regeneration.
 export function toggleStar(list, id) {
   const clean = Array.isArray(list) ? list : [];
-  if (!clean.some((p) => p && p.id === id)) return { ok: false, error: 'preset not found: ' + id };
+  const target = clean.find((p) => p && p.id === id);
+  if (!target) return { ok: false, error: 'preset not found: ' + id };
+  if (isBuiltIn(target)) return { ok: false, error: 'built-in presets cannot be starred' };
   return { ok: true, list: clean.map((p) => (p.id === id ? { ...p, starred: !p.starred } : p)) };
 }
 

@@ -95,9 +95,9 @@ export default function DrawingRail({ drawings = [], selectedId = null,
               {p.id === linkedDirtyId && <span className="rail-preset-dirty" data-testid={'rail-preset-dirty-' + p.id} title="Selected drawing differs from this preset">• modified</span>}
               {onPresetApply && <button type="button" data-testid={'rail-preset-apply-' + p.id}
                 disabled={lockedRefuses} onClick={() => onPresetApply(p.id)}>Apply</button>}
-              {onPresetToggleStar && <button type="button" data-testid={'rail-preset-star-' + p.id}
+              {onPresetToggleStar && p.kind !== 'built-in' && <button type="button" data-testid={'rail-preset-star-' + p.id}
                 onClick={() => onPresetToggleStar(p.id)}>{p.starred ? 'Unstar' : 'Star'}</button>}
-              {onPresetSetActive && <button type="button" data-testid={'rail-preset-active-' + p.id}
+              {onPresetSetActive && p.kind !== 'built-in' && <button type="button" data-testid={'rail-preset-active-' + p.id}
                 onClick={() => onPresetSetActive(p.id)}>{p.active ? 'Active' : 'Set active'}</button>}
               {onPresetUpdate && <button type="button" data-testid={'rail-preset-update-' + p.id}
                 disabled={lockedRefuses || p.id !== linkedDirtyId}

@@ -57,13 +57,37 @@ export function defaultStyleForTool(toolId) {
 
 // Keep only the supported fields for the tool's family. Falsey SUPPORTED
 // values (false, 0, null) are preserved — C091 "preserve false options".
+// C130 fib normalization: an older writer or hand-edited store can leave
+// levelColors/showLevels shorter (or longer) than ratios — pad from the
+// canonical palette / the visible-by-default convention and trim extras so
+// a renderer never reads undefined or invents levels. Surviving user values
+// are kept in place.
+const CANONICAL_FIB_COLORS = ['#7fa6c0', '#e3c16a', '#5ec986', '#d65656', '#c4a1ef', '#5a9bd4', '#9a9a9a'];
+function normalizeFibArrays(style) {
+  const out = { ...style };
+  const n = Array.isArray(out.ratios) ? out.ratios.length : 0;
+  if (n > 0) {
+    if (Array.isArray(out.levelColors) && out.levelColors.length !== n) {
+      const colors = out.levelColors.slice(0, n);
+      while (colors.length < n) colors.push(CANONICAL_FIB_COLORS[colors.length % CANONICAL_FIB_COLORS.length]);
+      out.levelColors = colors;
+    }
+    if (Array.isArray(out.showLevels) && out.showLevels.length !== n) {
+      const visible = out.showLevels.slice(0, n);
+      while (visible.length < n) visible.push(true); // visible-by-default convention
+      out.showLevels = visible;
+    }
+  }
+  return out;
+}
 export function sanitizePresetStyle(toolId, style) {
   const family = toolFamily(toolId);
   if (!family) return null; // unsupported tool — caller refuses upstream
   const fields = PRESET_STYLE_FIELDS[family];
+  const source = family === 'fib' ? normalizeFibArrays(style || {}) : (style || {});
   const out = {};
-  for (const key of Object.keys(style || {})) {
-    if (fields.includes(key)) out[key] = style[key];
+  for (const key of Object.keys(source)) {
+    if (fields.includes(key)) out[key] = source[key];
   }
   return out;
 }

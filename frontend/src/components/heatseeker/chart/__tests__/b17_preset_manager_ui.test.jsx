@@ -133,3 +133,22 @@ test('B17: with no selected drawing the create/apply actions are refused honestl
   expect(screen.getByTestId('rail-preset-create')).toBeDisabled();
   expect(screen.getByTestId('rail-preset-apply-p1')).toBeDisabled();
 });
+
+test('C091: built-in rows offer no star and no set-active — the fallback tier is not user-managed', () => {
+  render(<DrawingRail {...baseProps} presetScope="SPY"
+    presets={[preset('b', 'Built-in trend', { kind: 'built-in' }), preset('p1', 'Mine')]}
+    onPresetCreate={jest.fn()} onPresetUpdate={jest.fn()} onPresetApply={jest.fn()}
+    onPresetToggleStar={jest.fn()} onPresetDelete={jest.fn()} onPresetSetActive={jest.fn()} />);
+  expect(screen.queryByTestId('rail-preset-star-b')).not.toBeInTheDocument();
+  expect(screen.queryByTestId('rail-preset-active-b')).not.toBeInTheDocument();
+  expect(screen.getByTestId('rail-preset-star-p1')).toBeInTheDocument();
+  expect(screen.getByTestId('rail-preset-active-p1')).toBeInTheDocument();
+});
+
+test('B17: without presetScope the section mounts without a scope line', () => {
+  render(<DrawingRail {...baseProps} presets={[]}
+    onPresetCreate={jest.fn()} onPresetUpdate={jest.fn()} onPresetApply={jest.fn()}
+    onPresetToggleStar={jest.fn()} onPresetDelete={jest.fn()} onPresetSetActive={jest.fn()} />);
+  expect(screen.getByTestId('rail-presets')).toBeInTheDocument();
+  expect(screen.queryByTestId('rail-presets-scope')).not.toBeInTheDocument();
+});

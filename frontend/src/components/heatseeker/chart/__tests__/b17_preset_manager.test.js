@@ -162,3 +162,59 @@ test('B17: old unstyled drawings keep their defaults — the manager never batch
   expect(applied.presetId).toBe(list[0].id);
   expect(old2.style).toEqual({ width: 1 }); // the source object is not mutated
 });
+
+test('C091: star and active are refused for built-ins — the fallback tier is not user-managed', () => {
+  const builtin = builtInPresetFor('trend');
+  const withBuiltin = [builtin, ...createPreset([], { name: 'Mine', tool: 'trend', style: {} }).list];
+  const starred = toggleStar(withBuiltin, builtin.id);
+  expect(starred.ok).toBe(false); // symmetric with setActivePreset's existing refusal
+  expect(starred.list).toBeUndefined();
+  // a stale star/active flag on a caller-materialized built-in is normalized
+  // away by the manager tier resolution — the built-in stays the fallback
+  const weird = [{ ...builtin, starred: true, active: true }];
+  const resolved = defaultPresetFor(weird, 'trend');
+  expect(resolved.kind).toBe('built-in');
+});
+
+test('C129: a drawing linked to a DELETED preset has no dirty dot and no enabled Update', () => {
+  const list = createPreset([], { name: 'A', tool: 'trend', style: { width: 1 } }).list;
+  const drawing = applyPresetToDrawing({ id: 'd1', tool: 'trend' }, list[0]);
+  // the caller deletes the preset; the stale link resolves to nothing
+  const gone = deletePreset(list, list[0].id).list;
+  expect(dirtyPresetFor(drawing, gone)).toBe(null);
+  // even after drifting, a stale link never fabricates a dirty reference
+  const drifted = { ...drawing, style: { width: 9 } };
+  expect(dirtyPresetFor(drifted, gone)).toBe(null);
+});
+
+test('manager: rename succeeds for user presets and refuses collisions', () => {
+  const a = createPreset([], { name: 'A', tool: 'trend', style: {} }).list;
+  const b = createPreset(a, { name: 'B', tool: 'trend', style: {} }).list;
+  const renamed = renamePreset(b, b.find((p) => p.name === 'A').id, 'Renamed');
+  expect(renamed.ok).toBe(true);
+  expect(renamed.list.find((p) => p.id === b.find((q) => q.name === 'A').id).name).toBe('Renamed');
+  const collision = renamePreset(renamed.list, renamed.list.find((p) => p.name === 'Renamed').id, 'b');
+  expect(collision.ok).toBe(false);
+  expect(collision.error).toMatch(/exists/i);
+});
+
+test('C130: fib arrays loaded with mismatched lengths are normalized, never crash-rendered', () => {
+  // an older writer or hand-edited store can leave levelColors/showLevels
+  // shorter than ratios — sanitize pads honestly so a renderer never reads
+  // undefined, and the roundtrip keeps every surviving user value.
+  const ragged = sanitizePresetStyle('fib', {
+    ratios: [0, 0.5, 1],
+    levelColors: ['#111111'],        // 1 of 3
+    showLevels: [true],              // 1 of 3
+    width: 2,
+  });
+  expect(ragged.ratios).toEqual([0, 0.5, 1]);
+  expect(ragged.levelColors).toHaveLength(3);
+  expect(ragged.levelColors[0]).toBe('#111111'); // user value survives
+  expect(ragged.showLevels).toHaveLength(3);
+  expect(ragged.showLevels[0]).toBe(true);       // user value survives
+  // extra entries beyond ratios are trimmed (never invented levels)
+  const overlong = sanitizePresetStyle('fib', { ratios: [0, 1], levelColors: ['#1', '#2', '#3'], showLevels: [true, true, true] });
+  expect(overlong.levelColors).toHaveLength(2);
+  expect(overlong.showLevels).toHaveLength(2);
+});
