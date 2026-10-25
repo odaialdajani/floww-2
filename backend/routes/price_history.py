@@ -317,3 +317,38 @@ async def price_history(ticker: str, days: int = Query(5, ge=1, le=2600),
             ticker, bars, received_at, bar_seconds, opening_minutes,
             tick_size, units, entitlement, max_delay_seconds)
     return result
+
+
+@router.get("/mapped-levels/{target}")
+async def mapped_levels(
+    target: str,
+    source: str = Query(..., min_length=1, max_length=12),
+    cursor: float = Query(...),
+    combine: str | None = Query(None, max_length=32),
+    scope: str | None = Query(None, max_length=64),
+):
+    """B09 cross-instrument mapped levels: the ratio lock + typed refusals only.
+
+    Contract: C2-PRODUCER-CONTRACTS-20261024.json v2 b09_mapped_levels_contract.
+    Supported pairs only (C040); the review-mode ratio is an explicit
+    horizontal lock at-or-before the cursor (C042); C115 board-combination
+    stays a refusal; levels are never invented (levels_status says so).
+    """
+    from services.chart_mapped_levels import is_supported_pair, mapped_levels_response
+
+    target = target.strip().upper()
+    source = source.strip().upper()
+    combine_clean = (combine or "").strip().lower() or None
+    scope_clean = (scope or "").strip().upper() or None
+
+    # Pair validation BEFORE any provider read: an unsupported pair never spends one.
+    if not is_supported_pair(source, target):
+        return mapped_levels_response(target, source, cursor, [], [], combine_clean)
+
+    src_bars, _, _ = await _history_bars(source, "DAY", "FIVE_MINUTES", "regular")
+    tgt_bars, _, _ = await _history_bars(target, "DAY", "FIVE_MINUTES", "regular")
+    body = mapped_levels_response(target, source, cursor,
+                                   src_bars or [], tgt_bars or [], combine_clean)
+    if scope_clean:
+        body["scope"] = scope_clean
+    return body
