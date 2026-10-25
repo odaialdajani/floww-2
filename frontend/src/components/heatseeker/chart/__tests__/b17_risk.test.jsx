@@ -1,12 +1,19 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import PriceNodeHistory from '../../PriceNodeHistory';
 import { createDrawing, geometryFor, TOOLS } from '../drawings/drawingReducer';
 import { DRAWING_TOOLS, isSupportedTool, anchorsFor, toolFamily } from '../drawings/toolRegistry';
 import { riskLevels } from '../drawings/advancedTools';
 import { loadDrawings, saveDrawings } from '../drawings/drawingPersistence';
+import { actionFor, DEFAULT_SHORTCUTS } from '../ChartShortcuts';
 
 jest.mock('axios', () => ({ get: jest.fn(), post: jest.fn() }));
+
+const firePointer = (el, type, x, y, extra = {}) => {
+  const event = new window.PointerEvent(type, { bubbles: true, clientX: x, clientY: y, pointerType: 'mouse', ...extra });
+  act(() => { el.dispatchEvent(event); });
+  return event;
+};
 const arm = () => {
   const axios = require('axios');
   axios.get.mockImplementation(async () => ({ data: { ticker: 'SPY', frames: [
@@ -107,4 +114,37 @@ test('the rail offers the risk tool and picking it arms a three-anchor draft', a
   // the draft needs three anchors (CHART-C090 entry/stop/target) before it commits
   expect(anchorsFor('risk')).toBe(3);
   expect(screen.getByTestId('rail-cancel')).toBeInTheDocument();
+});
+
+test("CHART-C090: Alt+L/Alt+S arm the risk tool by side; modifier combos never fire plain-key chart shortcuts", async () => {
+  // The workspace's rebindable single-key dispatch must not claim Alt combos
+  // (the pulse-page precedent applied to the chart shell) — RED before the guard.
+  expect(actionFor(DEFAULT_SHORTCUTS, { target: { tagName: "BODY" }, key: "l", altKey: true })).toBe(null);
+  // plain keys keep their incumbent mapping
+  expect(actionFor(DEFAULT_SHORTCUTS, { target: { tagName: "BODY" }, key: "l" })).toBe("layouts");
+  arm();
+  window.localStorage.removeItem("floww.drawings.SPY");
+  render(<PriceNodeHistory ticker="SPY" open />);
+  await waitFor(() => expect(screen.getByTestId("drawing-layer")).toBeInTheDocument());
+  const layer = screen.getByTestId("drawing-layer");
+  // Alt+L arms the risk tool with side long; three pointer anchors commit it
+  fireEvent.keyDown(window, { key: "l", altKey: true });
+  expect(screen.getByTestId("rail-tool-risk")).toHaveAttribute("aria-pressed", "true");
+  firePointer(layer, "pointerdown", 150, 90);
+  firePointer(layer, "pointerdown", 300, 150);
+  firePointer(layer, "pointerdown", 450, 210);
+  let persisted = JSON.parse(window.localStorage.getItem("floww.drawings.SPY"));
+  expect(persisted).toHaveLength(1);
+  expect(persisted[0].tool).toBe("risk");
+  expect(persisted[0].side).toBe("long");
+  // Alt+S arms side short for the next box
+  fireEvent.keyDown(window, { key: "s", altKey: true });
+  expect(screen.getByTestId("rail-tool-risk")).toHaveAttribute("aria-pressed", "true");
+  firePointer(layer, "pointerdown", 150, 90);
+  firePointer(layer, "pointerdown", 300, 150);
+  firePointer(layer, "pointerdown", 450, 210);
+  persisted = JSON.parse(window.localStorage.getItem("floww.drawings.SPY"));
+  expect(persisted).toHaveLength(2);
+  expect(persisted[1].tool).toBe("risk");
+  expect(persisted[1].side).toBe("short");
 });

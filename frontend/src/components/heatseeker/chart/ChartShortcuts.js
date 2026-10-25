@@ -28,9 +28,12 @@ export function keyOf(event) {
   return String(event?.key ?? '').toLowerCase();
 }
 
-// The single dispatch rule: typing fields never fire chart shortcuts.
+// The single dispatch rule: typing fields never fire chart shortcuts, and
+// modifier combos (Alt/Ctrl/Meta) never fire the rebindable single-key map —
+// those belong to focused handlers (CHART-C090's Alt+L/Alt+S risk armer).
 export function actionFor(map, event) {
   if (!shouldHandleShortcut(event)) return null;
+  if (event?.altKey || event?.ctrlKey || event?.metaKey) return null;
   const key = keyOf(event);
   for (const action of REBINDABLE_ACTIONS) {
     if (map[action] === key) return action;
