@@ -468,7 +468,7 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
         <rect x="0" y="0" width={drawingViewport.width} height={drawingViewport.height} fill="transparent" pointerEvents={draftTool ? "all" : "none"} />
         {drawings.filter(d=>d.visible!==false).map(d=>{const g=geometryFor(d.tool,d.anchors,drawingViewport,d);
           if(!g)return null;
-          const common={"data-testid":"drawing-shape","data-drawing-id":d.id,"data-selected":d.id===selectedDrawing,stroke:d.id===selectedDrawing?"#e3c16a":"#7fa6c0",strokeWidth:d.id===selectedDrawing?2:1.2,fill:"none",pointerEvents:"stroke",onPointerDown:e=>onDrawingElementPointerDown(e,d)};
+          const common={"data-testid":"drawing-shape","data-drawing-id":d.id,"data-selected":d.id===selectedDrawing,stroke:d.style?.color||(d.id===selectedDrawing?"#e3c16a":"#7fa6c0"),strokeWidth:d.style?.width||(d.id===selectedDrawing?2:1.2),strokeDasharray:d.style?.dash?"6 3":undefined,fill:"none",pointerEvents:"stroke",onPointerDown:e=>onDrawingElementPointerDown(e,d)};
           if(g.kind==="risk"){
             // CHART-C090: analysis-only entry/stop/target box — shaded stop->entry
             // (risk) and entry->target (reward) zones, three role lines and the
@@ -509,7 +509,7 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
           arrows nudge; Escape cancels; Undo pops. */}
 
       <DrawingRail drawings={drawings} selectedId={selectedDrawing}
-      tools={REDUCER_TOOLS.map(id=>({id,anchors:anchorsFor(id)}))} draftTool={draftTool}
+      tools={REDUCER_TOOLS.map(id=>({id,anchors:anchorsFor(id)}))} draftTool={draftTool} onStyle={(id,style)=>persistDrawings(reduceDrawings(drawings,{type:"style",id,style}))}
       onToolPick={id=>{setDraftTool(draftTool===id?null:id);setDraftAnchors([]);}}
       onUndo={()=>persistDrawings(reduceDrawings(drawings,{type:"undo"}))}
       onCancelDraft={()=>{setDraftTool(null);setDraftAnchors([]);}}
