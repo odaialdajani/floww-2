@@ -1,0 +1,121 @@
+/* Indicator browser panel — restrained dark, existing palette vars only.
+   One bounded panel; no new visual brand, no floating docks. */
+.indicators-panel {
+  background: var(--panel, #0d1117);
+  border: 1px solid var(--border, #1f2733);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--text, #dce8f2);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 100%;
+  overflow-y: auto;
+}
+.indicators-panel .ind-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.indicators-panel .ind-head input[type="search"] {
+  flex: 1 1 140px;
+  min-width: 120px;
+  background: var(--surface-1, #080b10);
+  border: 1px solid var(--border, #1f2733);
+  border-radius: 6px;
+  color: inherit;
+  font-size: 12px;
+  padding: 4px 8px;
+}
+.indicators-panel .ind-count { font-size: 12px; color: #8fa6ba; white-space: nowrap; }
+.indicators-panel .ind-group { display: flex; flex-direction: column; gap: 2px; }
+.indicators-panel .ind-group-label {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #8fa6ba;
+  margin: 4px 0 2px;
+}
+.indicators-panel .ind-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+.indicators-panel .ind-row:hover { background: rgba(127, 166, 192, 0.06); }
+.indicators-panel .ind-row .ind-name { font-size: 13px; flex: 0 0 auto; }
+.indicators-panel .ind-row .ind-note { font-size: 12px; color: #8fa6ba; flex: 1 1 auto; }
+.indicators-panel .ind-row.ind-unavailable .ind-name { color: #8fa6ba; }
+.indicators-panel .ind-actions { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+.indicators-panel button {
+  background: #161d27;
+  border: 1px solid var(--border, #1f2733);
+  border-radius: 5px;
+  color: var(--text, #dce8f2);
+  font-size: 12px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+.indicators-panel button[aria-pressed="true"] { border-color: #e3c16a; color: #e3c16a; }
+.indicators-panel button.ind-chip { border-style: dashed; padding: 3px 8px; color: #8fa6ba; }
+.indicators-panel .ind-note-row {
+  font-size: 12px;
+  color: #e3c16a;
+  border: 1px dashed rgba(227, 193, 106, 0.4);
+  border-radius: 6px;
+  padding: 4px 8px;
+}
+.indicators-panel .ind-active { display: flex; flex-direction: column; gap: 4px; }
+.indicators-panel .ind-instance {
+  border: 1px solid var(--border, #1f2733);
+  border-radius: 6px;
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.indicators-panel .ind-instance-head { display: flex; align-items: center; gap: 6px; }
+.indicators-panel .ind-instance-head .ind-name { flex: 1 1 auto; }
+.indicators-panel .ind-editors { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+.indicators-panel .ind-editors label { font-size: 12px; color: #8fa6ba; display: flex; gap: 4px; align-items: center; }
+.indicators-panel .ind-editors input[type="number"] {
+  width: 64px;
+  background: var(--surface-1, #080b10);
+  border: 1px solid var(--border, #1f2733);
+  border-radius: 5px;
+  color: inherit;
+  font-size: 12px;
+  padding: 2px 4px;
+}
+.indicators-panel .ind-editors select {
+  background: var(--surface-1, #080b10);
+  border: 1px solid var(--border, #1f2733);
+  border-radius: 5px;
+  color: inherit;
+  font-size: 12px;
+  padding: 2px 4px;
+}
+.indicators-panel .ind-check input { accent-color: #e3c16a; }
+.indicators-panel .ind-mults { display: inline-flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+.indicators-panel .ind-mult {
+  border: 1px solid var(--border, #1f2733);
+  border-radius: 10px;
+  padding: 1px 6px;
+  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.indicators-panel .ind-mult .ind-mult-x {
+  padding: 0 3px;
+  font-size: 11px;
+  border: none;
+  background: none;
+  color: #8fa6ba;
+  cursor: pointer;
+}
+.indicators-panel .ind-mult-add { display: inline-flex; gap: 2px; align-items: center; }
+.indicators-panel .ind-mult-add input { width: 48px; }
