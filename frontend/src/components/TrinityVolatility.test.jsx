@@ -358,9 +358,11 @@ test("term structure keeps every declared expiry on the axis, missing ones are g
   expect(termNote19.textContent).toContain("put 768 IV 3.6578 Δ−0.505");
   expect(termNote19.textContent).toContain("0.06pt");
 
-  // 2026-10-21 call-only and 2026-10-26 no rows stay explicit on the axis
+  // 2026-10-21 call-only and 2026-10-26 no rows stay explicit on the axis.
+  // (M2 G3 2026-10-24: the exact rows now disclose behind the named details —
+  // .tv-cell-h-notes > details > div — the content contract is unchanged.)
   const termCell = screen.getByText(/ATM IV Term Structure/).closest(".tv-cell");
-  const termNotes = Array.from(termCell.querySelectorAll(".tv-cell-h-notes > div"));
+  const termNotes = Array.from(termCell.querySelectorAll(".tv-cell-h-notes div"));
   const termNote21 = termNotes.find((n) => n.textContent.includes("2026-10-21"));
   const termNote26 = termNotes.find((n) => n.textContent.includes("2026-10-26"));
   expect(termNote21).toBeDefined();

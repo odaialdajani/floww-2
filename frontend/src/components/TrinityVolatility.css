@@ -146,10 +146,26 @@
    <small> tags inside 12px headers, so the browser's 0.8em default rendered
    the honesty/approximation disclaimers ("nearest-observation approximation",
    "call & put" scope) at 9.6px — the least readable text on the Volatility
-   tab. Floor every small inside the Volatility root at 11px, matching the
-   surrounding .tv-sub/.tv-status rhythm. Measured before: 3 nodes <10px;
-   target after: 0. */
-.tv-root small { font-size: 11px; }
+   tab. H3 G1 (2026-10-24): the row letter reads "secondary >=12px", and the
+   captions are semantically the most important tier, so they join the
+   standard secondary group at exactly 12px rather than a separate 11px tier.
+   Measured before: 3 nodes <10px; after: 0 nodes under 12px. */
+.tv-root small { font-size: 12px; }
+/* M2 G3: the long exact-source review rows disclose behind a named details —
+   closed by default keeps the tab an uncluttered read; the summary names the
+   content and the full exact rows are one click away (never truncated). */
+.tv-source-details > summary { cursor: pointer; color: #8fa8b5; padding: 2px 0; white-space: nowrap; }
+.tv-source-details > summary::-webkit-details-marker { display: none; }
+.tv-source-details > summary::before { content: "▸ "; color: #6d8391; }
+.tv-source-details[open] > summary::before { content: "▾ "; }
+.tv-source-details > summary:focus-visible { outline: 2px solid #e2bf73; outline-offset: 2px; }
+/* M2 G2 (Hermes-2, 2026-10-24): the row letter reads "each shown plot
+   >=300px"; the fixed 280px body left every lens plot 20px short of the
+   letter. The effective rule is the 320px cascade line below (this file's
+   later same-specificity rule wins over the early .tv-cell-b declaration).
+   320px meets the letter with headroom; the tab scrolls, so taller plots
+   cost nothing. Measured receipt per plot at 1470x950 and 1024x768 in
+   m2-gaps-closure.json. */
 .tv-cell-h-notes > div { padding: 1px 0; }
 .tv-status { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
 .tv-status-row { margin: 0; padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,.04); display: flex; flex-direction: column; gap: 2px; }
@@ -187,7 +203,7 @@
 .tv-header { flex-wrap:wrap; }
 .tv-sub,.tv-controls,.tv-cell-h,.tv-legend,.tv-cell-h-notes,.tv-status,.tv-error-note { font-size:12px; line-height:1.5; color:#abb6c5; }
 .tv-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr)); flex:none; align-items:start; }
-.tv-cell-b { min-height:280px; height:280px; flex:none; }
+.tv-cell-b { min-height:320px; height:320px; flex:none; }
 .tv-legend { flex-wrap:wrap; overflow:visible; }
 .tv-status-row,.tv-cell-h-notes { overflow-wrap:anywhere; }
 .tv-cell-h { min-height:46px; }
