@@ -1,7 +1,10 @@
 // B08 study-instance persistence: per-symbol, versioned, quota-capped,
 // corrupt rows recover to empty — the drawing-store pattern applied to study
 // instances. Local only — never a cross-device sync claim. No secrets: only
-// registry-known study names + validated numeric settings are stored.
+// registry-known kinds + validated numeric settings are stored. The stored
+// rows carry the contract shape {instanceId, kind, settings, source,
+// visible, order} plus additive provenance (paneKey/created) verbatim —
+// booleans and numbers round-trip exactly, never coerced.
 import { getStudy, validateStudySettings } from '../indicators/registry';
 
 export const STUDY_QUOTA = 24;
@@ -11,13 +14,13 @@ const keyFor = (ticker) => `floww.chart.studies.${String(ticker || '').toUpperCa
 
 function isPlainInstance(value) {
   if (!value || typeof value !== 'object') return false;
-  if (typeof value.id !== 'string' || !value.id) return false;
-  const declaration = getStudy(value.study);
+  if (typeof value.instanceId !== 'string' || !value.instanceId) return false;
+  const declaration = getStudy(value.kind);
   if (!declaration) return false;
   const settings = value.settings && typeof value.settings === 'object' ? value.settings : null;
   if (!settings) return false;
   // persisted settings must still validate against the registry declaration
-  return validateStudySettings(value.study, settings);
+  return validateStudySettings(value.kind, settings);
 }
 
 export function loadStudyInstances(ticker) {
