@@ -2,7 +2,7 @@ import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import PriceNodeHistory from '../../PriceNodeHistory';
 import { createDrawing, geometryFor, TOOLS } from '../drawings/drawingReducer';
-import { DRAWING_TOOLS, isSupportedTool } from '../drawings/toolRegistry';
+import { DRAWING_TOOLS, isSupportedTool, anchorsFor } from '../drawings/toolRegistry';
 import { FIB_LEVELS, fibPrices } from '../drawings/advancedTools';
 
 jest.mock('axios', () => ({ get: jest.fn(), post: jest.fn() }));
@@ -25,9 +25,14 @@ test('the reducer accepts every registry tool and still refuses the rest', () =>
     expect(TOOLS).toContain(id);
     expect(() => createDrawing(id, [{ t: 1, p: 100 }, { t: 2, p: 101 }])).not.toThrow();
   }
-  // 'risk' is a helper concept, NOT a creatable tool — the gate refuses it
-  expect(isSupportedTool('risk')).toBe(false);
-  expect(() => createDrawing('risk', [])).toThrow('unsupported-tool');
+  // CHART-C090 (owner-approved 2026-10-24): "Alt+L/S analysis entry/stop/target
+  // risk box, never broker intent" — the anchor semantics the old refusal
+  // guarded are defined BY the preserved requirement row, so 'risk' is now a
+  // creatable three-anchor analysis tool (pinned in b17_risk.test.jsx);
+  // the analysis-only marker is part of the tool contract.
+  expect(isSupportedTool('risk')).toBe(true);
+  expect(anchorsFor('risk')).toBe(3);
+  expect(() => createDrawing('madeup', [])).toThrow('unsupported-tool');
 });
 
 test('fib geometry renders the seven evidence-backed levels across the anchor span', () => {

@@ -452,9 +452,22 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
         onPointerDown={onDrawingLayerPointerDown} onPointerMove={onDrawingLayerPointerMove} onPointerUp={onDrawingLayerPointerUp} onPointerLeave={onDrawingLayerPointerUp}>
         <defs><clipPath id={`drawings-${drawingViewport.clipId}`}><rect width={drawingViewport.width} height={drawingViewport.height}/></clipPath><marker id={`arrow-${drawingViewport.clipId}`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#7fa6c0"/></marker></defs>
         <rect x="0" y="0" width={drawingViewport.width} height={drawingViewport.height} fill="transparent" pointerEvents={draftTool ? "all" : "none"} />
-        {drawings.filter(d=>d.visible!==false).map(d=>{const g=geometryFor(d.tool,d.anchors,drawingViewport);
+        {drawings.filter(d=>d.visible!==false).map(d=>{const g=geometryFor(d.tool,d.anchors,drawingViewport,d);
           if(!g)return null;
           const common={"data-testid":"drawing-shape","data-drawing-id":d.id,"data-selected":d.id===selectedDrawing,stroke:d.id===selectedDrawing?"#e3c16a":"#7fa6c0",strokeWidth:d.id===selectedDrawing?2:1.2,fill:"none",pointerEvents:"stroke",onPointerDown:e=>onDrawingElementPointerDown(e,d)};
+          if(g.kind==="risk"){
+            // CHART-C090: analysis-only entry/stop/target box — shaded stop->entry
+            // (risk) and entry->target (reward) zones, three role lines and the
+            // R-multiple; never a broker intent.
+            const roles=Object.fromEntries(g.levels.map(l=>[l.role,l]));
+            const zone=(a,b,testid,fill)=>a&&b&&Number.isFinite(a.y)&&Number.isFinite(b.y)?<rect key={testid} data-testid={testid} x={g.x0} width={Math.max(1,g.x1-g.x0)} y={Math.min(a.y,b.y)} height={Math.abs(a.y-b.y)} fill={fill} stroke="none" pointerEvents="none"/>:null;
+            return <g key={d.id} {...common} data-testid="risk-shape" fill="none">
+              {zone(roles.entry,roles.stop,"risk-zone-stop","rgba(214,86,86,0.14)")}
+              {zone(roles.entry,roles.target,"risk-zone-target","rgba(94,201,134,0.10)")}
+              {g.levels.map(l=><line key={l.role} data-testid={"risk-line-"+l.role} x1={g.x0} x2={g.x1} y1={l.y} y2={l.y} stroke={l.role==="entry"?"#e3c16a":l.role==="stop"?"#d65656":"#5ec986"} strokeWidth={common.strokeWidth} pointerEvents="stroke" onPointerDown={e=>onDrawingElementPointerDown(e,d)}/>)}
+              {g.levels.map(l=><text key={l.role+"-lbl"} x={g.x1+4} y={l.y} fontSize="9" fill="#8fa6ba" pointerEvents="none">{l.role} {l.price}</text>)}
+              <text data-testid="risk-label" x={g.x0} y={Math.min(...g.levels.map(l=>l.y))-4} fontSize="10" fill={d.id===selectedDrawing?"#e3c16a":"#8fa6ba"} pointerEvents="none">R {g.rMultiple.toFixed(1)} · {g.side} · analysis only</text>
+            </g>;}
           if(g.kind==="rect")return <rect key={d.id} {...common} x={g.x} y={g.y} width={Math.max(g.width,2)} height={Math.max(g.height,2)} />;
           if(g.kind==="label")return <text key={d.id} {...common} x={g.x} y={g.y} fontSize="12" fill="#dce8f2">{d.text||"text"}</text>;
           if(g.kind==="fib")return <g key={d.id} {...common} fill="none">{g.levels.map((level,li)=>(<g key={d.id+":"+li} data-testid="fib-level" data-ratio={level.ratio}>

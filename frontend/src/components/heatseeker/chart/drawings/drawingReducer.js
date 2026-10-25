@@ -5,11 +5,15 @@
 // Anchors are LOGICAL {t,p} values (epoch ms, price) — never pixels. Projection
 // maps them through the current viewport, so zoom/resize changes where they
 // render but never what they mean.
-import { fibPrices } from './advancedTools';
-export const TOOLS = ['horizontal', 'trend', 'vertical', 'rectangle', 'text', 'arrow', 'horizontal-ray', 'brush', 'fib'];
-export function createDrawing(tool, anchors) {
+import { fibPrices, riskLevels } from './advancedTools';
+export const TOOLS = ['horizontal', 'trend', 'vertical', 'rectangle', 'text', 'arrow', 'horizontal-ray', 'brush', 'fib', 'risk'];
+export function createDrawing(tool, anchors, extra = {}) {
   if (!TOOLS.includes(tool)) throw new Error('unsupported-tool');
-  return { id: Math.random().toString(36).slice(2), tool, anchors, visible: true, locked: false, revision: 1 };
+  // Only known-safe extras merge (side for the risk tool); anything else —
+  // especially secrets or broker fields — never touches a drawing.
+  const { side, style } = extra || {};
+  return { id: Math.random().toString(36).slice(2), tool, anchors, visible: true, locked: false, revision: 1,
+    ...(side ? { side } : {}), ...(style ? { style } : {}) };
 }
 export function magnet(price, ohlc) {
   const cands = [ohlc.open, ohlc.high, ohlc.low, ohlc.close].filter((v) => Number.isFinite(v));
@@ -86,7 +90,8 @@ export function suppressesPan(interaction) {
 }
 
 // Geometry descriptor per tool (rendering contract for the drawing layer).
-export function geometryFor(tool, anchors, vp) {
+// `extra` carries the drawing itself (risk side, style) where the tool needs it.
+export function geometryFor(tool, anchors, vp, extra = null) {
   if (!Array.isArray(anchors) || !anchors.length) return null;
   const points = anchors.map(a => projectAnchor(a, vp)).filter(Boolean);
   if (!points.length) return null;
@@ -113,6 +118,20 @@ export function geometryFor(tool, anchors, vp) {
     return { kind: 'rect', x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), width: Math.abs(b.x - a.x), height: Math.abs(b.y - a.y) };
   }
   if (tool === 'text') return { kind: 'label', x: points[0].x, y: points[0].y };
+  if (tool === 'risk') {
+    // CHART-C090: three order-independent anchors -> sorted entry/stop/target
+    // levels for the drawing's side; degenerate inputs render NOTHING (the
+    // helper refuses), so no zone or R-multiple is ever fabricated.
+    const levels = riskLevels(anchors.map(a => a.p), extra?.side || 'long');
+    if (!levels) return null;
+    const xs = points.map(p => p.x);
+    const x0 = Math.min(...xs), x1 = Math.max(...xs);
+    if (!(x1 > x0)) return null;
+    const yFor = price => projectAnchor({ t: anchors[0].t, p: price }, vp).y;
+    return { kind: 'risk', side: levels.side, rMultiple: levels.rMultiple, x0, x1,
+      levels: [['entry', levels.entry], ['stop', levels.stop], ['target', levels.target]]
+        .map(([role, price]) => ({ role, price, y: yFor(price) })) };
+  }
   return { kind: 'line', points };
 }
 
