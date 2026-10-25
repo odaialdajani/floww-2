@@ -3,6 +3,8 @@ import axios from "axios";
 import { API } from "../../config/api";
 import RecordedPriceChart from "./RecordedPriceChart";
 import DrawingRail from "./chart/drawings/DrawingRail";
+import { loadPresets, savePresets, PRESET_STORAGE_VERSION } from "./chart/drawings/presetPersistence";
+import { defaultPresetFor, createPreset, updatePresetStyle, deletePreset, resetPresetStyleToBuiltIn, toggleStar, setActivePreset, applyPresetToDrawing } from "./chart/drawings/presetManager";
 import { loadDrawings, saveDrawings } from "./chart/drawings/drawingPersistence";
 import { reduceDrawings, createDrawing, geometryFor, magnetPoint, nudgeDrawing, canEdit, suppressesPan, unprojectPoint, viewportFor, TOOLS as REDUCER_TOOLS } from "./chart/drawings/drawingReducer";
 import { barAt, sweepExtrema, visibleSnapshot } from "./chart/replay/replayReducer";
@@ -92,6 +94,37 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
   const persistDrawings = next => {
     setDrawings(next);
     try { saveDrawings(ticker, next); } catch { /* quota: in-memory only */ }
+  };
+  // ── B17 preset production adoption (C091/C129/C130/C131) ──────────────────
+  // The caller state for the delivered preset manager: ONE scoped list bound
+  // to this pane's ticker, loaded per scope, persisted only through complete
+  // successful whole-store operations. Local only — no cloud/account sync.
+  const [presetList, setPresetList] = useState([]);
+  const [presetError, setPresetError] = useState(null);
+  useEffect(() => {
+    setPresetError(null);
+    // future storage envelopes are not ours to interpret: refuse to load AND
+    // to overwrite — surfaced honestly, never a silent empty
+    try {
+      const raw = window.localStorage.getItem('floww.drawing.presets.' + String(ticker || '').toUpperCase());
+      const env = raw ? JSON.parse(raw) : null;
+      if (env && typeof env.v === 'number' && env.v > PRESET_STORAGE_VERSION) {
+        setPresetList([]);
+        setPresetError('newer preset storage version (' + env.v + ') — presets not loaded; nothing overwritten');
+        return;
+      }
+    } catch { /* fall through to the delivered loader */ }
+    setPresetList(loadPresets(ticker));
+  }, [ticker]);
+  const commitPresets = next => {
+    // whole-store write; on ANY refusal the operation is dropped and the
+    // error is surfaced — the in-memory list never drifts from the store
+    try { savePresets(ticker, next); setPresetList(next); setPresetError(null); return true; }
+    catch (err) { setPresetError(String(err && err.message ? err.message : err)); return false; }
+  };
+  const requestPresetOp = result => {
+    if (!result || result.ok === false) { setPresetError(result && result.error ? result.error : 'preset operation refused'); return false; }
+    return commitPresets(result.list);
   };
   const recordNodes = useCallback(async () => {
     if (!onRecordNodes || recording) return;
@@ -267,7 +300,11 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
   const commitDraft = point => {
     const nextAnchors = [...draftAnchors, point];
     if (nextAnchors.length >= anchorsFor(draftTool)) {
-      persistDrawings(reduceDrawings(drawings, { type: "add", drawing: createDrawing(draftTool, nextAnchors, draftTool === "risk" ? { side: draftSide } : null) }));
+      // C091: a NEW drawing gets this tool's preset default — starred >
+      // active > built-in — and records the link so dirty tracking is honest
+      const base = createDrawing(draftTool, nextAnchors, draftTool === "risk" ? { side: draftSide } : null);
+      const creationPreset = defaultPresetFor(presetList, draftTool);
+      persistDrawings(reduceDrawings(drawings, { type: "add", drawing: creationPreset ? applyPresetToDrawing(base, creationPreset) : base }));
       setDraftTool(null); setDraftAnchors([]);
     } else setDraftAnchors(nextAnchors);
   };
@@ -650,7 +687,23 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
       onSelect={setSelectedDrawing}
       onDelete={id => { if (selectedDrawing === id) setSelectedDrawing(null); persistDrawings(reduceDrawings(drawings, { type: "delete", id })); }}
       onToggleLock={id => persistDrawings(drawings.map(d => d.id === id ? { ...d, locked: !d.locked } : d))}
-      onToggleHide={id => persistDrawings(drawings.map(d => d.id === id ? { ...d, visible: d.visible === false } : d))} />
+      onToggleHide={id => persistDrawings(drawings.map(d => d.id === id ? { ...d, visible: d.visible === false } : d))}
+      presets={presetList}
+      presetScope={ticker}
+      onPresetCreate={request => requestPresetOp(createPreset(presetList, request))}
+      onPresetUpdate={(id, style) => requestPresetOp(updatePresetStyle(presetList, id, style))}
+      onPresetApply={id => {
+        // the SELECTED drawing only — never a silent restyle of many
+        const preset = presetList.find(p => p && p.id === id);
+        const target = drawings.find(d => d && d.id === selectedDrawing);
+        if (!preset || !target || target.locked) return;
+        persistDrawings(drawings.map(d => d.id === target.id ? applyPresetToDrawing(d, preset) : d));
+      }}
+      onPresetToggleStar={id => requestPresetOp(toggleStar(presetList, id))}
+      onPresetSetActive={id => requestPresetOp(setActivePreset(presetList, id))}
+      onPresetReset={id => requestPresetOp(resetPresetStyleToBuiltIn(presetList, id))}
+      onPresetDelete={id => requestPresetOp(deletePreset(presetList, id))} />
+      {presetError && <p className="price-preset-error" data-testid="preset-error" role="note">{presetError}</p>}
     </details>}
     {open&&velocityRows.length>0&&(
       <div className="price-history-velocity" data-testid="velocity-strip" aria-label="Fastest-moving nodes">
