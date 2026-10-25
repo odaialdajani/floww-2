@@ -80,6 +80,25 @@ test('local device half: an oversized store is refused whole, never truncated', 
   expect(localStorage.getItem('floww.drawing.presets.SPY')).toBe(null);
 });
 
+test('isolation: two same-scope instances never merge — last save wins, in-memory lists untouched', () => {
+  // Two chart instances sharing a scope (two tabs) both load, both edit,
+  // each saves: the store holds the LAST save whole — no merge, no partial
+  // rows, no corruption. Each instance's own array stays intact in memory.
+  const listA = [preset('A1', 'trend'), preset('A2', 'fib')];
+  const listB = [preset('B1', 'trend')];
+  savePresets('SPY', listA);
+  savePresets('SPY', listB);
+  const stored = loadPresets('SPY');
+  expect(stored).toEqual(listB);       // last save wins, whole
+  expect(stored).toHaveLength(1);      // no merged A-rows
+  expect(listA).toHaveLength(2);       // the earlier instance's memory intact
+  // and the next save from the stale instance overwrites whole again —
+  // the contract is whole-store last-write-wins, never a cross-tab merge
+  // claim (cross-tab live sync is NOT claimed locally).
+  savePresets('SPY', listA);
+  expect(loadPresets('SPY')).toEqual(listA);
+});
+
 test('cloud sync stays honest-external: no cloud or account claim is made locally', () => {
   const status = cloudSyncStatus();
   expect(status.available).toBe(false);
