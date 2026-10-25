@@ -8,7 +8,7 @@ const bound=(value,low,high)=>Math.max(low,Math.min(high,value));
 const axisTime=value=>new Date(value).toLocaleString('en-US',{timeZone:'America/New_York',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false});
 const closeDetails=element=>{const details=element.closest('details');if(details){details.open=false;details.querySelector('summary')?.focus();}};
 
-export default function RecordedPriceChart({ticker,frames,revision='',onInteract,metricCoverage={},toolbarControls=null,toolbarActions=null,historyPeriodControls=null,historyControls=null,replayControls=null,dataDetails=null,readingStatus="Data details",emptyContent=null,showAtlas=true,exposureLine=null,darkLevels=null,flowBars=null,alertLines=null,cvdLine=null,contractBars=null,contractSymbol=null,contractStatus=null,fitAllFrames=null,renderDrawingLayer=null,syncSeq=0,syncView=null,syncPrice=null,syncCrosshair=null,onSync=null,studyLines=null}) {
+export default function RecordedPriceChart({ticker,frames,revision='',onInteract,metricCoverage={},toolbarControls=null,toolbarActions=null,historyPeriodControls=null,historyControls=null,replayControls=null,dataDetails=null,readingStatus="Data details",emptyContent=null,showAtlas=true,exposureLine=null,darkLevels=null,flowBars=null,alertLines=null,cvdLine=null,contractBars=null,contractSymbol=null,contractStatus=null,fitAllFrames=null,renderDrawingLayer=null,syncSeq=0,syncView=null,syncPrice=null,syncCrosshair=null,onSync=null,studyLines=null,mappedShapes=null}) {
  const data=useMemo(()=>checkedCandles(frames),[frames]);
  const premiumCloses=useMemo(()=>contractClosesForFrames(data,contractBars),[data,contractBars]);
  const surface=useRef(null),pointers=useRef(new Map()),gesture=useRef(null),previousLength=useRef(0);
@@ -128,8 +128,26 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
       </g>;
     });
   };
+  // B09 mapped levels (contract v2): DISTINCT derived shapes — diamond ◆ /
+  // triangle ▲ markers at the mapped price with a dotted level line; the
+  // label + source price ride the title. Out-of-range prices render nothing.
+  const mappedShapesRender=()=>{
+    if(!Array.isArray(mappedShapes)||!mappedShapes.length)return null;
+    return mappedShapes.filter(s=>s&&Number.isFinite(s?.price)&&s.price>=range.low&&s.price<=range.high).map((s,si)=>{
+      const yy=y(s.price);
+      const mx=right-14;
+      const diamond=s.kind==='diamond';
+      const color=diamond?'#e8bd65':'#8fd3e8';
+      const d=diamond?`M ${mx} ${yy-6} L ${mx+6} ${yy} L ${mx} ${yy+6} L ${mx-6} ${yy} Z`:`M ${mx-6} ${yy+5} L ${mx+6} ${yy+5} L ${mx} ${yy-5} Z`;
+      return <g key={'mapped:'+si} data-testid="mapped-level-shape" data-kind={s.kind}>
+        <line x1={left} x2={right} y1={yy} y2={yy} stroke={color} strokeWidth="1" strokeDasharray="3 4" opacity="0.8" />
+        <path d={d} fill={color} opacity="0.9" />
+        <title>{s.label + (Number.isFinite(s.sourcePrice) ? ` · source ${s.sourcePrice}` : '')}</title>
+      </g>;
+    });
+  };
   const exposurePolys=()=>{
-   if(!showAtlas||!Array.isArray(exposureLine)||!exposureLine.length)return null;
+    if(!showAtlas||!Array.isArray(exposureLine)||!exposureLine.length)return null;
    const byTime=new Map(exposureLine.filter(p=>p&&typeof p.time==='string').map(p=>[p.time,p]));
    const segments=(key)=>{
     const segs=[];let cur=[];
@@ -217,6 +235,7 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
         return <circle data-testid="chart-orb" key={frame.time+':orb:'+ni} cx={center} cy={yy} r={r} fill={isKing?'#e8bd65':'none'} stroke={NODE_COLORS[node.metric]} strokeWidth={isKing?2:1} opacity="0.75"><title>{'Orb '+price(node.level)+(isKing?' (King Node · '+NODE_LABELS[node.metric]+' · observed saved subset)':weights[ni]===null?' (exposure unavailable)':'')}</title></circle>;});})}
       {exposurePolys()}
       {studyPolys()}
+      {mappedShapesRender()}
       {envelopeLevels().map((lv,li)=><line data-testid="exposure-envelope" key={'envelope:'+li} x1={left} x2={right} y1={y(lv)} y2={y(lv)} stroke="#72d7df" strokeWidth="1" strokeDasharray="2 3" opacity="0.7"><title>Exposure envelope level</title></line>)}
       {showAtlas&&Array.isArray(darkLevels)&&darkLevels.filter(l=>l&&typeof l.price==='number'&&Number.isFinite(l.price)&&l.price>=range.low&&l.price<=range.high).map((l,li)=><line data-testid="dark-pool-level" key={'dark:'+li} x1={left} x2={right} y1={y(l.price)} y2={y(l.price)} stroke="#c9a86a" strokeWidth="1.5" strokeDasharray="6 3"><title>{'Dark pool level '+price(l.price)+(l.venue?' '+l.venue:'')}</title></line>)}
       {Array.isArray(alertLines)&&alertLines.filter(a=>a&&typeof a.price==='number'&&Number.isFinite(a.price)&&a.price>=range.low&&a.price<=range.high).map((a,ai)=><line data-testid="alert-line" data-state={a.state==='stale'?'stale':'armed'} key={'alert:'+(a.id||ai)} x1={left} x2={right} y1={y(a.price)} y2={y(a.price)} stroke={a.state==='stale'?'#6b7684':'#e06c75'} strokeWidth="1.5" strokeDasharray={a.state==='stale'?'2 3':'none'}><title>{'Alert '+(a.id||ai)+' at '+price(a.price)+(a.state==='stale'?' — stale alert refused':'')}</title></line>)}
