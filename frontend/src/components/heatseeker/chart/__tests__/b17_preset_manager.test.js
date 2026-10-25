@@ -218,3 +218,20 @@ test('C130: fib arrays loaded with mismatched lengths are normalized, never cras
   expect(overlong.levelColors).toHaveLength(2);
   expect(overlong.showLevels).toHaveLength(2);
 });
+
+test('C129: preset styles are stored in CANONICAL key order — no false dirty dots from key order', () => {
+  // isDirty compares JSON.stringify(style) — key ORDER sensitive. Two
+  // logically equal styles built in different orders (reducer patches vs a
+  // preset written width-first) must not fabricate a dirty dot: sanitize
+  // emits fields in the family's canonical order, so every stored preset
+  // style and every style copied from one is order-stable.
+  const shuffled = sanitizePresetStyle('trend', { width: 2, color: '#7fa6c0' });
+  expect(Object.keys(shuffled)).toEqual(['color', 'width']);
+  const canonical = sanitizePresetStyle('trend', { color: '#7fa6c0', width: 2 });
+  expect(JSON.stringify(shuffled)).toBe(JSON.stringify(canonical));
+  // end-to-end: a preset created from a width-first style, applied to a
+  // drawing, stays CLEAN against the preset (no phantom dirty dot)
+  const created = createPreset([], { name: 'A', tool: 'trend', style: { width: 2, color: '#7fa6c0' } });
+  const drawing = applyPresetToDrawing({ id: 'd1', tool: 'trend' }, created.preset);
+  expect(dirtyPresetFor(drawing, created.list)).toBe(null);
+});
