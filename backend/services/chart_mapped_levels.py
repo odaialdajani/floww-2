@@ -60,7 +60,14 @@ def _unavailable(reason: str, source: str, target: str, cursor: float, **extra):
 
 def _finite_close(bar):
     try:
-        value = float(bar.get("c"))
+        value = bar.get("c")
+    except (TypeError, ValueError):
+        return None
+    if isinstance(value, bool):
+        # H3 V31: bool subclasses int — True must never pass as a close.
+        return None
+    try:
+        value = float(value)
     except (TypeError, ValueError):
         return None
     if value != value or value in (float("inf"), float("-inf")):

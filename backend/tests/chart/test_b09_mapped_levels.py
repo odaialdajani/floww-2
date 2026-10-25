@@ -165,3 +165,25 @@ def test_ndx_family_supported(monkeypatch):
     body = r.json()
     assert body["status"] == "available"
     assert body["ratio"]["value"] == pytest.approx(24000.0 / 600.0)
+
+
+def test_v31_boolean_close_is_not_a_ratio_input(monkeypatch):
+    """H3 V31 defect pin: bool subclasses int/float - True must NEVER be
+    accepted as a bar close on either side of the mapped-levels ratio."""
+    c = _client(monkeypatch, {
+        "SPXW": [{"t": CURSOR - 300, "c": True, "v": 1}],
+        "SPY": [{"t": CURSOR - 300, "c": 600.0, "v": 50}],
+    })
+    r = c.get(f"/api/heatseeker/mapped-levels/SPY?source=SPXW&cursor={CURSOR}")
+    body = r.json()
+    assert body["status"] == "refused"
+    assert body["reason"] == "ratio-unavailable-at-cursor"
+
+
+def test_v31_boolean_target_close_refuses(monkeypatch):
+    c = _client(monkeypatch, {
+        "SPXW": [{"t": CURSOR - 300, "c": 6000.0, "v": 1}],
+        "SPY": [{"t": CURSOR - 300, "c": True, "v": 50}],
+    })
+    r = c.get(f"/api/heatseeker/mapped-levels/SPY?source=SPXW&cursor={CURSOR}")
+    assert r.json()["reason"] == "ratio-unavailable-at-cursor"
