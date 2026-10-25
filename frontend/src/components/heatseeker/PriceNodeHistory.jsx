@@ -8,6 +8,7 @@ import { reduceDrawings, createDrawing, geometryFor, magnetPoint, nudgeDrawing, 
 import { barAt, sweepExtrema, visibleSnapshot } from "./chart/replay/replayReducer";
 import { anchorsFor } from "./chart/drawings/toolRegistry";
 import { shouldHandleShortcut } from "./chart/ChartShortcuts";
+import { useChartData } from "./chart/useChartData";
 import { chartTime } from "./recordedPriceChartData";
 
 
@@ -43,8 +44,6 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
   const usingMapScope = forcedScope != null && followMap;
   const setScope = value => setSavedView(current => ({ticker,scope:value,followMap:current.ticker===ticker?current.followMap:true}));
   const setFollowMap = value => setSavedView(current => ({ticker,scope:current.ticker===ticker?current.scope:"",followMap:value}));
-  const [payload, setPayload] = useState(null);
-  const [status, setStatus] = useState("idle");
   const [reload, setReload] = useState(0);
   const [retryUntil, setRetryUntil] = useState(0);
   const [clock, setClock] = useState(Date.now);
@@ -98,25 +97,76 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
     } catch { setRecordNote("Recording did not land — try again."); }
     finally { setRecording(false); }
   }, [onRecordNodes, recording]);
-  useEffect(() => { setScope(""); setPayload(null); setPlaying(false); setDrawings(loadDrawings(ticker)); setSelectedDrawing(null); setContractInput(""); setContract(""); setVelocity(null); }, [ticker]);
-  useEffect(() => {
-    if (!open) return undefined;
-    const controller = new AbortController();
-    let active = true;
-    setPayload(null); setStatus("loading"); setPlaying(false); setRetryUntil(0);
-    const activeScope = usingMapScope ? forcedScope : scope;
-    axios.get(`${API}/heatseeker/price-history/${encodeURIComponent(ticker)}`, {
+  useEffect(() => { setScope(""); setPlaying(false); setDrawings(loadDrawings(ticker)); setSelectedDrawing(null); setContractInput(""); setContract(""); setVelocity(null); }, [ticker]);
+  const activeScope = usingMapScope ? forcedScope : scope;
+  // B05 mount (C2-PRODUCER-CONTRACTS-20261024.json): the pane's price-history
+  // read goes through the shared useChartData hook — one PRIVATE session per
+  // pane, superseded identities aborted, identical in-flight reads shared.
+  // The hook's dedupeKey slots carry the contract's four dimensions; the
+  // remaining request dimensions (days, contract, the manual reload counter)
+  // ride the scope slot so a change ABORTS the superseded in-flight query
+  // instead of sharing it. The wire params themselves come from the fetcher.
+  const paneIdentity = `${activeScope}|days=${days}|contract=${contract || "-"}|reload=${reload}`;
+  const fetchHistory = useCallback(({ signal }) => axios.get(
+    `${API}/heatseeker/price-history/${encodeURIComponent(ticker)}`, {
       params: { days, interval_minutes: minutes, include_metric_lines: true, include_envelopes: true, sessions, ...(activeScope ? { query_key: activeScope } : {}), ...(contract ? { contract_symbol: contract } : {}) },
-      timeout: 30000, signal: controller.signal,
-    }).then(({ data }) => {
-      if (!active) return;
-      if (data?.ticker !== ticker.toUpperCase() || !Array.isArray(data.frames)) { setStatus("error"); return; }
-      const seconds=data?.price_failure?.retry_after_seconds;
-      if(typeof seconds==="number"&&Number.isFinite(seconds)&&seconds>0&&seconds<=3600){const now=Date.now();setClock(now);setRetryUntil(now+Math.ceil(seconds)*1000);}
-      setPayload(data); setPosition(Math.max(0, (data.frames?.length || 0) - 1)); setStatus("ready");
-    }).catch(() => { if (active) setStatus("error"); });
-    return () => { active = false; controller.abort(); };
-  }, [ticker, days, minutes, sessions, scope, forcedScope, usingMapScope, open, reload, contract]);
+      timeout: 30000, signal,
+    }
+  ).then(({ data }) => {
+    // Served truth -> badge truth: the route's typed price_failure vocabulary
+    // carries the budget/outage reasons; nothing else is inferred (the route
+    // never stale-serves, so cached/stale stay unflagged).
+    const reason = data?.price_failure?.reason;
+    const budget = reason === "inflight_cap" || reason === "host_cooldown" || reason === "token_bucket" || reason === "budget_unavailable";
+    const outage = reason === "provider_unavailable" || reason === "invalid_price_bars";
+    const valid = data?.ticker === ticker.toUpperCase() && Array.isArray(data.frames);
+    // The pane-owned pieces arm HERE — the same place the incumbent's single
+    // .then armed them — so the hook's [status, badge, data] commit renders
+    // together with the replay cursor and the retry gate (a typed refusal and
+    // its retry note can never render apart). The signal guard keeps an
+    // aborted/superseded query from arming anything; the consumer effect
+    // below re-applies both from the ACTIVE read, so a superseded arming
+    // self-heals one commit later.
+    if (valid && !signal?.aborted) {
+      setPosition(Math.max(0, (data.frames?.length || 0) - 1));
+      const seconds = data?.price_failure?.retry_after_seconds;
+      if (typeof seconds === "number" && Number.isFinite(seconds) && seconds > 0 && seconds <= 3600) {
+        const now = Date.now(); setClock(now); setRetryUntil(now + Math.ceil(seconds) * 1000);
+      }
+    }
+    if (!valid) {
+      return { data: null, error: true, budgetExhausted: budget, outage };
+    }
+    return { data, budgetExhausted: budget, outage };
+  }).catch(error => {
+    // A transport rejection is an unreachable read, never a live one.
+    throw Object.assign(error instanceof Error ? error : new Error("history read failed"), { outage: true });
+  }), [ticker, days, minutes, sessions, activeScope, contract]);
+  const { data: readData, status, badge: readBadge } = useChartData({
+    symbol: ticker, interval: minutes, session: sessions, scope: paneIdentity,
+    fetcher: fetchHistory, enabled: open,
+  });
+  // Single-commit application: the payload is DERIVED from the hook's own
+  // state (status ready ⇒ this read's data, anything else ⇒ none), so the
+  // pane renders data exactly when the hook commits it — no intermediate
+  // ready-without-payload frame, no extra commit for consumers to await.
+  const payload = status === "ready" && readData ? readData : null;
+  // Generation-gated corrector: re-apply the replay cursor and the retry
+  // gate from the ACTIVE read (heals any superseded arming), and stop replay
+  // plus clear the retry clock the moment a new request starts loading.
+  useEffect(() => {
+    if (status === "ready" && readData) {
+      setPosition(Math.max(0, (readData.frames?.length || 0) - 1));
+      const seconds = readData?.price_failure?.retry_after_seconds;
+      if (typeof seconds === "number" && Number.isFinite(seconds) && seconds > 0 && seconds <= 3600) {
+        const now = Date.now(); setClock(now); setRetryUntil(now + Math.ceil(seconds) * 1000);
+      } else if (readData && !readData.price_failure?.retry_after_seconds) {
+        setRetryUntil(0);
+      }
+    } else if (status === "loading") {
+      setPlaying(false); setRetryUntil(0);
+    }
+  }, [status, readData]);
   const frames = payload?.ticker === ticker.toUpperCase() ? payload.frames || [] : [];
   // B16 pointer/keyboard geometry: the drawing layer projects LOGICAL anchors
   // through the real loaded frames' time/price domain. Zoom/resize changes
@@ -209,13 +259,14 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
     if (!onQuality) return;
     onQuality({
       status,
+      badge: readBadge,
       sourceTime: frames.length ? frames[frames.length - 1].time : null,
       coverage: frames.length ? `${payload?.candles_with_recorded_nodes ?? 0} of ${frames.length} candles carry saved nodes` : "no candles loaded",
       partialBars: payload?.records_truncated ? "period contains more saved readings than can be loaded" : null,
       capability: payload?.node_status ?? null,
       retry: retryRemaining > 0 ? `manual retry in ${retryRemaining}s` : "manual retry available",
     });
-  }, [onQuality, status, frames.length, payload, retryRemaining]);
+  }, [onQuality, status, readBadge, frames.length, payload, retryRemaining]);
   // R21-03/04 supply wiring (inert without a listener, like onQuality): the
   // pane publishes the recorded admission envelopes that arrived alongside
   // this read's own bars. A payload without an envelopes key — or this
@@ -415,7 +466,7 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
           return pt?<circle key={"draft-"+i} data-testid="draft-anchor" cx={pt.x} cy={pt.y} r="4" fill="#e3c16a" />:null;})}
       </g>;
   };
-  return <section className="panel price-node-history" data-open={open} style={{margin:"12px 0",padding:12}} data-testid="price-node-history">
+  return <section className="panel price-node-history" data-open={open} data-read-badge={readBadge} style={{margin:"12px 0",padding:12}} data-testid="price-node-history">
     {!primary&&<button type="button" className="skylit-trade-mode-btn" aria-expanded={open} onClick={()=>{setOpen(!open);setPlaying(false);}}>Price chart + historical nodes</button>}
     {open&&<RecordedPriceChart renderDrawingLayer={renderDrawingLayer} ticker={ticker} frames={frames.slice(0,position+1)} fitAllFrames={fitMode==="fit-all"?frames:null} revision={ticker+":"+days+":"+minutes+":"+payload?.query_key+":"+reload} onInteract={pauseInteraction} metricCoverage={payload?.metric_line_coverage} toolbarControls={controls} toolbarActions={toolbarActions} historyPeriodControls={historyPeriodControls} historyControls={historyControls} replayControls={replayControls} dataDetails={details} readingStatus={readingStatus} emptyContent={empty} showAtlas={showAtlas} exposureLine={exposureLine??payload?.exposure_line??null} darkLevels={darkLevels} alertLines={alertLines??null} cvdLine={cvdLine??payload?.cvd_line??null} contractBars={payload?.contract_bars??null} contractSymbol={payload?.contract_symbol??(contract||null)} contractStatus={payload?.contract_status??null} flowBars={Array.isArray(flowBars)&&flowBars.length===frames.length?flowBars.slice(0,position+1):flowBars} syncSeq={sync?.seq||0} syncView={sync?.time||null} syncPrice={sync?.price||null} syncCrosshair={sync?.crosshair!=null?sync.crosshair:null} onSync={onSyncEvent}/>}
     {open&&forcedScope!=null&&!followMap&&<p role="note">Saved-view review — these recorded expiry dates are not the current map scope.</p>}
