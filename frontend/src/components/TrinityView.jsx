@@ -100,7 +100,13 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
     setContractSelection(selection);
     if (selection?.status === "resolved") setCell({strike: Number(selection.identity.strike), colKey: selection.identity.expiry});
   }, []);
-  const [scope, setScope] = useState("0dte");
+  // Owner UX decision 2026-10-24 (live request): a FRESH Market entry uses
+  // the existing explicitly-labeled "All loaded" scope so the desk is useful
+  // on weekends too. 0DTE stays an explicitly selectable request with its
+  // strict same-day refusal (UI-M02 semantics preserved: the refusal never
+  // auto-substitutes a broader scope — the distinct next action stays a
+  // user-initiated click). Nothing persists: this is session state only.
+  const [scope, setScope] = useState("loaded");
   const [replayId, setReplayId] = useState(handoff?.replayAsOf ? handoff.snapshotId || null : null);
   const isReplay = Boolean(replayId || replayDisplay);
   const [board, setBoard] = useState([]);
@@ -126,12 +132,19 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
   useEffect(() => {
     if (!drawerOpen) return undefined;
     drawerPrevFocusRef.current = document.activeElement;
-    drawerCloseRef.current?.focus();
+    drawerCloseRef.current?.focus({ preventScroll: true });
     return () => {
-      try { drawerPrevFocusRef.current?.focus?.(); } catch { /* noop */ }
+      // preventScroll: the measured owner preflight caught the plain restore
+      // jumping the PAGE (ancestor scroller) 439px to reveal the Contracts
+      // button — focus restoration must never move the desk underneath the
+      // user. The sticky drawer close needs no scroll either.
+      try { drawerPrevFocusRef.current?.focus?.({ preventScroll: true }); } catch { /* noop */ }
     };
   }, [drawerOpen]);
   const rawMapRef = useRef(null);
+  // Reading position recorded by the show-loaded action (see the fetch
+  // effect for the one-shot restore).
+  const restoreScrollRef = useRef(null);
   const adjustedMapRef = useRef(null);
   // M1 (2026-10-24): a basis change re-centers only the adjusted grid (its
   // metric basis is part of the grid's centering key), which leaves the two
@@ -207,6 +220,19 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
         if (!next || (next.ticker && next.ticker !== ticker) || (replayId && next.snapshotId !== replayId)) { setError("Snapshot identity mismatch — no substitution made"); setLoading(false); return; }
         setPayload(next);
         setLoading(false);
+        // Owner live request 2026-10-24 (ancestor scroll jumps): loading all
+        // expiries from the 0DTE refusal unmounts the refusal blocks and the
+        // document collapses mid-transition, so the browser clamps the page
+        // from the user's reading position to the top (measured 355 -> 0).
+        // The show-loaded click records the reading position; restore it
+        // once, after the loaded content lays out (rAF fires post-commit).
+        if (restoreScrollRef.current != null) {
+          const y = restoreScrollRef.current;
+          restoreScrollRef.current = null;
+          // Double rAF: the first frame lays out the loaded commit; restoring
+          // in the second lands after any post-commit re-anchoring settles.
+          requestAnimationFrame(() => { requestAnimationFrame(() => { window.scrollTo(0, y); }); });
+        }
       })
       .catch((e) => {
         if (!mountedRef.current || genRef.current !== myGen) return;
@@ -435,16 +461,16 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
             admission renders as the compact in-band chip instead. */}
         {!isReplay && scope === "0dte" && !sameDayAdmitted && (walls || []).length > 0 && <div className="triad-band-note triad-scope-notice">
           <p role="status" data-testid="triad-scope-admission">
-            Same-day admission unavailable — the loaded observation is not verified 0DTE. Exact loaded dates remain visible; no same-session expiry or entitlement is invented.
+            Same-day admission unavailable — the loaded observation is not verified 0DTE. 0DTE was your explicit request, not a saved choice — nothing is saved between visits, and the desk does not substitute a broader scope by itself. Exact loaded dates remain visible; no same-session expiry or entitlement is invented.
           </p>
-          <button type="button" data-testid="triad-show-loaded" onClick={() => setScope("loaded")}>Show all loaded expiries</button>
+          <button type="button" data-testid="triad-show-loaded" onClick={() => { restoreScrollRef.current = window.scrollY; setScope("loaded"); }}>Show all loaded expiries</button>
         </div>}
       </div>
       {!isReplay && scope === "0dte" && !sameDayAdmitted && !(walls || []).length && (
         <div className="triad-empty-desk" data-testid="triad-empty-desk">
           <p role="status" data-testid="triad-scope-admission">
             <strong>Same-day admission unavailable — the loaded observation is not verified 0DTE.</strong>
-            Exact loaded dates remain visible; no same-session expiry or entitlement is invented.
+            0DTE was your explicit request, not a saved choice — nothing is saved between visits, and the desk does not substitute a broader scope by itself. Exact loaded dates remain visible; no same-session expiry or entitlement is invented.
           </p>
           <span className="triad-empty-desk-identity">
             {isReplay ? "REPLAY" : "LIVE"} · loaded expiries: {loadedExpiries.total === 0
@@ -454,7 +480,7 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
                 : "none valid — expiry dates unreadable in this snapshot"}
             {loadedExpiries.invalid > 0 && ` · ${loadedExpiries.invalid} invalid excluded — not complete`}
           </span>
-          <button type="button" data-testid="triad-show-loaded" className="triad-empty-desk-action" onClick={() => setScope("loaded")}>Show all loaded expiries</button>
+          <button type="button" data-testid="triad-show-loaded" className="triad-empty-desk-action" onClick={() => { restoreScrollRef.current = window.scrollY; setScope("loaded"); }}>Show all loaded expiries</button>
         </div>
       )}
       <div className={drawerOpen ? "triad-review-workspace" : ""}>
