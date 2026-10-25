@@ -152,3 +152,30 @@ test('B17: without presetScope the section mounts without a scope line', () => {
   expect(screen.getByTestId('rail-presets')).toBeInTheDocument();
   expect(screen.queryByTestId('rail-presets-scope')).not.toBeInTheDocument();
 });
+
+test('C131: the rail offers built-in reset on user rows and labels the store local-only', () => {
+  const onPresetReset = jest.fn();
+  render(<DrawingRail {...baseProps} presetScope="SPY"
+    presets={[preset('b', 'Built-in trend', { kind: 'built-in' }), preset('p1', 'Mine')]}
+    onPresetCreate={jest.fn()} onPresetUpdate={jest.fn()} onPresetApply={jest.fn()}
+    onPresetToggleStar={jest.fn()} onPresetDelete={jest.fn()} onPresetSetActive={jest.fn()}
+    onPresetReset={onPresetReset} />);
+  // Reset offered on user rows only — built-ins ARE the default
+  expect(screen.getByTestId('rail-preset-reset-p1')).toBeInTheDocument();
+  expect(screen.queryByTestId('rail-preset-reset-b')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByTestId('rail-preset-reset-p1'));
+  expect(onPresetReset).toHaveBeenCalledWith('p1');
+  // the store is explicitly labelled local-only (no cloud/account claim)
+  expect(screen.getByTestId('rail-presets-local')).toHaveTextContent(/local/i);
+  expect(screen.getByTestId('rail-presets-local')).toHaveTextContent(/no cloud/i);
+});
+
+test('C131: without onPresetReset the rail renders no reset buttons (additive optional prop)', () => {
+  render(<DrawingRail {...baseProps} presetScope="SPY"
+    presets={[preset('p1', 'Mine')]}
+    onPresetCreate={jest.fn()} onPresetUpdate={jest.fn()} onPresetApply={jest.fn()}
+    onPresetToggleStar={jest.fn()} onPresetDelete={jest.fn()} onPresetSetActive={jest.fn()} />);
+  expect(screen.queryByTestId('rail-preset-reset-p1')).not.toBeInTheDocument();
+  // the local-only label still shows whenever the section mounts
+  expect(screen.getByTestId('rail-presets-local')).toBeInTheDocument();
+});

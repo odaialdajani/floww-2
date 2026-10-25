@@ -11,11 +11,13 @@ import React from 'react';
 // into a preset; a preset's style changes only through the explicit Update
 // button, enabled solely on the linked preset while it differs.
 import { PRESET_CAP, isDirty } from './presetSchema';
+import { LOCAL_ONLY_LABEL } from './presetPersistence';
 export default function DrawingRail({ drawings = [], selectedId = null,
   onSelect = null, onDelete = null, onToggleLock = null, onToggleHide = null,
   tools = [], draftTool = null, onToolPick = null, onUndo = null, onCancelDraft = null, onStyle = null,
   presets = null, presetScope = null, onPresetCreate = null, onPresetUpdate = null,
-  onPresetApply = null, onPresetToggleStar = null, onPresetDelete = null, onPresetSetActive = null }) {
+  onPresetApply = null, onPresetToggleStar = null, onPresetDelete = null, onPresetSetActive = null,
+  onPresetReset = null }) {
   const [presetName, setPresetName] = React.useState('');
   const selected = (Array.isArray(drawings) ? drawings : []).find((d) => d.id === selectedId) || null;
   const presetList = Array.isArray(presets) ? presets : null;
@@ -76,6 +78,7 @@ export default function DrawingRail({ drawings = [], selectedId = null,
       {showPresets && (
         <div className="rail-presets" data-testid="rail-presets" role="group" aria-label="Drawing presets">
           {presetScope && <div className="rail-presets-scope" data-testid="rail-presets-scope">Presets · {presetScope}</div>}
+          <div className="rail-presets-local" data-testid="rail-presets-local">{LOCAL_ONLY_LABEL}</div>
           {!atCap && onPresetCreate && (
             <div className="rail-preset-create-row">
               <input type="text" data-testid="rail-preset-name" aria-label="New preset name"
@@ -102,6 +105,9 @@ export default function DrawingRail({ drawings = [], selectedId = null,
               {onPresetUpdate && <button type="button" data-testid={'rail-preset-update-' + p.id}
                 disabled={lockedRefuses || p.id !== linkedDirtyId}
                 onClick={() => onPresetUpdate(p.id, selected.style)}>Update</button>}
+              {onPresetReset && p.kind !== 'built-in' && <button type="button" data-testid={'rail-preset-reset-' + p.id}
+                title="Reset this preset's style to the built-in default"
+                onClick={() => onPresetReset(p.id)}>Reset</button>}
               {onPresetDelete && p.kind !== 'built-in' && <button type="button" data-testid={'rail-preset-delete-' + p.id}
                 onClick={() => onPresetDelete(p.id)}>Delete</button>}
             </div>

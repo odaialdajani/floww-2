@@ -4,7 +4,7 @@
 import {
   createPreset, updatePresetStyle, renamePreset, deletePreset, toggleStar,
   setActivePreset, defaultPresetFor, builtInPresetFor, presetsForTool,
-  dirtyPresetFor, applyPresetToDrawing,
+  dirtyPresetFor, applyPresetToDrawing, resetPresetStyleToBuiltIn,
 } from '../drawings/presetManager';
 import { PRESET_CAP, presetForNew, isDirty, applyPreset, defaultStyleForTool, sanitizePresetStyle, PRESET_STYLE_FIELDS } from '../drawings/presetSchema';
 import { FIB_LEVELS } from '../drawings/advancedTools';
@@ -234,4 +234,23 @@ test('C129: preset styles are stored in CANONICAL key order — no false dirty d
   const created = createPreset([], { name: 'A', tool: 'trend', style: { width: 2, color: '#7fa6c0' } });
   const drawing = applyPresetToDrawing({ id: 'd1', tool: 'trend' }, created.preset);
   expect(dirtyPresetFor(drawing, created.list)).toBe(null);
+});
+
+test('C131: built-in reset returns a USER preset to the family default; built-ins refuse', () => {
+  const list = createPreset([], { name: 'A', tool: 'trend', style: { color: '#e3c16a', width: 3, dash: true } }).list;
+  const drawing = { id: 'd1', tool: 'trend', style: { color: '#e3c16a', width: 3, dash: true } };
+  const reset = resetPresetStyleToBuiltIn(list, list[0].id);
+  expect(reset.ok).toBe(true);
+  expect(reset.list[0].style).toEqual(defaultStyleForTool('trend'));
+  // canonical order survives the reset (order-stable isDirty contract)
+  expect(Object.keys(reset.list[0].style)).toEqual(['color', 'width', 'dash', 'extendLeft', 'extendRight', 'showLabels']);
+  // a pure op: the drawing is untouched by the preset reset
+  expect(drawing.style).toEqual({ color: '#e3c16a', width: 3, dash: true });
+  // built-ins are already the default — reset refuses
+  const builtin = builtInPresetFor('trend');
+  const refused = resetPresetStyleToBuiltIn([builtin], builtin.id);
+  expect(refused.ok).toBe(false);
+  expect(refused.list).toBeUndefined();
+  // unknown id refuses
+  expect(resetPresetStyleToBuiltIn(list, 'nope').ok).toBe(false);
 });
