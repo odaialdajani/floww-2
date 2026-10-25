@@ -8,7 +8,7 @@ const bound=(value,low,high)=>Math.max(low,Math.min(high,value));
 const axisTime=value=>new Date(value).toLocaleString('en-US',{timeZone:'America/New_York',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false});
 const closeDetails=element=>{const details=element.closest('details');if(details){details.open=false;details.querySelector('summary')?.focus();}};
 
-export default function RecordedPriceChart({ticker,frames,revision='',onInteract,metricCoverage={},toolbarControls=null,toolbarActions=null,historyPeriodControls=null,historyControls=null,replayControls=null,dataDetails=null,readingStatus="Data details",emptyContent=null,showAtlas=true,exposureLine=null,darkLevels=null,flowBars=null,alertLines=null,cvdLine=null,contractBars=null,contractSymbol=null,contractStatus=null,fitAllFrames=null,renderDrawingLayer=null,syncSeq=0,syncView=null,syncPrice=null,syncCrosshair=null,onSync=null}) {
+export default function RecordedPriceChart({ticker,frames,revision='',onInteract,metricCoverage={},toolbarControls=null,toolbarActions=null,historyPeriodControls=null,historyControls=null,replayControls=null,dataDetails=null,readingStatus="Data details",emptyContent=null,showAtlas=true,exposureLine=null,darkLevels=null,flowBars=null,alertLines=null,cvdLine=null,contractBars=null,contractSymbol=null,contractStatus=null,fitAllFrames=null,renderDrawingLayer=null,syncSeq=0,syncView=null,syncPrice=null,syncCrosshair=null,onSync=null,studyLines=null}) {
  const data=useMemo(()=>checkedCandles(frames),[frames]);
  const premiumCloses=useMemo(()=>contractClosesForFrames(data,contractBars),[data,contractBars]);
  const surface=useRef(null),pointers=useRef(new Map()),gesture=useRef(null),previousLength=useRef(0);
@@ -106,6 +106,28 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
   }catch{setExportError('Chart image could not be saved. Try again.');}
   finally{if(sourceUrl)URL.revokeObjectURL(sourceUrl);setExporting(false);}
  };
+  // B08 actual study instances (C045-C048): gap-segmented overlay lines from
+  // registry-computed specs — the same byTime/gap pattern as the exposure
+  // path. Missing or warmup values break the segment; nothing is fabricated.
+  const studyPolys=()=>{
+    if(!Array.isArray(studyLines)||!studyLines.length)return null;
+    return studyLines.map(spec=>{
+      if(!spec||!Array.isArray(spec.points))return null;
+      const byTime=new Map(spec.points.filter(p=>p&&typeof p.time==='string').map(p=>[p.time,p.value]));
+      const segs=[];let cur=[];
+      visible.forEach((frame,index)=>{
+        const value=byTime.get(frame.time);
+        if(typeof value!=='number'||!Number.isFinite(value)){if(cur.length>1)segs.push(cur);cur=[];return;}
+        const py=y(value);if(py<top||py>bottom)return;
+        cur.push({x:left+(index+0.5)*spacing,y:py});
+      });
+      if(cur.length>1)segs.push(cur);
+      if(!segs.length)return null;
+      return <g key={spec.id} data-instance={spec.instanceId}>
+        {segs.map((seg,si)=><polyline key={si} data-testid={'study-line-'+spec.id} data-band={spec.band||''} points={seg.map(p=>p.x+','+p.y).join(' ')} fill="none" stroke={spec.color} strokeWidth={spec.band?1.2:1.6}><title>{spec.label}</title></polyline>)}
+      </g>;
+    });
+  };
   const exposurePolys=()=>{
    if(!showAtlas||!Array.isArray(exposureLine)||!exposureLine.length)return null;
    const byTime=new Map(exposureLine.filter(p=>p&&typeof p.time==='string').map(p=>[p.time,p]));
@@ -194,6 +216,7 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
         const king=kings[node.metric],ratio=king>0&&weights[ni]!==null?weights[ni]/king:0,r=Math.min(12,Math.max(3,4*Math.sqrt(ratio))),isKing=king>0&&weights[ni]===king;
         return <circle data-testid="chart-orb" key={frame.time+':orb:'+ni} cx={center} cy={yy} r={r} fill={isKing?'#e8bd65':'none'} stroke={NODE_COLORS[node.metric]} strokeWidth={isKing?2:1} opacity="0.75"><title>{'Orb '+price(node.level)+(isKing?' (King Node · '+NODE_LABELS[node.metric]+' · observed saved subset)':weights[ni]===null?' (exposure unavailable)':'')}</title></circle>;});})}
       {exposurePolys()}
+      {studyPolys()}
       {envelopeLevels().map((lv,li)=><line data-testid="exposure-envelope" key={'envelope:'+li} x1={left} x2={right} y1={y(lv)} y2={y(lv)} stroke="#72d7df" strokeWidth="1" strokeDasharray="2 3" opacity="0.7"><title>Exposure envelope level</title></line>)}
       {showAtlas&&Array.isArray(darkLevels)&&darkLevels.filter(l=>l&&typeof l.price==='number'&&Number.isFinite(l.price)&&l.price>=range.low&&l.price<=range.high).map((l,li)=><line data-testid="dark-pool-level" key={'dark:'+li} x1={left} x2={right} y1={y(l.price)} y2={y(l.price)} stroke="#c9a86a" strokeWidth="1.5" strokeDasharray="6 3"><title>{'Dark pool level '+price(l.price)+(l.venue?' '+l.venue:'')}</title></line>)}
       {Array.isArray(alertLines)&&alertLines.filter(a=>a&&typeof a.price==='number'&&Number.isFinite(a.price)&&a.price>=range.low&&a.price<=range.high).map((a,ai)=><line data-testid="alert-line" data-state={a.state==='stale'?'stale':'armed'} key={'alert:'+(a.id||ai)} x1={left} x2={right} y1={y(a.price)} y2={y(a.price)} stroke={a.state==='stale'?'#6b7684':'#e06c75'} strokeWidth="1.5" strokeDasharray={a.state==='stale'?'2 3':'none'}><title>{'Alert '+(a.id||ai)+' at '+price(a.price)+(a.state==='stale'?' — stale alert refused':'')}</title></line>)}

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { API } from "../../config/api";
 import RecordedPriceChart from "./RecordedPriceChart";
@@ -9,6 +9,8 @@ import { barAt, sweepExtrema, visibleSnapshot } from "./chart/replay/replayReduc
 import { anchorsFor } from "./chart/drawings/toolRegistry";
 import { shouldHandleShortcut } from "./chart/ChartShortcuts";
 import { useChartData } from "./chart/useChartData";
+import { STUDIES, getStudy, createStudyInstance, validateStudySettings, studySpecs } from "./chart/indicators/registry";
+import { loadStudyInstances, saveStudyInstances } from "./chart/persistence/studyStore";
 import { chartTime } from "./recordedPriceChartData";
 
 
@@ -170,6 +172,38 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
     }
   }, [status, readData]);
   const frames = payload?.ticker === ticker.toUpperCase() ? payload.frames || [] : [];
+  // B08 ACTUAL STUDY INSTANCES (C045-C048): per-pane instances through the ONE
+  // registry, persisted per symbol (versioned store, quota-capped). Two
+  // differently configured studies compute independent series from THIS pane's
+  // own frames via the existing priceStudies primitives — no second engine.
+  const [studyInstances, setStudyInstances] = useState(() => loadStudyInstances(ticker));
+  const [studyAddPeriod, setStudyAddPeriod] = useState("20");
+  const [studyAddMultiple, setStudyAddMultiple] = useState("2");
+  const [studyRefusal, setStudyRefusal] = useState(null);
+  useEffect(() => { setStudyInstances(loadStudyInstances(ticker)); setStudyRefusal(null); }, [ticker]);
+  const commitStudies = next => {
+    try { saveStudyInstances(ticker, next); setStudyInstances(next); setStudyRefusal(null); }
+    catch (error) { setStudyRefusal(error?.message === "study quota exceeded" ? "Study limit reached — remove one first." : "Study settings refused — check period and multiple."); }
+  };
+  const addStudy = kind => {
+    if (!getStudy(kind)) { setStudyRefusal("Unknown study."); return; }
+    const settings = kind === "bb" ? { period: Number(studyAddPeriod), multiple: Number(studyAddMultiple) } : { period: Number(studyAddPeriod) };
+    if (!validateStudySettings(kind, settings)) {
+      setStudyRefusal(kind === "bb" ? "Bollinger needs a whole period of at least 2 and a positive multiple." : "Period must be a whole number of at least 1.");
+      return;
+    }
+    commitStudies([...studyInstances, createStudyInstance(kind, settings, ticker)]);
+  };
+  const updateStudy = (id, patch) => {
+    const inst = studyInstances.find(s => s.id === id);
+    if (!inst) return;
+    const settings = { ...inst.settings, ...patch };
+    if (!validateStudySettings(inst.study, settings)) { setStudyRefusal("Refused — invalid settings; the previous value stays."); return; }
+    commitStudies(studyInstances.map(s => (s.id === id ? { ...s, settings } : s)));
+  };
+  const removeStudy = id => commitStudies(studyInstances.filter(s => s.id !== id));
+  const STUDY_COLORS = ["#e8bd65", "#5ec986", "#72d7df", "#c4a1ef", "#e06c75", "#8fd3e8"];
+  const studyLineSpecs = useMemo(() => studyInstances.flatMap((inst, i) => studySpecs(inst, frames).map(spec => ({ ...spec, color: STUDY_COLORS[i % STUDY_COLORS.length] }))), [studyInstances, frames]);
   // B16 pointer/keyboard geometry: the drawing layer projects LOGICAL anchors
   // through the real loaded frames' time/price domain. Zoom/resize changes
   // pixels, never anchor meaning.
@@ -440,6 +474,26 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
     <label className="price-history-contract">Option contract<input aria-label="Option contract symbol" placeholder="OSI, e.g. SPY261017C00650000" value={contractInput} onChange={e=>setContractInput(e.target.value)} /></label>
     <button type="button" disabled={!contractInput.trim()} onClick={()=>setContract(contractInput.trim().toUpperCase())}>Load contract</button>
     {contract&&<button type="button" onClick={()=>{setContract("");setContractInput("");}}>Clear contract</button>}
+    <details className="price-studies-panel" data-testid="studies-panel">
+      <summary data-testid="studies-panel-summary" role="button" aria-label="Studies">Studies{studyInstances.length ? ` · ${studyInstances.length}` : ""}</summary>
+      <div className="price-studies-content">
+        <p className="price-studies-hint">Chart studies computed from this pane's own candles. Missing data leaves a gap — never filled.</p>
+        {studyInstances.map(inst => <div key={inst.id} className="price-study-instance" data-testid={"study-instance-"+inst.id}>
+          <span className="price-study-name">{inst.study === "bb" ? `Bollinger ${inst.settings.period} · ${inst.settings.multiple}σ` : `${inst.study.toUpperCase()} ${inst.settings.period}`}</span>
+          <label>Period<input aria-label={"Study period "+inst.id} type="number" min="1" value={inst.settings.period} onChange={e=>updateStudy(inst.id,{period:Number(e.target.value)})} /></label>
+          {inst.study==="bb"&&<label>σ<input aria-label={"Study multiple "+inst.id} type="number" min="0.5" step="0.5" value={inst.settings.multiple} onChange={e=>updateStudy(inst.id,{multiple:Number(e.target.value)})} /></label>}
+          <button type="button" aria-label={"Remove study "+inst.id} onClick={()=>removeStudy(inst.id)}>Remove</button>
+        </div>)}
+        {studyRefusal&&<p role="alert" data-testid="studies-refusal">{studyRefusal}</p>}
+        <div className="price-study-add">
+          <label>Period<input data-testid="study-add-period" aria-label="New study period" type="number" min="1" value={studyAddPeriod} onChange={e=>setStudyAddPeriod(e.target.value)} /></label>
+          <label>σ (Bollinger)<input data-testid="study-add-multiple" aria-label="New Bollinger multiple" type="number" min="0.5" step="0.5" value={studyAddMultiple} onChange={e=>setStudyAddMultiple(e.target.value)} /></label>
+          <button type="button" data-testid="study-add-sma" onClick={()=>addStudy("sma")}>Add SMA</button>
+          <button type="button" data-testid="study-add-ema" onClick={()=>addStudy("ema")}>Add EMA</button>
+          <button type="button" data-testid="study-add-bb" onClick={()=>addStudy("bb")}>Add Bollinger</button>
+        </div>
+      </div>
+    </details>
   </>;
   // Replay affordances stay visible while Chart tools is closed: pause state
   // and candle time must remain readable during an active replay.
@@ -495,7 +549,7 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
   };
   return <section className="panel price-node-history" data-open={open} data-read-badge={readBadge} style={{margin:"12px 0",padding:12}} data-testid="price-node-history">
     {!primary&&<button type="button" className="skylit-trade-mode-btn" aria-expanded={open} onClick={()=>{setOpen(!open);setPlaying(false);}}>Price chart + historical nodes</button>}
-    {open&&<RecordedPriceChart renderDrawingLayer={renderDrawingLayer} ticker={ticker} frames={frames.slice(0,position+1)} fitAllFrames={fitMode==="fit-all"?frames:null} revision={ticker+":"+days+":"+minutes+":"+payload?.query_key+":"+reload} onInteract={pauseInteraction} metricCoverage={payload?.metric_line_coverage} toolbarControls={controls} toolbarActions={toolbarActions} historyPeriodControls={historyPeriodControls} historyControls={historyControls} replayControls={replayControls} dataDetails={details} readingStatus={readingStatus} emptyContent={empty} showAtlas={showAtlas} exposureLine={exposureLine??payload?.exposure_line??null} darkLevels={darkLevels} alertLines={alertLines??null} cvdLine={cvdLine??payload?.cvd_line??null} contractBars={payload?.contract_bars??null} contractSymbol={payload?.contract_symbol??(contract||null)} contractStatus={payload?.contract_status??null} flowBars={Array.isArray(flowBars)&&flowBars.length===frames.length?flowBars.slice(0,position+1):flowBars} syncSeq={sync?.seq||0} syncView={sync?.time||null} syncPrice={sync?.price||null} syncCrosshair={sync?.crosshair!=null?sync.crosshair:null} onSync={onSyncEvent}/>}
+    {open&&<RecordedPriceChart renderDrawingLayer={renderDrawingLayer} ticker={ticker} frames={frames.slice(0,position+1)} fitAllFrames={fitMode==="fit-all"?frames:null} revision={ticker+":"+days+":"+minutes+":"+payload?.query_key+":"+reload} onInteract={pauseInteraction} metricCoverage={payload?.metric_line_coverage} toolbarControls={controls} toolbarActions={toolbarActions} historyPeriodControls={historyPeriodControls} historyControls={historyControls} replayControls={replayControls} dataDetails={details} readingStatus={readingStatus} emptyContent={empty} showAtlas={showAtlas} exposureLine={exposureLine??payload?.exposure_line??null} darkLevels={darkLevels} alertLines={alertLines??null} cvdLine={cvdLine??payload?.cvd_line??null} contractBars={payload?.contract_bars??null} contractSymbol={payload?.contract_symbol??(contract||null)} contractStatus={payload?.contract_status??null} flowBars={Array.isArray(flowBars)&&flowBars.length===frames.length?flowBars.slice(0,position+1):flowBars} syncSeq={sync?.seq||0} syncView={sync?.time||null} syncPrice={sync?.price||null} syncCrosshair={sync?.crosshair!=null?sync.crosshair:null} onSync={onSyncEvent} studyLines={studyLineSpecs}/>}
     {open&&forcedScope!=null&&!followMap&&<p role="note">Saved-view review — these recorded expiry dates are not the current map scope.</p>}
     {/* P1-5 (UX review): secondary strips below the chart collapse into slim
         lines — drawings behind a one-line disclosure, velocity as an inline

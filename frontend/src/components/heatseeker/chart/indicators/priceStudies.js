@@ -30,6 +30,30 @@ export function ema(values, period) {
   return out;
 }
 
+// Bollinger bands (CHART-C048). PINNED CONVENTION: rolling arithmetic mean of
+// the same complete window the SMA uses, POPULATION standard deviation
+// (ddof=0), warmup = the full window of finite samples, upper/lower =
+// mean ± multiple·sigma. Any non-finite value in the input refuses the whole
+// series (complete-sample semantics, C047) — never a fabricated window.
+export function bollinger(values, period, multiple = 2) {
+  const out = new Array(values.length).fill(null);
+  if (!values.length || !(period >= 2) || typeof multiple !== 'number' || !Number.isFinite(multiple) || multiple <= 0) return out;
+  for (let i = period - 1; i < values.length; i += 1) {
+    let sum = 0, sumSq = 0;
+    for (let j = i - period + 1; j <= i; j += 1) {
+      const v = values[j];
+      if (typeof v !== 'number' || !Number.isFinite(v)) return new Array(values.length).fill(null);
+      sum += v;
+      sumSq += v * v;
+    }
+    const mean = sum / period;
+    const variance = Math.max(0, sumSq / period - mean * mean);
+    const sigma = Math.sqrt(variance);
+    out[i] = { mean, upper: mean + multiple * sigma, lower: mean - multiple * sigma, sigma };
+  }
+  return out;
+}
+
 function sessionDay(time) {
   const d = new Date(time);
   if (!Number.isFinite(d.valueOf())) return null;
