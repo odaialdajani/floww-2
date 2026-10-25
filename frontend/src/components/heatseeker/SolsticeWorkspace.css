@@ -188,8 +188,8 @@
    dark treatment, no new navigation. The loaded expiry dates stay visible
    on the desk so the actual displayed axis never depends on the
    disclosure. */
-.trinity-layout .triad-context-disclosure { margin: 6px 10px; border: 1px solid #263044; border-radius: 5px; background: #0b1117; }
-.trinity-layout .triad-context-disclosure > summary { cursor: pointer; list-style: none; padding: 6px 10px; font-size: 12px; color: #c6d7df; white-space: nowrap; }
+.trinity-layout .triad-context-disclosure { margin: 2px 10px 3px; border: 1px solid #263044; border-radius: 5px; background: #0b1117; }
+.trinity-layout .triad-context-disclosure > summary { cursor: pointer; list-style: none; padding: 3px 10px; font-size: 12px; color: #c6d7df; white-space: nowrap; }
 .trinity-layout .triad-context-disclosure > summary::-webkit-details-marker { display: none; }
 .trinity-layout .triad-context-disclosure[open] > summary::before { content: "▾ "; color: #8ba3b0; }
 .trinity-layout .triad-context-disclosure:not([open]) > summary::before { content: "▸ "; color: #8ba3b0; }
@@ -263,7 +263,7 @@
    Expiry scope, adjusted basis, loaded-date identity, Ask Flow and the
    mobile pair switch share one banded row; conditional status notes are
    compact chips inside the band instead of stacked full-width bars. */
-.trinity-layout .triad-control-band { margin: 0 10px 8px; display: flex; flex-direction: column; gap: 5px; padding: 7px 9px; background: #0b1117; border: 1px solid #263044; border-radius: 6px; }
+.trinity-layout .triad-control-band { margin: 0 10px 3px; display: flex; flex-direction: column; gap: 5px; padding: 4px 9px; background: #0b1117; border: 1px solid #263044; border-radius: 6px; }
 .triad-band-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; font-size: 11px; color: #94a3b8; }
 .triad-band-controls select { background: #101625; border: 1px solid #34405b; border-radius: 4px; padding: 4px 6px; min-height: 27px; color: #cbd5e1; font-size: 11px; max-width: 190px; }
 .triad-band-controls label { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
@@ -288,8 +288,21 @@
 /* P0-3 fix (UX review): 3px rect overlap at 390 between the band's Ask Flow
    trigger and the empty-desk action below it — give the band bottom
    clearance and the empty desk more separation. */
-.trinity-layout .triad-control-band { padding-bottom: 10px; }
+.trinity-layout .triad-control-band { padding-bottom: 4px; }
 .trinity-layout .triad-empty-desk { margin-top: 18px; }
+
+/* M1 (2026-10-24) map-start budget: with the replay strip relocated below the
+   maps (UI-M03 — it is supporting context), the remaining trinity-only rhythm
+   above the maps is tightened so the loaded map containers start at <=300px
+   from the content top at BOTH 1470x950 and 1024x768. Nothing is removed:
+   the band selects drop to a 24px desktop min-height (the 640px touch rule
+   keeps 32px), the per-pane "Center/Show level" row compacts like the pane
+   headers, and the pair trims only its top inset. Scoped to .trinity-layout —
+   the Stock-chart (solstice/skylit) surfaces keep the shared defaults. */
+.trinity-layout .triad-band-controls select { min-height: 24px; }
+.trinity-layout .triad-pair { padding: 3px 12px 8px; }
+.trinity-layout .heatmap-view-controls { padding: 3px 8px; }
+.trinity-layout .heatmap-view-controls button { min-height: 22px; padding: 2px 7px; }
 
 /* ══ 2026-10-18 coherence polish (CSS-only, no logic/testid changes) ══
    Right-rail drawer chrome compacted to match the refreshed inspector;
@@ -343,9 +356,25 @@
 .triad-profile-disclosure > summary { padding:8px 10px; cursor:pointer; font-size:12px; color:#c7c7c7; }
 .triad-profile-disclosure:not([open]) > .triad-profile { display:none; }
 .triad-profile-disclosure > .triad-profile { margin:0; max-height:300px; }
-.trinity-layout .triad-pane-header { white-space:normal; overflow-wrap:anywhere; line-height:1.45; min-height:40px; padding:6px 10px; font-size:12px; }
+/* M1 (2026-10-24): one fixed single-line header per pane — the adjusted title
+   can no longer wrap deeper than raw (that wrap offset same-strike rows by
+   13.17px @1470 and 8.56px @1024). Full units/provenance live in the
+   .triad-pane-units details, whose body overlays the grid (no layout shift). */
+.trinity-layout .triad-pane-header { display:flex; align-items:center; gap:6px; height:28px; min-height:28px; padding:0 10px; font-size:12px; line-height:1; white-space:nowrap; }
+.trinity-layout .triad-pane-header .triad-pane-title { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.trinity-layout .triad-pane-units { position:relative; margin-left:auto; flex:0 0 auto; }
+.trinity-layout .triad-pane-units > summary { cursor:pointer; list-style:none; color:#9bb0bd; font-size:10.5px; line-height:1; padding:4px 7px; border:1px solid #37575f; border-radius:4px; white-space:nowrap; }
+.trinity-layout .triad-pane-units > summary::-webkit-details-marker { display:none; }
+.trinity-layout .triad-pane-units[open] > summary { color:#e2bf73; border-color:#6a5b2c; }
+.trinity-layout .triad-pane-units-body { position:absolute; top:100%; right:0; z-index:30; width:min(360px, 92%); max-height:calc(100% - 44px); overflow:auto; padding:8px 10px; background:#0d222a; border:1px solid #29454d; font-size:11px; line-height:1.5; color:#c8dce0; overflow-wrap:anywhere; box-shadow:0 8px 24px #0008; }
+.trinity-layout .triad-pane-units-body p { margin:0; }
+.trinity-layout .triad-pane-units :focus-visible { outline:2px solid #e2bf73; outline-offset:2px; }
 @media(min-width:900px) {
- .trinity-layout .triad-pair { height:clamp(300px,48dvh,620px); }
- .trinity-layout .heatmap-landmarks { padding:6px 12px; }
+ /* M1: maps >=360px tall at both 1470x950 and 1024x768 — the pair reserves
+    510px so header(28)+controls(39)+legend(32–57, the adjusted legend can
+    wrap one line deeper)+padding never starve either matrix below 360px;
+    the desk itself scrolls. */
+ .trinity-layout .triad-pair { height:clamp(510px,55dvh,620px); }
+ .trinity-layout .heatmap-landmarks { padding:6px 12px; margin-top:8px; }
  .trinity-layout .heatmap-landmarks-heading { display:flex; align-items:center; flex-wrap:wrap; gap:6px 14px; }
 }

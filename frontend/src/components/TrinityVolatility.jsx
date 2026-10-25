@@ -565,13 +565,16 @@ export default function TrinityVolatility({ ticker = "SPY", expiries = 8, loader
             ATM IV Term Structure <small>vol vs expiry · nearest-observation approximation</small>
           </div>
           <div className="tv-cell-b" ref={termRef} />
-          <div className="tv-cell-h-notes">{termData.map(d => (
-            <div key={d.expiry}>{d.expiry} · {d.iv == null ? "unavailable" : `ATM IV ${fmtPct(d.iv)}`}
-              {d.hasCall ? ` · call ${fmtIv(d.callStrike)} IV ${fmtIv(d.callIv)} Δ${fmtNum(d.callDelta)}` : ""}
-              {d.hasPut ? ` · put ${fmtIv(d.putStrike)} IV ${fmtIv(d.putIv)} Δ${fmtNum(d.putDelta)}` : ""}
-              {d.hasCall || d.hasPut ? ` (distance ${d.hasCall ? fmtNum(d.callDistance) : "—"}pt ${d.hasPut ? ` · ${fmtNum(d.putDistance)}pt` : ""})` : ""}
-            </div>
-          ))}</div>
+          <div className="tv-cell-h-notes"><details className="tv-source-details" data-testid="tv-source-details-term">
+            <summary>Exact rows · {termData.length} expiries</summary>
+            {termData.map(d => (
+              <div key={d.expiry}>{d.expiry} · {d.iv == null ? "unavailable" : `ATM IV ${fmtPct(d.iv)}`}
+                {d.hasCall ? ` · call ${fmtIv(d.callStrike)} IV ${fmtIv(d.callIv)} Δ${fmtNum(d.callDelta)}` : ""}
+                {d.hasPut ? ` · put ${fmtIv(d.putStrike)} IV ${fmtIv(d.putIv)} Δ${fmtNum(d.putDelta)}` : ""}
+                {d.hasCall || d.hasPut ? ` (distance ${d.hasCall ? fmtNum(d.callDistance) : "—"}pt ${d.hasPut ? ` · ${fmtNum(d.putDistance)}pt` : ""})` : ""}
+              </div>
+            ))}
+          </details></div>
         </div>
 
         <div className="tv-cell">
@@ -579,14 +582,17 @@ export default function TrinityVolatility({ ticker = "SPY", expiries = 8, loader
             25Δ Risk Reversal <small>put−call skew by expiry · nearest-observation approximation</small>
           </div>
           <div className="tv-cell-b" ref={rrRef} />
-          <div className="tv-cell-h-notes">{rrData.map(d => (
-            <div key={d.expiry}>{d.expiry} · {d.rr == null ? "unavailable (one side missing)" : `RR ${fmtNum(d.rr)} vol pts`}
-              {d.callStrike != null ? ` · call Δ${fmtNum(d.callDelta)} @${fmtIv(d.callStrike)}` : ""}
-              {d.putStrike != null ? ` · put Δ${fmtNum(d.putDelta)} @${fmtIv(d.putStrike)}` : ""}
-              {d.callStrike != null ? ` · call ${d.callDistance} from +0.25` : ""}
-              {d.putStrike != null ? ` · put ${d.putDistance} from −0.25` : ""}
-            </div>
-          ))}</div>
+          <div className="tv-cell-h-notes"><details className="tv-source-details" data-testid="tv-source-details-rr">
+            <summary>Exact rows · {rrData.length} expiries</summary>
+            {rrData.map(d => (
+              <div key={d.expiry}>{d.expiry} · {d.rr == null ? "unavailable (one side missing)" : `RR ${fmtNum(d.rr)} vol pts`}
+                {d.callStrike != null ? ` · call Δ${fmtNum(d.callDelta)} @${fmtIv(d.callStrike)}` : ""}
+                {d.putStrike != null ? ` · put Δ${fmtNum(d.putDelta)} @${fmtIv(d.putStrike)}` : ""}
+                {d.callStrike != null ? ` · call ${d.callDistance} from +0.25` : ""}
+                {d.putStrike != null ? ` · put ${d.putDistance} from −0.25` : ""}
+              </div>
+            ))}
+          </details></div>
         </div>
       </div>
 
