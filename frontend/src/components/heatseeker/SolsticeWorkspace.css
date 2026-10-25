@@ -303,6 +303,14 @@
 .trinity-layout .triad-pair { padding: 3px 12px 8px; }
 .trinity-layout .heatmap-view-controls { padding: 3px 8px; }
 .trinity-layout .heatmap-view-controls button { min-height: 22px; padding: 2px 7px; }
+/* Owner live request 2026-10-24 (ancestor scroll jumps): the 0DTE refusal
+   blocks unmount when "Show all loaded expiries" loads the maps, and Chrome's
+   scroll anchoring lost its anchor node inside them — the page jumped from
+   scrollY 335 to 0 (measured in owner-preflight-fresh-context.json). Excluding
+   the volatile conditionally-mounted blocks from the anchor search leaves the
+   stable comparison pair as the anchor, so the desk does not move under the
+   user when the refusal is dismissed. */
+.trinity-layout .triad-empty-desk, .trinity-layout .triad-scope-notice, .trinity-layout .triad-band-note { overflow-anchor: none; }
 
 /* ══ 2026-10-18 coherence polish (CSS-only, no logic/testid changes) ══
    Right-rail drawer chrome compacted to match the refreshed inspector;
