@@ -188,7 +188,7 @@
    dark treatment, no new navigation. The loaded expiry dates stay visible
    on the desk so the actual displayed axis never depends on the
    disclosure. */
-.trinity-layout .triad-context-disclosure { margin: 3px 10px; border: 1px solid #263044; border-radius: 5px; background: #0b1117; }
+.trinity-layout .triad-context-disclosure { margin: 2px 10px 3px; border: 1px solid #263044; border-radius: 5px; background: #0b1117; }
 .trinity-layout .triad-context-disclosure > summary { cursor: pointer; list-style: none; padding: 3px 10px; font-size: 12px; color: #c6d7df; white-space: nowrap; }
 .trinity-layout .triad-context-disclosure > summary::-webkit-details-marker { display: none; }
 .trinity-layout .triad-context-disclosure[open] > summary::before { content: "▾ "; color: #8ba3b0; }
@@ -263,7 +263,7 @@
    Expiry scope, adjusted basis, loaded-date identity, Ask Flow and the
    mobile pair switch share one banded row; conditional status notes are
    compact chips inside the band instead of stacked full-width bars. */
-.trinity-layout .triad-control-band { margin: 0 10px 4px; display: flex; flex-direction: column; gap: 5px; padding: 4px 9px; background: #0b1117; border: 1px solid #263044; border-radius: 6px; }
+.trinity-layout .triad-control-band { margin: 0 10px 3px; display: flex; flex-direction: column; gap: 5px; padding: 4px 9px; background: #0b1117; border: 1px solid #263044; border-radius: 6px; }
 .triad-band-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; font-size: 11px; color: #94a3b8; }
 .triad-band-controls select { background: #101625; border: 1px solid #34405b; border-radius: 4px; padding: 4px 6px; min-height: 27px; color: #cbd5e1; font-size: 11px; max-width: 190px; }
 .triad-band-controls label { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }

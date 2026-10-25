@@ -116,6 +116,32 @@ test("a payload reload re-anchors the adjusted scroller, not only a basis change
   expect(screen.getByTestId("triad-source")).toHaveTextContent("snap-triad-1");
 });
 
+test("a grid re-center marker re-anchors the pair without any scroll event", async () => {
+  await act(async () => { render(<TrinityView ticker="SPY" />); });
+  const raw = screen.getByTestId("triad-pane-raw").querySelector(".skylit-heatmap-container");
+  const adjusted = screen.getByTestId("triad-pane-adjusted").querySelector(".skylit-heatmap-container");
+  raw.scrollTop = 200;
+  fireEvent.scroll(raw);
+  expect(adjusted.scrollTop).toBe(200);
+  // Programmatic re-centers (Center on price, Show selected level, the
+  // grids' own mount/scope centering) write scrollTop with NO user gesture,
+  // and renderers that defer scroll events to rendering opportunities that
+  // never arrive never fire the sync (measured headless: raw 978 vs
+  // adjusted 991 — a 13px same-strike offset). The grid marks every
+  // programmatic center on the container via data-centered-scroll, so the
+  // pair must re-anchor off that marker alone, no scroll event at all.
+  raw.scrollTop = 300;
+  raw.dataset.centeredScroll = "300";
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+  expect(adjusted.scrollTop).toBe(300);
+  // A re-center of the ADJUSTED grid alone must also fall back to raw's
+  // anchor (raw keeps the user's scroll; adjusted is the dependent pane).
+  adjusted.scrollTop = 999;
+  adjusted.dataset.centeredScroll = "999";
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+  expect(adjusted.scrollTop).toBe(300);
+});
+
 test("landmarks follow the comparison maps; profile stays below both", async () => {
   await act(async () => { render(<TrinityView ticker="SPY" />); });
   const maps = screen.getByTestId("triad-raw-adjusted");

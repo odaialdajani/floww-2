@@ -148,6 +148,28 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
     const adjusted = adjustedMapRef.current;
     if (raw && adjusted && adjusted.scrollTop !== raw.scrollTop) adjusted.scrollTop = raw.scrollTop;
   }, [basis, payload]);
+  // M1 (2026-10-24): programmatic re-centers (Center on price, Show selected
+  // level, the grids' own mount/scope centering) write scrollTop with no user
+  // gesture, and renderers that defer scroll events to rendering
+  // opportunities which never arrive never fire the onScroll sync (measured
+  // in an embedded headless pass: raw 978 vs adjusted 991 — same-strike rows
+  // 13px apart at 1024x768). The grid marks every programmatic center on
+  // the container via data-centered-scroll, so watching that marker keeps
+  // the pair anchored to raw in those environments too; in normal browsers
+  // this is redundant with the event path. Raw is the anchor by design —
+  // an adjusted-side re-center falls back to raw's position.
+  useEffect(() => {
+    const raw = rawMapRef.current;
+    const adjusted = adjustedMapRef.current;
+    if (!raw || !adjusted || typeof MutationObserver === "undefined") return undefined;
+    const anchor = () => {
+      if (adjusted.scrollTop !== raw.scrollTop) adjusted.scrollTop = raw.scrollTop;
+    };
+    const observer = new MutationObserver(anchor);
+    observer.observe(raw, { attributes: true, attributeFilter: ["data-centered-scroll"] });
+    observer.observe(adjusted, { attributes: true, attributeFilter: ["data-centered-scroll"] });
+    return () => observer.disconnect();
+  }, [payload]);
   const syncMaps = event => {
     const source = event.currentTarget;
     const target = source === rawMapRef.current ? adjustedMapRef.current : rawMapRef.current;
