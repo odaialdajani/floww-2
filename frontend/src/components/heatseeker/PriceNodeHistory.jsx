@@ -12,6 +12,7 @@ import { useChartData } from "./chart/useChartData";
 import { STUDIES, getStudy, createStudyInstance, validateStudySettings, studySpecs, paneEligibility } from "./chart/indicators/registry";
 import { loadStudyInstances, saveStudyInstances } from "./chart/persistence/studyStore";
 import { eligibleMappedPairsFor, parseMappedLevelsResponse } from "./chart/mappedLevelsClient";
+import { projectWhitespace } from "./chart/scenarioProjection";
 import { chartTime } from "./recordedPriceChartData";
 
 
@@ -233,6 +234,23 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
       .catch(() => { if (!cancelled) setMapped({ status: 'unavailable', reason: 'route unavailable', shapes: [], legend: null, ratio: null }); });
     return () => { cancelled = true; };
   }, [mappedSource, ticker, position, payload?.query_key]);
+  // B10 future whitespace (b10_projection_contract v2, H3 PASS; CHART-C044):
+  // the future axis extends in exact interval multiples of THIS pane's grid;
+  // the scenario zone is sessionZones at its own known-at — recorded context
+  // only, high/low never extended into the future; the source age is ALWAYS
+  // rendered with the zone. Refusals render as the typed one-liner.
+  const GRID_MINUTES = [1, 5, 15, 30, 60];
+  const projection = useMemo(() => {
+    if (!frames.length || !GRID_MINUTES.includes(minutes)) return null;
+    const cursorFrame = frames[position];
+    if (!cursorFrame) return null;
+    return projectWhitespace(frames, {
+      intervalMinutes: minutes,
+      horizonMinutes: minutes * 8,
+      supportedGrid: GRID_MINUTES,
+      cursorMs: Date.parse(cursorFrame.time),
+    });
+  }, [frames, minutes, position]);
   // B16 pointer/keyboard geometry: the drawing layer projects LOGICAL anchors
   // through the real loaded frames' time/price domain. Zoom/resize changes
   // pixels, never anchor meaning.
@@ -603,6 +621,16 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
     {!primary&&<button type="button" className="skylit-trade-mode-btn" aria-expanded={open} onClick={()=>{setOpen(!open);setPlaying(false);}}>Price chart + historical nodes</button>}
     {open&&<RecordedPriceChart renderDrawingLayer={renderDrawingLayer} ticker={ticker} frames={frames.slice(0,position+1)} fitAllFrames={fitMode==="fit-all"?frames:null} revision={ticker+":"+days+":"+minutes+":"+payload?.query_key+":"+reload} onInteract={pauseInteraction} metricCoverage={payload?.metric_line_coverage} toolbarControls={controls} toolbarActions={toolbarActions} historyPeriodControls={historyPeriodControls} historyControls={historyControls} replayControls={replayControls} dataDetails={details} readingStatus={readingStatus} emptyContent={empty} showAtlas={showAtlas} exposureLine={exposureLine??payload?.exposure_line??null} darkLevels={darkLevels} alertLines={alertLines??null} cvdLine={cvdLine??payload?.cvd_line??null} contractBars={payload?.contract_bars??null} contractSymbol={payload?.contract_symbol??(contract||null)} contractStatus={payload?.contract_status??null} flowBars={Array.isArray(flowBars)&&flowBars.length===frames.length?flowBars.slice(0,position+1):flowBars} syncSeq={sync?.seq||0} syncView={sync?.time||null} syncPrice={sync?.price||null} syncCrosshair={sync?.crosshair!=null?sync.crosshair:null} onSync={onSyncEvent} studyLines={studyLineSpecs} mappedShapes={mapped?.status === 'available' ? mapped.shapes : null}/>}
     {open&&forcedScope!=null&&!followMap&&<p role="note">Saved-view review — these recorded expiry dates are not the current map scope.</p>}
+    {/* B10 (C044): interval future whitespace + typed scenario zone. The
+        slots are EMPTY CANVAS markers — no forecasts; the zone is recorded
+        context at its own known-at; the source age is always visible. */}
+    {open&&projection?.status === 'ok'&&<div className="price-future-whitespace" data-testid="future-whitespace-strip" title="Future whitespace — empty canvas in interval multiples; the scenario zone describes only what was knowable at the cursor">
+      <span className="pw-slots" data-testid="future-whitespace-slots">{projection.segments.map((seg,i)=><i key={i} data-testid="future-whitespace-slot" aria-hidden="true"></i>)}</span>
+      <span data-testid="scenario-zone-label">Session zone {projection.zone.high}/{projection.zone.low} · {projection.zone.bars} bars</span>
+      <span data-testid="scenario-source-age" title="Age of the zone source at the cursor — how far the cursor is past the last known bar">age {projection.sourceAgeSeconds}s</span>
+      <span className="pw-note">{projection.zone.note}</span>
+    </div>}
+    {open&&projection?.status === 'refused'&&<p className="price-future-whitespace-refused" data-testid="future-whitespace-refusal" role="note">Future whitespace unavailable — {projection.reason}{projection.zone&&projection.zone.reason?` (${projection.zone.reason})`:''}</p>}
     {/* P1-5 (UX review): secondary strips below the chart collapse into slim
         lines — drawings behind a one-line disclosure, velocity as an inline
         hairline row. Rail testids and interactions are unchanged. */}
