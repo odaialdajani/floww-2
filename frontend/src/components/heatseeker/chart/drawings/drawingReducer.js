@@ -146,6 +146,9 @@ export function reduceDrawings(state, action) {
     case 'toggleVisible': return state.map((d) => (d.id === action.id ? { ...d, visible: d.visible === false } : d));
     // Edit/replace anchors: locked drawings refuse — returned unchanged.
     case 'update': return state.map((d) => (d.id === action.id && canEdit(d) ? { ...d, anchors: action.anchors, revision: (d.revision || 1) + 1 } : d));
+    // B17 style model: per-drawing optional {color?, width?, dash?} merged
+    // additively; absent keys keep incumbent defaults; locked refuses.
+    case 'style': return state.map((d) => (d.id === action.id && canEdit(d) ? { ...d, style: { ...(d.style || {}), ...action.style }, revision: (d.revision || 1) + 1 } : d));
     case 'nudge': return state.map((d) => (d.id === action.id && canEdit(d) ? nudgeDrawing(d, action.dt || 0, action.dp || 0) : d));
     default: return state;
   }

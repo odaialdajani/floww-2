@@ -6,7 +6,8 @@ import React from 'react';
 // draft CANCEL — every pinned testid/label above is byte-identical.
 export default function DrawingRail({ drawings = [], selectedId = null,
   onSelect = null, onDelete = null, onToggleLock = null, onToggleHide = null,
-  tools = [], draftTool = null, onToolPick = null, onUndo = null, onCancelDraft = null }) {
+  tools = [], draftTool = null, onToolPick = null, onUndo = null, onCancelDraft = null, onStyle = null }) {
+  const selected = (Array.isArray(drawings) ? drawings : []).find((d) => d.id === selectedId) || null;
   return (
     <div data-testid="drawing-rail" aria-label="Drawings">
       {!!tools.length && (
@@ -25,6 +26,35 @@ export default function DrawingRail({ drawings = [], selectedId = null,
       )}
       {draftTool && onCancelDraft && (
         <button type="button" data-testid="rail-cancel" onClick={() => onCancelDraft()}>Cancel drawing</button>
+      )}
+      {selected && onStyle && !selected.locked && (
+        <div className="rail-style-row" data-testid="rail-style-row" role="group" aria-label="Selected drawing style">
+          <label>Color
+            <select data-testid="rail-style-color" aria-label="Drawing color"
+              value={selected.style?.color || ""}
+              onChange={e => onStyle(selected.id, e.target.value ? { color: e.target.value } : { color: undefined })}>
+              <option value="">Default</option>
+              <option value="#7fa6c0">Blue</option>
+              <option value="#e3c16a">Gold</option>
+              <option value="#5ec986">Green</option>
+              <option value="#d65656">Red</option>
+              <option value="#c4a1ef">Violet</option>
+            </select>
+          </label>
+          <label>Width
+            <select data-testid="rail-style-width" aria-label="Drawing width"
+              value={String(selected.style?.width || "")}
+              onChange={e => onStyle(selected.id, e.target.value ? { width: Number(e.target.value) } : { width: undefined })}>
+              <option value="">Default</option>
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+            </select>
+          </label>
+          <label><input type="checkbox" data-testid="rail-style-dash" aria-label="Dashed line"
+            checked={!!selected.style?.dash}
+            onChange={e => onStyle(selected.id, { dash: e.target.checked })} />Dashed</label>
+        </div>
       )}
       {(Array.isArray(drawings) ? drawings : []).map((d) => (
         <div key={d.id} data-testid="rail-drawing" data-selected={d.id === selectedId}
