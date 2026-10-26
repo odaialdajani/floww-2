@@ -54,25 +54,55 @@ export function profileConfig(bars, { mode = 'visible', levels, vaPct = 0.68, ba
 // zero-axis rebasing, MA smoothing — over the REAL estimated path. The
 // 'estimated' approximation label is part of every output: this NEVER
 // becomes a classified-tape claim.
+//
+// H3 REWORK semantics (H3-VERDICT-PANESTUDIES-3d65b528-REWORK): a missing
+// bar stays an EXPLICIT hole in the output (cvd: null, ma: null — never
+// silently dropped), and the MA window RESETS at every hole and at every
+// anchor-period boundary — it never bridges a gap and never carries a
+// prior session's values into a new session's first window. The sma
+// primitive stays the ONE engine, applied per contiguous finite run
+// within one anchor group.
 export function cvdConfig(cvdLine, { anchor = 'none', maPeriod = 1, zeroAxis = 'free' } = {}) {
   const list = Array.isArray(cvdLine) ? cvdLine : [];
-  const clean = list.filter((p) => p && typeof p.cvd === 'number' && Number.isFinite(p.cvd));
-  if (!clean.length) return { status: 'refused', reason: 'no finite estimated CVD values on this pane' };
+  if (!list.length) return { status: 'refused', reason: 'no estimated CVD values on this pane' };
   if (anchor !== 'none' && anchor !== 'session') return { status: 'refused', reason: 'unsupported CVD anchor' };
   if (zeroAxis !== 'free' && zeroAxis !== 'zero-at-anchor') return { status: 'refused', reason: 'unsupported zero-axis mode' };
   if (!(Number.isInteger(maPeriod) && maPeriod >= 1 && maPeriod <= 200)) return { status: 'refused', reason: 'MA period out of bounds (1..200)' };
   const zeroAtAnchor = zeroAxis === 'zero-at-anchor' && anchor === 'session';
+  // Every entry renders: a non-finite cvd becomes an explicit hole (null) —
+  // the finite filter that silently removed missing bars is GONE.
   let dayKey = null, offset = 0;
-  const points = clean.map((p) => {
+  const points = list.map((p) => {
+    const finite = p && typeof p.cvd === 'number' && Number.isFinite(p.cvd);
+    let key = null;
     if (anchor === 'session') {
-      const key = periodKey(p.time, 'session');
-      if (key === null) return null;
-      if (key !== dayKey) { dayKey = key; offset = p.cvd; }        // a new session rebases
+      key = periodKey(p?.time, 'session');
+      if (key === null) return { time: p?.time ?? null, cvd: null, ma: null }; // unparsable time: a hole, never a guess
     }
-    return { time: p.time, cvd: zeroAtAnchor ? p.cvd - offset : p.cvd };
-  }).filter(Boolean);
-  const ma = sma(points.map((p) => p.cvd), maPeriod);
-  points.forEach((p, i) => { p.ma = ma[i]; });
+    if (finite) {
+      if (key !== null && key !== dayKey) { dayKey = key; offset = p.cvd; }   // a new session rebases
+      return { time: p.time, cvd: zeroAtAnchor ? p.cvd - offset : p.cvd, _key: key };
+    }
+    return { time: p?.time ?? null, cvd: null, ma: null };                    // explicit hole
+  });
+  // The MA runs per contiguous finite run WITHIN one anchor group: a hole or
+  // a boundary closes the run, so the window never bridges either.
+  let run = [], runAt = [];
+  const flushRun = () => {
+    if (!run.length) return;
+    const ma = sma(run, maPeriod);                                            // the ONE engine, per run
+    runAt.forEach((idx, i) => { points[idx].ma = ma[i]; });
+    run = []; runAt = [];
+  };
+  points.forEach((pt, i) => {
+    if (pt.cvd === null) { flushRun(); return; }                              // a hole resets the window
+    const sameGroup = anchor === 'none' || pt._key === (runAt.length ? points[runAt[runAt.length - 1]]._key : pt._key);
+    if (!sameGroup) flushRun();                                               // a boundary resets the window
+    run.push(pt.cvd); runAt.push(i);
+  });
+  flushRun();
+  points.forEach((pt) => { delete pt._key; pt.ma = pt.cvd === null ? null : (pt.ma ?? null); });
+  if (!points.some((p) => p.cvd !== null)) return { status: 'refused', reason: 'no finite estimated CVD values on this pane' };
   return {
     status: 'ok', approximation: 'estimated-bvc', anchor, zeroAxis, maPeriod,
     points,

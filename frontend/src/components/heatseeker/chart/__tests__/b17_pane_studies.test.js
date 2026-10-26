@@ -67,9 +67,11 @@ test('C118 cvdConfig: session anchor + zero-axis rebase + MA smoothing, computed
   // session rebasing: day 2 restarts at 0, not at day 1's end value
   expect(out.points[2].cvd).toBe(0);
   expect(out.points[3].cvd).toBe(8);                          // -5 -> 3 rebased to 0 -> 8
-  // MA smoothing rides the SAME sma primitive over the rebased path
-  const expectedMa = sma(out.points.map((p) => p.cvd), 2);
-  expect(out.points.map((p) => p.ma)).toEqual(expectedMa);
+  // MA smoothing rides the SAME sma primitive — PER contiguous run within one
+  // session (the rework rule: the window never crosses an anchor boundary).
+  const session1 = sma([0, 15], 2); // day 1 REBASED: 10->0, 25->15
+  const session2 = sma([0, 8], 2); // day 2 rebased: -5->0, 3->8
+  expect(out.points.map((p) => p.ma)).toEqual([...session1, ...session2]);
   // free zero-axis: no rebasing — the raw path passes through
   const free = cvdConfig(cvdLine, { anchor: 'none', zeroAxis: 'free', maPeriod: 1 });
   expect(free.points.map((p) => p.cvd)).toEqual([10, 25, -5, 3]);
@@ -101,4 +103,39 @@ test('C124-C126 tpoConfig: bar-resolution periods through the EXISTING engine; t
   const iso = tpoConfig(ISO_BARS, { mode: 'bar-resolution' });
   expect(iso.status).toBe('refused');
   expect(iso.reason).toMatch(/epoch milliseconds/);
+});
+
+// --- H3 REWORK vectors (H3-VERDICT-PANESTUDIES-3d65b528-REWORK): explicit
+// gaps preserved, MA never bridges a gap or an anchor-period boundary. ---
+test('CVD rework: a missing bar stays an explicit hole — never silently dropped, never bridged', () => {
+  const cvdLine = [
+    { time: '2026-10-26T13:30:00Z', cvd: 10 }, { time: '2026-10-26T14:00:00Z', cvd: 25 },
+    { time: '2026-10-26T14:30:00Z', cvd: null }, // the missing bar — must remain a point
+    { time: '2026-10-26T15:00:00Z', cvd: 40 },
+  ];
+  const out = cvdConfig(cvdLine, { anchor: 'none', maPeriod: 2 });
+  expect(out.status).toBe('ok');
+  expect(out.points).toHaveLength(4);                      // ALL entries render — the hole is not removed
+  expect(out.points[2]).toEqual({ time: '2026-10-26T14:30:00Z', cvd: null, ma: null }); // explicit hole
+  // the post-gap point's MA is computed from the POST-GAP run only: a single
+  // value with maPeriod 2 has no complete window -> null, NOT the average
+  // bridged across the missing bar.
+  expect(out.points[3].cvd).toBe(40);
+  expect(out.points[3].ma).toBe(null);
+  // the pre-gap run's MA is untouched by the hole
+  expect(out.points[1].ma).toBeCloseTo(17.5, 6);
+});
+
+test('CVD rework: MA never carries prior-session values across the anchor boundary', () => {
+  const cvdLine = [
+    { time: '2026-10-26T14:00:00Z', cvd: 10 }, { time: '2026-10-26T15:00:00Z', cvd: 20 },
+    { time: '2026-10-27T14:00:00Z', cvd: 30 }, // a NEW session begins
+  ];
+  const out = cvdConfig(cvdLine, { anchor: 'session', zeroAxis: 'zero-at-anchor', maPeriod: 2 });
+  expect(out.status).toBe('ok');
+  // session 2 rebases: 30 - 30 = 0
+  expect(out.points[2].cvd).toBe(0);
+  // the new session's MA restarts: its first value has no complete window in
+  // the NEW session — null, NOT (20 + 30)/2 = 25 carried from session 1.
+  expect(out.points[2].ma).toBe(null);
 });
