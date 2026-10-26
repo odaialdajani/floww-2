@@ -7,16 +7,13 @@ import { wallPositionOf } from "../lib/solsticeSelection";
 import { useReviewJournal } from "./triad/useReviewJournal";
 import { ALL_BASES, surfaceStatus, wallValues, wallRead } from "../lib/solsticeMetrics";
 import StrikeExposureProfile from "./triad/StrikeExposureProfile";
-import ExactContractReview from "./heatseeker/ExactContractReview";
 import AskFlow from "./heatseeker/AskFlow";
-import ReviewInspector, {ReviewSelectionContext} from "./heatseeker/ReviewInspector";
 import HeatmapLandmarks from "./heatseeker/HeatmapLandmarks";
-import WallInspector from "./heatseeker/WallInspector";
-import {chartTime} from "./heatseeker/recordedPriceChartData";
 import { usePublishScreenContext } from "../agent/useScreenContext";
 import { replayToDisplay } from "../lib/solsticeReplay";
 import ReplayStrip from "./heatseeker/ReplayStrip";
-import { GroundedPublicReview } from "./public/PublicHandoffReview";
+import MarketInspectorDock from "./triad/MarketInspectorDock";
+import "./triad/MarketDesktop.css";
 
 /**
  * TrinityView — Triad 0DTE review desk (O4 rebuild).
@@ -126,6 +123,31 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
   }, [sharedTicker, ticker, handoff, onFocusTicker]);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // Desktop composition (market-desktop-20261025): the selected-object
+  // inspector is a persistent right dock at wide desktop widths and a proper
+  // overlay below 1180px. `inspectorOpen` collapses the dock column / closes
+  // the overlay; the explicit review action (`Review contracts`) forces it
+  // open via drawerOpen. matchMedia is feature-detected: environments without
+  // it (jsdom) stay in dock mode so behavior tests are unaffected.
+  const initialNarrow = typeof window !== "undefined" && typeof window.matchMedia === "function"
+    ? window.matchMedia("(max-width: 1179px)").matches : false;
+  const [narrow, setNarrow] = useState(initialNarrow);
+  const narrowRef = useRef(initialNarrow);
+  useEffect(() => {
+    narrowRef.current = narrow;
+  }, [narrow]);
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return undefined;
+    const query = window.matchMedia("(max-width: 1179px)");
+    const onChange = e => { setNarrow(e.matches); narrowRef.current = e.matches; };
+    if (query.addEventListener) query.addEventListener("change", onChange);
+    else if (query.addListener) query.addListener(onChange);
+    return () => {
+      if (query.removeEventListener) query.removeEventListener("change", onChange);
+      else if (query.removeListener) query.removeListener(onChange);
+    };
+  }, []);
+  const [inspectorOpen, setInspectorOpen] = useState(!initialNarrow);
   // O5: same focus ownership as the Solstice inspector drawer.
   const drawerCloseRef = useRef(null);
   const drawerPrevFocusRef = useRef(null);
@@ -347,6 +369,10 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
     setWallId(id);
     setCell(null);
     setDrawerOpen(false);
+    // On narrow desktop the inspector is an overlay: selecting a wall is the
+    // one concrete action that should surface it. Wide-desktop dock mode is
+    // unaffected (the inspector is already visible).
+    if (narrowRef.current) setInspectorOpen(true);
   }, []);
 
   const onGridCell = useCallback((strike, colKey = null, pane = "raw") => {
@@ -398,44 +424,72 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
   }
 
   return (
-    <div className="trinity-layout" data-testid="triad-view">
-      {replayId && !replayDisplay && <button type="button" onClick={() => onReplayDisplay(null)}>Leave recorded observation · Live</button>}
-      {/* Market context (2026-10-18): secondary rank/research context and the
-          activity explanation live in a native disclosure — no state, no
-          effect, so opening it can never add requests or become a fetch
-          dependency. The focused-symbol input stays keyboard-first inside. */}
-      <details className="triad-context-disclosure" data-testid="triad-context-disclosure">
-        <summary role="button" aria-label="Market context">Market context</summary>
-        <div className="triad-context-body">
-          <p className="triad-context-method">Raw = where · adjusted = weighting, not observed direction.</p>
-          <ContextStrip board={board} ticker={ticker} symbolInput={symbolInput}
-            onSymbolInput={setSymbolInput} onSubmit={submitSymbol} showStockControl={!sharedStockChoice}
-            boardStatus={boardStatus} />
-          {["session_delta_volume", "activity", "window"].includes(basis) && <details data-testid="triad-activity-coverage">
-            <summary>Activity window and coverage</summary>
-            <p>Volume window: {payload?.metrics?.grids?.[basis]?.interval?.start && payload?.metrics?.grids?.[basis]?.interval?.end
-              ? `${payload.metrics.grids[basis].interval.start} → ${payload.metrics.grids[basis].interval.end}` : "unavailable — no declared bounds"}.
-              {" "}Usable inputs: {surfaceStatus(payload, basis).usable ?? "unknown"} · {surfaceStatus(payload, basis).status}.
-              {" "}{surfaceStatus(payload, basis).reason || "No volume or Greeks are inferred from OI."}</p>
-          </details>}
+    <div className={`trinity-layout trinity-desktop ${inspectorOpen || drawerOpen ? "tdk-dock-open" : "tdk-dock-closed"}`} data-testid="triad-view">
+      {/* Desktop composition (market-desktop-20261025): ONE calm grouped
+          command header — focus, scope, basis, assistant, context — then the
+          raw/adjusted comparison immediately, and the selected-object
+          inspector docked beside it. Every control, testid, honest refusal
+          string and data path is preserved; only the composition moves. */}
+      <header className="tdk-head" data-testid="triad-control-band">
+        <div className="tdk-head-row">
+          {!sharedStockChoice ? (
+            <div className="tdk-head-group">
+              <span className="tdk-head-label">Market</span>
+              <input value={symbolInput} onChange={(e) => setSymbolInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") submitSymbol(); }}
+                data-testid="triad-symbol-input" aria-label="Focused symbol" placeholder="SYM" />
+              <button type="button" onClick={submitSymbol} data-testid="triad-symbol-go"
+                title="Load this symbol's snapshot (its own data only)">Go</button>
+            </div>
+          ) : (
+            <div className="tdk-head-group">
+              <span className="tdk-head-label">Market ·</span>
+              <span className="tdk-chip" data-testid="triad-head-focus">Focused: {ticker}</span>
+            </div>
+          )}
+          <div className="tdk-head-group">
+            <select aria-label="Market view expiry scope" value={isReplay ? declaredScope : scope} disabled={isReplay} onChange={e => setScope(e.target.value)}>
+              <option value="loaded">All loaded · max 4 expiries</option><option value="0dte">0DTE · request same session</option><option value="week">Week · ≤7 calendar DTE</option>
+              <option value="next">Next listed · one expiry, ≤30 calendar DTE</option>
+              {isReplay && declaredScope === "recorded" && <option value="recorded">Recorded scope · exact dates below</option>}
+            </select>
+            <label>Adjusted context <select aria-label="Adjusted context" value={basis} onChange={e => { setBasis(e.target.value); setActivePane("adjusted"); }}>
+              {ADJUSTED_BASES.map(b => <option key={b.id} value={b.id} data-testid={`triad-basis-${b.id}`}
+                disabled={surfaceStatus(payload, b.id).status === "unavailable" && basis !== b.id} title={surfaceStatus(payload, b.id).reason || b.units}>{b.label}</option>)}
+            </select></label>
+          </div>
+          <div className="tdk-head-group">
+            <AskFlow subject={`${ticker} · raw wall ${wallId || "none"}`} overlayMetric={activeMetric} displayMode={isReplay ? "replay" : "live"} compact />
+          </div>
+          <div className="tdk-head-group">
+            <details className="triad-context-disclosure" data-testid="triad-context-disclosure">
+              <summary role="button" aria-label="Market context">Market context</summary>
+              <div className="triad-context-body">
+                <p className="triad-context-method">Raw = where · adjusted = weighting, not observed direction.</p>
+                <ContextStrip board={board} ticker={ticker} symbolInput={symbolInput}
+                  onSymbolInput={setSymbolInput} onSubmit={submitSymbol} showStockControl={false}
+                  boardStatus={boardStatus} />
+                {["session_delta_volume", "activity", "window"].includes(basis) && <details data-testid="triad-activity-coverage">
+                  <summary>Activity window and coverage</summary>
+                  <p>Volume window: {payload?.metrics?.grids?.[basis]?.interval?.start && payload?.metrics?.grids?.[basis]?.interval?.end
+                    ? `${payload.metrics.grids[basis].interval.start} → ${payload.metrics.grids[basis].interval.end}` : "unavailable — no declared bounds"}.
+                    {" "}Usable inputs: {surfaceStatus(payload, basis).usable ?? "unknown"} · {surfaceStatus(payload, basis).status}.
+                    {" "}{surfaceStatus(payload, basis).reason || "No volume or Greeks are inferred from OI."}</p>
+                </details>}
+              </div>
+            </details>
+          </div>
+          <div className="tdk-head-group">
+            <button type="button" className="tdk-head-toggle" data-testid="triad-inspector-toggle"
+              aria-pressed={inspectorOpen} onClick={() => setInspectorOpen(value => !value)}
+              title="Show or hide the selected-object inspector">
+              {inspectorOpen ? "Hide inspector" : "Inspector"}
+            </button>
+            {replayId && !replayDisplay && <button type="button" onClick={() => onReplayDisplay(null)}>Leave recorded observation · Live</button>}
+          </div>
+          <div className="triad-mobile-switch"><button onClick={() => setMobilePane("raw")}>Raw</button><button onClick={() => setMobilePane("adjusted")}>Adjusted</button></div>
         </div>
-      </details>
-      {/* 2026-10-18 visible refresh: ONE compact control band. Expiry scope,
-          adjusted basis, loaded-date identity, Ask Flow and the mobile pair
-          switch share a single banded row; conditional status notes sit
-          inside the band as compact chips instead of extra stacked
-          full-width bars. Every control, testid and honest string is kept. */}
-      <div className="triad-control-band" data-testid="triad-control-band">
-        <div className="triad-band-controls">
-          <select aria-label="Market view expiry scope" value={isReplay ? declaredScope : scope} disabled={isReplay} onChange={e => setScope(e.target.value)}>
-            <option value="loaded">All loaded · max 4 expiries</option><option value="0dte">0DTE · request same session</option><option value="week">Week · ≤7 calendar DTE</option>
-            <option value="next">Next listed · one expiry, ≤30 calendar DTE</option>
-            {isReplay && declaredScope === "recorded" && <option value="recorded">Recorded scope · exact dates below</option>}
-          </select>
-          <label>Adjusted context <select aria-label="Adjusted context" value={basis} onChange={e => { setBasis(e.target.value); setActivePane("adjusted"); }}>
-            {ADJUSTED_BASES.map(b => <option key={b.id} value={b.id} data-testid={`triad-basis-${b.id}`}
-              disabled={surfaceStatus(payload, b.id).status === "unavailable" && basis !== b.id} title={surfaceStatus(payload, b.id).reason || b.units}>{b.label}</option>)}
-          </select></label>
+        <div className="tdk-head-sub">
           {/* Actual loaded expiry dates (2026-10-18): the displayed raw axis,
               validated display-only. Missing or unreadable dates stay honest;
               an excluded invalid value is declared, never claimed complete. */}
@@ -448,24 +502,28 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
                 : "none valid — expiry dates unreadable in this snapshot"}
             {loadedExpiries.invalid > 0 && ` · ${loadedExpiries.invalid} invalid expiry value${loadedExpiries.invalid === 1 ? "" : "s"} excluded — not complete`}
           </span>
-          <AskFlow subject={`${ticker} · raw wall ${wallId || "none"}`} overlayMetric={activeMetric} displayMode={isReplay ? "replay" : "live"} compact />
-          <div className="triad-mobile-switch"><button onClick={() => setMobilePane("raw")}>Raw</button><button onClick={() => setMobilePane("adjusted")}>Adjusted</button></div>
+          <span className="triad-source" data-testid="triad-source">
+            {isReplay ? "REPLAY · " : "LIVE · "}{payload?.snapshotId ? `snapshot ${payload.snapshotId}` : "no snapshot"}
+            {payload?.asof ? ` · ${payload.asof}` : ""}
+            {payload?.data_source ? ` · ${payload.data_source}` : ""}
+            {quality?.state ? ` · quality ${quality.state}` : ""}
+          </span>
         </div>
-        {payload?.scope_selection?.status === "unavailable" && <div role="status" data-testid="triad-empty-scope" className="triad-band-note">No listed expiry in the server's 30-day bound — no substitution made.</div>}
-        {/* P0-1 (UX review): when the default 0DTE request is honestly refused
-            AND no walls are classified, the desk renders its designed empty
-            state — a centered honest callout with the "Show all loaded
-            expiries" action visually primary, the exact loaded dates and the
-            LIVE/REPLAY identity. Panes below keep their headers, so the desk
-            keeps visible structure while empty. When walls DO exist, the same
-            admission renders as the compact in-band chip instead. */}
-        {!isReplay && scope === "0dte" && !sameDayAdmitted && (walls || []).length > 0 && <div className="triad-band-note triad-scope-notice">
-          <p role="status" data-testid="triad-scope-admission">
-            Same-day admission unavailable — the loaded observation is not verified 0DTE. 0DTE was your explicit request, not a saved choice — nothing is saved between visits, and the desk does not substitute a broader scope by itself. Exact loaded dates remain visible; no same-session expiry or entitlement is invented.
-          </p>
-          <button type="button" data-testid="triad-show-loaded" onClick={() => { restoreScrollRef.current = window.scrollY; setScope("loaded"); }}>Show all loaded expiries</button>
-        </div>}
-      </div>
+      </header>
+      {payload?.scope_selection?.status === "unavailable" && <div role="status" data-testid="triad-empty-scope" className="triad-band-note">No listed expiry in the server's 30-day bound — no substitution made.</div>}
+      {/* P0-1 (UX review): when the default 0DTE request is honestly refused
+          AND no walls are classified, the desk renders its designed empty
+          state — a centered honest callout with the "Show all loaded
+          expiries" action visually primary, the exact loaded dates and the
+          LIVE/REPLAY identity. Panes below keep their headers, so the desk
+          keeps visible structure while empty. When walls DO exist, the same
+          admission renders as the compact in-band chip instead. */}
+      {!isReplay && scope === "0dte" && !sameDayAdmitted && (walls || []).length > 0 && <div className="triad-band-note triad-scope-notice">
+        <p role="status" data-testid="triad-scope-admission">
+          Same-day admission unavailable — the loaded observation is not verified 0DTE. 0DTE was your explicit request, not a saved choice — nothing is saved between visits, and the desk does not substitute a broader scope by itself. Exact loaded dates remain visible; no same-session expiry or entitlement is invented.
+        </p>
+        <button type="button" data-testid="triad-show-loaded" onClick={() => { restoreScrollRef.current = window.scrollY; setScope("loaded"); }}>Show all loaded expiries</button>
+      </div>}
       {!isReplay && scope === "0dte" && !sameDayAdmitted && !(walls || []).length && (
         <div className="triad-empty-desk" data-testid="triad-empty-desk">
           <p role="status" data-testid="triad-scope-admission">
@@ -483,8 +541,8 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
           <button type="button" data-testid="triad-show-loaded" className="triad-empty-desk-action" onClick={() => { restoreScrollRef.current = window.scrollY; setScope("loaded"); }}>Show all loaded expiries</button>
         </div>
       )}
-      <div className={drawerOpen ? "triad-review-workspace" : ""}>
-      <div className="triad-review-analysis">
+      <div className="tdk-body">
+      <main className="tdk-main">
       <div className="triad-pair" data-testid="triad-raw-adjusted" data-mobile-pane={mobilePane}>
         <div className="triad-pane" data-testid="triad-pane-raw">
           <div className="triad-pane-header" title="Raw structural GEX — gex_net_v1/gex_gross_v1, USD per 1% spot move">
@@ -513,14 +571,13 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
         </div>
       </div>
 
-      {/* UI-M03 (M1 2026-10-24): stored-session replay is supporting context,
-          so the strip follows the maps instead of preceding them — at the top
-          its 47px pushed the loaded map start to 341px@1470x950 / 374px@1024x768,
-          past the <=300px start budget. Every control is preserved; only the
-          reading order changed. Loading/error states keep the strip at the top
-          where no maps exist yet. */}
-      {replayControls}
+      {/* Wall chips stay beside the maps as the quick selection affordance;
+          the selected wall's full card lives in the right inspector. */}
+      <WallBar walls={walls} wallId={selectedWall?.wall_id || null} onSelect={selectWall} />
       <HeatmapLandmarks data={payload} />
+      {/* UI-M03 (M1 2026-10-24): stored-session replay is supporting context,
+          so the strip follows the maps. Every control is preserved. */}
+      {replayControls}
       <details className="triad-profile-disclosure" data-testid="triad-profile-disclosure">
         <summary>Signed exposure profile · raw and adjusted</summary>
       <StrikeExposureProfile data={payload} basis={basis} wall={selectedWall} onSelect={onGridCell} />
@@ -531,30 +588,32 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
           SPX unavailable in this session (entitlement/coverage unknown). No substitution made.
         </div>
       )}
-      <WallBar walls={walls} wallId={selectedWall?.wall_id || null} onSelect={selectWall} />
-      {selectedWall ? (
-        <ScenarioCard wall={selectedWall} scenarios={scenarios} spot={spot}
-          quality={quality} onContracts={openContracts} ticker={ticker} read={read} replay={isReplay} />
-      ) : (
-        <div className="triad-nowall" data-testid="triad-no-wall">
-          No structural wall selected — pick a cell in either pane. An adjusted-only peak with no
-          corresponding GEX wall will say so here rather than inheriting another wall's story.
-        </div>
-      )}
-      </div>
-      {drawerOpen && (
-        <ContractDrawer selectionRevision={reviewSelectionRevision} data={payload} cell={cell} replay={isReplay} metric={activeMetric}
-          wall={selectedWall} scenario={scenarios[0] || null} onClose={() => setDrawerOpen(false)} ticker={ticker}
-          closeRef={drawerCloseRef} selectionScope={contractScope} onSelection={onContractSelection} />
-      )}
-      </div>
       <ReviewSection journal={journal} ticker={ticker} snapshotId={payload?.snapshotId} />
-      <div className="triad-source" data-testid="triad-source">
-        {isReplay ? "REPLAY · " : "LIVE · "}{payload?.snapshotId ? `snapshot ${payload.snapshotId}` : "no snapshot"}
-        {payload?.asof ? ` · ${payload.asof}` : ""}
-        {payload?.data_source ? ` · ${payload.data_source}` : ""}
-        {quality?.state ? ` · quality ${quality.state}` : ""}
+      </main>
+      <MarketInspectorDock
+        ticker={ticker}
+        data={payload}
+        cell={cell}
+        wall={selectedWall}
+        scenario={scenarios[0] || null}
+        scenarios={scenarios}
+        spot={spot}
+        quality={quality}
+        read={read}
+        adjNet={value?.net ?? null}
+        adjLabel={adjDef?.label || basis}
+        metric={activeMetric}
+        replay={isReplay}
+        drawerOpen={drawerOpen}
+        onClose={() => { setDrawerOpen(false); setInspectorOpen(false); }}
+        closeRef={drawerCloseRef}
+        selectionScope={contractScope}
+        onSelection={onContractSelection}
+        selectionRevision={reviewSelectionRevision}
+        onContracts={openContracts}
+      />
       </div>
+      <div className="tdk-backdrop" onClick={() => { setDrawerOpen(false); setInspectorOpen(false); }} />
     </div>
   );
 }
@@ -639,179 +698,6 @@ function WallBar({ walls, wallId, onSelect }) {
       ))}
     </div>
   );
-}
-
-function ScenarioCard({ wall, scenarios, spot, quality, onContracts, ticker, read, replay }) {
-  const [first, second] = scenarios || [];
-  // Position strip: spot marker against the wall zone on one shared scale.
-  // Pure geometry (percent positions), no inferred levels.
-  const pos = useMemo(() => {
-    const low = Number(wall.low);
-    const high = Number(wall.high);
-    const sp = typeof spot === "number" && Number.isFinite(spot) ? spot : NaN;
-    if (!Number.isFinite(low) || !Number.isFinite(high) || high <= low) return null;
-    const lo = Number.isFinite(sp) ? Math.min(low, sp) : low;
-    const hi = Number.isFinite(sp) ? Math.max(high, sp) : high;
-    const pad = Math.max((hi - lo) * 0.5, Math.abs(hi) * 0.002, 0.01);
-    const loP = lo - pad;
-    const span = (hi - lo) + 2 * pad;
-    const pct = (v) => Math.min(100, Math.max(0, ((v - loP) / span) * 100));
-    return { z0: pct(low), z1: pct(high), sp: Number.isFinite(sp) ? pct(sp) : null };
-  }, [wall, spot]);
-  // State text derives from CURRENT spot vs zone (observable now), not the
-  // packet's scenario label (which may describe an older observation).
-  // wallPositionOf names the WALL's side of spot; the strip names the
-  // PRICE's side of the wall, so the two are mirrored.
-  const wposNow = wallPositionOf(wall, spot);
-  const posState = wposNow === "inside" ? "price inside wall"
-    : wposNow === "below" ? "price above wall"
-    : wposNow === "above" ? "price below wall" : null;
-  return (
-    <div className="triad-scenario" data-testid="triad-scenario">
-      <div className="triad-scenario-zone" data-testid="triad-scenario-zone">
-        Wall {wall.wall_id} · zone {wall.low}–{wall.high}
-        {spot != null && wall.mid != null ? ` · ${Math.abs(spot - wall.mid).toFixed(1)} from mid` : ""}
-      </div>
-      <div className="triad-readiness" data-testid="triad-readiness" role="status">
-        <strong>{read?.readiness || "Observe"}</strong><span>{read?.watch || "No directional watch"}</span>
-        <small>{read?.reasons?.join(" · ")} · Conditional review only; adjusted sign is not a price forecast.</small>
-      </div>
-      {pos && (
-        <div className="triad-position" data-testid="triad-position"
-          title="Spot position against the wall zone (shared scale)">
-          <div className="triad-position-rail">
-            <div className="triad-position-zone" data-testid="triad-position-zone"
-              style={{ left: `${pos.z0}%`, width: `${pos.z1 - pos.z0}%` }} />
-            {pos.sp != null && (
-              <div className="triad-position-spot" data-testid="triad-position-spot"
-                style={{ left: `${pos.sp}%` }} />
-            )}
-          </div>
-          <div className="triad-position-labels">
-            <span>Below</span><span>Spot</span><span>Above</span>
-          </div>
-          {posState && (
-            <div className="triad-position-state" data-testid="triad-position-state">{posState}</div>
-          )}
-        </div>
-      )}
-      {first ? (
-        <div className="triad-scenario-side" data-testid="triad-scenario-first">
-          <span className="triad-scenario-name">{first.name}</span>
-          <span className="triad-scenario-confirm" title="Confirmation condition">Confirm: {first.confirmation}</span>
-          <span className="triad-scenario-invalidate" title="Invalidation condition">Invalidate: {first.invalidation}</span>
-        </div>
-      ) : null}
-      {second ? (
-        <div className="triad-scenario-side" data-testid="triad-scenario-second">
-          <span className="triad-scenario-name">{second.name}</span>
-          <span className="triad-scenario-confirm" title="Confirmation condition">Confirm: {second.confirmation}</span>
-          <span className="triad-scenario-invalidate" title="Invalidation condition">Invalidate: {second.invalidation}</span>
-        </div>
-      ) : null}
-      {!first && (
-        <div className="triad-scenario-empty">No scenario attached to this wall in the snapshot.</div>
-      )}
-      <div className="triad-scenario-blocker" data-testid="triad-blocker"
-        title="Primary interpretation blocker">
-        Blocker: {quality?.reasonCodes?.[0] || quality?.state || "none stated"}
-      </div>
-      {replay ? <div className="triad-price-empty">Replay: fresh price history is not requested. Use recorded interaction evidence.</div> : <WallPricePath ticker={ticker} wall={wall} spot={spot} />}
-      <button className="triad-contracts-btn" data-testid="triad-contracts-btn"
-        title="Review contracts at this wall (identity, delta, spread, quote age)"
-        onClick={onContracts}>
-        Review contracts
-      </button>
-    </div>
-  );
-}
-
-function WallPricePath({ ticker, wall, spot }) {
-  const [frames, setFrames] = useState(null);
-  const [failed, setFailed] = useState(false);
-  useEffect(() => {
-    if (!ticker || !wall) return undefined;
-    let cancelled = false;
-    const ctrl = new AbortController();
-    setFrames(null);
-    setFailed(false);
-    axios
-      .get(`${API}/heatseeker/price-history/${encodeURIComponent(ticker)}`, {
-        params: { days: 5 }, timeout: 30000, signal: ctrl.signal,
-      })
-      .then((r) => { if (!cancelled) setFrames(r?.data?.frames || []); })
-      .catch(() => { if (!cancelled) setFailed(true); });
-    return () => { cancelled = true; ctrl.abort(); };
-  }, [ticker, wall?.wall_id]);
-  const rows = useMemo(() => (Array.isArray(frames) ? frames : []).map(frame => {
-    const at = typeof frame?.time === "string" && /(?:Z|[+-]\d{2}:\d{2})$/.test(frame.time) ? Date.parse(frame.time) : NaN;
-    return {at, close: typeof frame?.close === "number" && Number.isFinite(frame.close) && frame.close > 0 ? frame.close : null};
-  }), [frames]);
-  const counts = new Map();
-  for (const row of rows) if (Number.isFinite(row.at)) counts.set(row.at, (counts.get(row.at) || 0) + 1);
-  const observed = rows.filter(row => Number.isFinite(row.at) && counts.get(row.at) === 1 && row.close != null);
-  if (frames === null && !failed) return <div className="triad-price-loading">loading price path…</div>;
-  if (failed) return <div className="triad-price-empty" data-testid="triad-price-empty">Price history unavailable for this symbol.</div>;
-  if (!observed.length) return <div className="triad-price-empty" data-testid="triad-price-empty">No price candles for this period.</div>;
-  const W = 300, H = 120, PAD = 6;
-  const first = Math.min(...observed.map(row => row.at)), last = Math.max(...observed.map(row => row.at));
-  const lo = Math.min(...observed.map(row => row.close)), hi = Math.max(...observed.map(row => row.close));
-  const span = hi - lo || 1;
-  const X = at => first === last ? W / 2 : PAD + (at - first) / (last - first) * (W - 2 * PAD);
-  const Y = value => H - PAD - (value - lo) / span * (H - 2 * PAD);
-  const segments = [];
-  let segment = [], previous = null;
-  for (const row of rows) {
-    if (!Number.isFinite(row.at) || row.close == null || counts.get(row.at) !== 1 || (previous != null && row.at <= previous)) {
-      if (segment.length) segments.push(segment);
-      segment = []; previous = null; continue;
-    }
-    segment.push(row); previous = row.at;
-  }
-  if (segment.length) segments.push(segment);
-  return <div className="triad-price" data-testid="triad-price-path">
-    <p className="triad-price-caption">Current map reference: wall {wall.low}–{wall.high}{typeof spot === "number" && Number.isFinite(spot) ? ` · price ${spot.toFixed(2)}` : ""} — not historical candle-time levels.</p>
-    <svg data-testid="triad-price-path-svg" data-first-at={new Date(first).toISOString()} data-last-at={new Date(last).toISOString()}
-      viewBox={`0 0 ${W} ${H}`} width="100%" height="120" role="img" aria-label="Historical closes by recorded time; no historical wall inferred">
-      {segments.filter(part => part.length > 1).map((part, i) => <polyline key={i} points={part.map(row => `${X(row.at).toFixed(1)},${Y(row.close).toFixed(1)}`).join(" ")} fill="none" stroke="#7dd3fc" strokeWidth="1.5" />)}
-      {observed.map(row => <circle key={row.at} cx={X(row.at)} cy={Y(row.close)} r="1.5" fill="#7dd3fc"><title>{new Date(row.at).toISOString()} · {row.close}</title></circle>)}
-    </svg>
-    <div className="triad-price-caption" data-testid="triad-price-caption">
-      {observed.length} closes · {chartTime(first, true)} → {chartTime(last, true)} · missing/ambiguous readings break the line. Current map references are not historical candle-time levels. VWAP unavailable (no verified source).
-    </div>
-  </div>;
-}
-
-function ContractDrawer({ data, cell, replay, wall, scenario, metric, onClose, ticker, closeRef, selectionScope, onSelection, selectionRevision }) {
-  useEffect(() => {
-    const close = e => { if (e.key === "Escape") onClose(); };
-    window.addEventListener("keydown", close);
-    return () => window.removeEventListener("keydown", close);
-  }, [onClose]);
-  return <div className="triad-drawer" data-testid="triad-contract-drawer" role="dialog" aria-label="Contract review">
-    <div className="triad-drawer-header">
-      <span>Contracts · {ticker} {wall ? `${wall.low}–${wall.high}` : ""}</span>
-      <button ref={closeRef} onClick={onClose} data-testid="triad-drawer-close" aria-label="Close contract review">✕</button>
-    </div>
-    <ReviewInspector context={<ReviewSelectionContext ticker={ticker} data={data} wall={wall} cell={cell} metric={metric} replay={replay}/>} initialTab="contract" selectionKey={`${ticker}|${wall?.wall_id || ""}|${selectionScope}|${replay}|${selectionRevision}`}
-      wall={<WallInspector wall={wall} interaction={data?.interactions?.find(i => i.wall_id === wall?.wall_id)}
-        metrics={data?.metrics} grids={data?.metrics?.grids} displayGrid={data?.grid} quality={data?.quality}
-        metric={metric} scenario={scenario} snapshotId={data?.snapshotId} replay={replay} />}
-      contract={<ExactContractReview key={`${ticker}|${wall?.wall_id || ""}|${data?.snapshotId || ""}`} ticker={ticker} data={data} wall={wall} cell={cell} replay={replay} selectionScope={selectionScope} onSelection={onSelection} />}
-      flow={<>
-        <h3>Flow · selected reading</h3>
-        <dl className="review-inspector-context">
-          <dt>Stock / wall</dt><dd>{ticker} · {wall?.wall_id || "No classified wall"}</dd>
-          <dt>Snapshot</dt><dd>{data?.snapshotId || "Unknown"}</dd>
-          <dt>Market observation</dt><dd>{data?.event_time || data?.observed_at || "Unknown"}</dd>
-          <dt>Snapshot time</dt><dd>{data?.asof || "Unknown"} · {replay ? "Recorded" : "Live request"}</dd>
-        </dl>
-        <p>The same Ask Flow assistant explains this selection. Opening a step does not request research or prepare an order.</p>
-        <AskFlow subject={`${ticker} · exact contract review`} overlayMetric={metric} displayMode={replay ? "replay" : "live"} compact />
-      </>}
-      publicAgent={<><h3>Public agent · reviewed draft</h3><p>A copied brief is not delivery or activation. Review the workflow in Public before any separately approved activation.</p><GroundedPublicReview /></>}
-    />
-  </div>;
 }
 
 function ReviewSection({ journal, ticker, snapshotId }) {
