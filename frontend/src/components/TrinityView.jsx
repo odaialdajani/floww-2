@@ -7,6 +7,7 @@ import { wallPositionOf } from "../lib/solsticeSelection";
 import { useReviewJournal } from "./triad/useReviewJournal";
 import { ALL_BASES, surfaceStatus, wallValues, wallRead } from "../lib/solsticeMetrics";
 import StrikeExposureProfile from "./triad/StrikeExposureProfile";
+import MarketObservationLine from './triad/MarketObservationLine';
 import AskFlow from "./heatseeker/AskFlow";
 import HeatmapLandmarks from "./heatseeker/HeatmapLandmarks";
 import { usePublishScreenContext } from "../agent/useScreenContext";
@@ -502,12 +503,7 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
                 : "none valid — expiry dates unreadable in this snapshot"}
             {loadedExpiries.invalid > 0 && ` · ${loadedExpiries.invalid} invalid expiry value${loadedExpiries.invalid === 1 ? "" : "s"} excluded — not complete`}
           </span>
-          <span className="triad-source" data-testid="triad-source">
-            {isReplay ? "REPLAY · " : "LIVE · "}{payload?.snapshotId ? `snapshot ${payload.snapshotId}` : "no snapshot"}
-            {payload?.asof ? ` · ${payload.asof}` : ""}
-            {payload?.data_source ? ` · ${payload.data_source}` : ""}
-            {quality?.state ? ` · quality ${quality.state}` : ""}
-          </span>
+          <MarketObservationLine replay={isReplay} data={payload} quality={quality} />
         </div>
       </header>
       {payload?.scope_selection?.status === "unavailable" && <div role="status" data-testid="triad-empty-scope" className="triad-band-note">No listed expiry in the server's 30-day bound — no substitution made.</div>}

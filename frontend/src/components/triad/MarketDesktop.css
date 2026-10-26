@@ -244,3 +244,26 @@
 @media (max-width: 640px) {
   .tdk-head .triad-mobile-switch { display: flex; gap: 8px; }
 }
+
+/* Market main context header — the readable observation line (root 09:20):
+   LIVE/REPLAY + quality + honest observation age outside; the exact
+   snapshot id, full UTC clock, source and formula inside the NAMED CLOSED
+   Provenance detail. Charcoal tokens only; no new visual brand. */
+.tdk-head-sub .tdk-observation { margin: 0; display: inline-flex; align-items: baseline; gap: 10px; min-width: 0; }
+.tdk-head-sub .tdk-observation-line { font-size: 12px; color: #9bb0bd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tdk-observation .tdk-provenance-details { display: inline-block; }
+.tdk-observation .tdk-provenance-details > summary {
+  cursor: pointer; font-size: 12px; color: #7d94a6; list-style: none;
+  border: 1px solid #263041; border-radius: 6px; padding: 1px 8px; white-space: nowrap;
+}
+.tdk-observation .tdk-provenance-details > summary::-webkit-details-marker { display: none; }
+.tdk-observation .tdk-provenance-details[open] > summary { color: #dce8f2; border-color: #3a4a63; }
+.tdk-observation .tdk-provenance-details dl {
+  position: relative; z-index: 5; margin: 6px 0 0; padding: 8px 10px;
+  background: #0d1117; border: 1px solid #263041; border-radius: 8px;
+  font-size: 12px; color: #9bb0bd; max-width: 420px;
+  display: grid; grid-template-columns: auto 1fr; gap: 2px 10px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+.tdk-observation .tdk-provenance-details dt { color: #7d94a6; }
+.tdk-observation .tdk-provenance-details dd { margin: 0; overflow-wrap: anywhere; color: #dce8f2; }
