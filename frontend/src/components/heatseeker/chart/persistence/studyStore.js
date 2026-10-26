@@ -23,6 +23,30 @@ function isPlainInstance(value) {
   return validateStudySettings(value.kind, settings);
 }
 
+// Set-wide identity invariant (C045): row validation alone cannot stop two
+// VALID rows from sharing one instanceId (a legacy/corrupt persisted set, or
+// a caller handing saveStudyInstances a duplicated list) — and duplicate ids
+// become duplicate React keys that make the caller's update/remove by id hit
+// EVERY matching row. Deterministic repair at BOTH store boundaries: the
+// FIRST row in stored order keeps its id verbatim (legacy ids stay stable);
+// each later duplicate is re-minted `${id}-dup2`, `-dup3`, … skipping any id
+// the set already contains. Every other field rides through untouched — no
+// study is dropped, coalesced or overwritten, and the repair is a pure
+// function of stored content+order, so an unrepaired set heals identically
+// on every load until the next save persists it.
+function resolveDuplicateInstanceIds(list) {
+  const taken = new Set(list.map(inst => inst.instanceId));
+  const kept = new Set();
+  return list.map(inst => {
+    if (!kept.has(inst.instanceId)) { kept.add(inst.instanceId); return inst; }
+    let suffix = 2;
+    while (taken.has(`${inst.instanceId}-dup${suffix}`)) suffix += 1;
+    const repaired = { ...inst, instanceId: `${inst.instanceId}-dup${suffix}` };
+    taken.add(repaired.instanceId);
+    return repaired;
+  });
+}
+
 export function loadStudyInstances(ticker) {
   try {
     const raw = window.localStorage.getItem(keyFor(ticker));
@@ -30,7 +54,7 @@ export function loadStudyInstances(ticker) {
     const data = JSON.parse(raw);
     if (!data || typeof data !== 'object' || !Array.isArray(data.instances)) return [];
     if (data.schema_version !== SCHEMA_VERSION) return [];
-    return data.instances.filter(isPlainInstance);
+    return resolveDuplicateInstanceIds(data.instances.filter(isPlainInstance));
   } catch {
     return [];
   }
@@ -42,7 +66,8 @@ export function saveStudyInstances(ticker, instances) {
   for (const inst of list) {
     if (!isPlainInstance(inst)) throw new Error('invalid study instance');
   }
-  const text = JSON.stringify({ schema_version: SCHEMA_VERSION, instances: list });
+  const unique = resolveDuplicateInstanceIds(list);
+  const text = JSON.stringify({ schema_version: SCHEMA_VERSION, instances: unique });
   if (text.length > STUDY_BYTES) throw new Error('study quota exceeded');
   window.localStorage.setItem(keyFor(ticker), text);
 }
