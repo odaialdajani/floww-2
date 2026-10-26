@@ -8,14 +8,19 @@
 // renderer specs from REAL frames using the priceStudies primitives — the
 // ONE indicator engine. The registry NEVER re-implements math.
 import { sma, ema, bollinger, sessionVwapValues, sessionVwapBands } from './priceStudies';
+import { anchoredVwapValues, anchoredVwapBands } from './anchorStudies';
 
 // Legacy fixed-import declarations stay byte-compatible for existing callers.
 export const STUDIES = {
   sma: { inputs: ['period'], version: 'ma.v1', source: 'ohlc', unit: 'price', approximation: 'none', replay: true },
   ema: { inputs: ['period'], version: 'ma.v1', source: 'ohlc', unit: 'price', approximation: 'none', replay: true },
   bollinger: { inputs: ['period', 'multiple'], version: 'bb.v1', source: 'ohlc', unit: 'price', approximation: 'none', replay: true },
-  volume: { inputs: [], version: 'volume.v1', source: 'bars', unit: 'volume', approximation: 'none', replay: true },
-  vwap: { inputs: ['source', 'bands'], version: 'vwap.v1', source: 'bars', unit: 'price', approximation: 'bar-vwap', replay: true },
+  volume: { inputs: [], version: 'volume.v1', source: 'bars', unit: 'volume', approximation: 'none', replay: true, paneControl: 'volume-pane' },
+  // C050 (c050_vwap_anchor_contract v1.0): the anchor input is added to the
+  // vwap kind; version moves to vwap.v2. Persisted vwap.v1 rows (settings
+  // without an anchor) stay loadable — 'session' is the default and is
+  // byte-compatible with the existing engine behavior.
+  vwap: { inputs: ['source', 'bands', 'anchor'], version: 'vwap.v2', source: 'bars', unit: 'price', approximation: 'bar-vwap', replay: true },
   'exposure-vwap': { inputs: ['scope', 'nodes', 'band', 'envelope'], version: 'gexvwap.v1', source: 'board', unit: 'price', approximation: 'board-weighted', replay: 'cursor-eligible-only' },
 };
 // Legacy declaration name kept as an ALIAS for the pre-contract import path
@@ -34,6 +39,11 @@ function intBetween(value, min, max) {
 // Settings schemas per kind (contract v2): MA periods integer 1..500;
 // bollinger period 10..500 + multiple 0.5..5; vwap source/bandBasis/multipliers
 // with at most 3 band pairs (bands off by default, C116); volume {}.
+// C050: the vwap anchor enum ['session','week','month','quarter','year'],
+// default 'session' (byte-compatible with every persisted vwap.v1 row — an
+// absent anchor validates as session); out-of-enum anchors are refused
+// BEFORE any instance exists.
+const VWAP_ANCHORS = ['session', 'week', 'month', 'quarter', 'year'];
 export function validateStudySettings(name, settings) {
   if (!getStudy(name) || !settings || typeof settings !== 'object') return false;
   if (name === 'sma' || name === 'ema') return intBetween(settings.period, 1, 500);
@@ -50,23 +60,49 @@ export function validateStudySettings(name, settings) {
     if (!Array.isArray(settings.multipliers) || settings.multipliers.length < 1 || settings.multipliers.length > 3) return false;
     if (!settings.multipliers.every(m => typeof m === 'number' && Number.isFinite(m) && m >= 0.5 && m <= 5)) return false;
     if (typeof settings.bands !== 'boolean') return false;
+    const anchor = settings.anchor === undefined ? 'session' : settings.anchor;
+    if (!VWAP_ANCHORS.includes(anchor)) return false;
     return true;
   }
   if (name === 'exposure-vwap') return false; // not creatable on the price pane (no board source)
   return false;
 }
 
-// Unique instance ids (C045): <kind>-<seq> from a module-monotonic counter —
-// two instances never share an id; the id is PERSISTED so a reloaded pane
-// renders the SAME instance, not a regenerated one. Full contract shape:
+// C046: named factory presets — the discoverable defaults the panel offers
+// as one-click rows (EMA 9 is the row's explicit demand). Every preset is
+// valid per the schema above.
+export const STUDY_PRESETS = {
+  'EMA 9': { kind: 'ema', settings: { period: 9 } },
+  'SMA 20': { kind: 'sma', settings: { period: 20 } },
+  'Bollinger 20 · 2σ': { kind: 'bollinger', settings: { period: 20, multiple: 2 } },
+  'VWAP · session': { kind: 'vwap', settings: { source: 'hlc3', bandBasis: 'std', multipliers: [1, 2, 3], bands: false, anchor: 'session' } },
+};
+
+// Volume is a REAL pane control, not a dead record: the measured volume pane
+// already renders in the chart's volume-gated layers with C049 gap honesty —
+// a volume INSTANCE means the pane is ON. H1 binds this mapping to the real
+// pane's visibility; studySpecs(volume) stays [] (never a price-axis line).
+export const PANE_CONTROLS = { volume: 'volume-pane' };
+
+// Unique instance ids (C045): `<kind>-<seq>` alone identified an instance
+// only within ONE module lifetime — a reload restarts the counter at 1 while
+// persisted instances keep their ids, so a fresh module re-minted an id a
+// restored row already owned (and the caller's update/remove by id then hit
+// BOTH rows). The mint therefore carries a per-module-lifetime token: unique
+// within a module by seq, unique across module lifetimes by token, and never
+// equal to a legacy short id because every fresh mint carries the suffix.
+// The id is PERSISTED so a reloaded pane renders the SAME instance, not a
+// regenerated one. Full contract shape:
 // { instanceId, kind, settings, source, visible, order } (paneKey/created are
 // additive provenance fields the store preserves verbatim).
+const MODULE_MINT_TOKEN = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8).padEnd(6, '0')}`;
+
 export function createStudyInstance(kind, settings, paneKey = '') {
   if (!validateStudySettings(kind, settings)) throw new Error('invalid study settings');
   createStudyInstance._seq = (createStudyInstance._seq || 0) + 1;
   const source = kind === 'vwap' ? (settings.source || 'hlc3') : 'close';
   return {
-    instanceId: `${kind}-${createStudyInstance._seq}`,
+    instanceId: `${kind}-${createStudyInstance._seq}-${MODULE_MINT_TOKEN}`,
     kind,
     settings: { ...settings },
     source,
@@ -133,14 +169,31 @@ export function studySpecs(instance, frames) {
     ];
   }
   if (instance.kind === 'vwap') {
-    // The EXISTING session engine: HLC3/Close source, NY-session reset,
-    // zero-weight unavailable, bands off by default (C116).
-    const values = sessionVwapValues(list, { source: instance.settings.source, bandBasis: instance.settings.bandBasis, multipliers: instance.settings.multipliers });
-    const specs = [{ ...base, id: `${instance.instanceId}-vwap`, band: null, label: `VWAP ${instance.settings.source}`, points: pointsOf(values) }];
+    // The EXISTING session engine generalized by the anchor input (C050):
+    // 'session' is the unchanged engine path; week/month/quarter/year use
+    // the SAME sessionVwap math per period group (anchorStudies — one engine).
+    const anchor = instance.settings.anchor === undefined ? 'session' : instance.settings.anchor;
+    const opts = { source: instance.settings.source, bandBasis: instance.settings.bandBasis, multipliers: instance.settings.multipliers, anchor };
+    const values = anchoredVwapValues(list, opts);
+    const specs = [{ ...base, id: `${instance.instanceId}-vwap`, band: null, label: `VWAP ${instance.settings.source} · ${anchor}`, points: pointsOf(values) }];
     if (instance.settings.bands) {
-      const bands = sessionVwapBands(list, { source: instance.settings.source, bandBasis: instance.settings.bandBasis, multipliers: instance.settings.multipliers });
-      specs.push({ ...base, id: `${instance.instanceId}-upper`, band: 'upper', label: 'VWAP band', points: bands.map((b, i) => ({ time: times[i], value: b ? (b[0]?.upper ?? null) : null })) });
-      specs.push({ ...base, id: `${instance.instanceId}-lower`, band: 'lower', label: 'VWAP band', points: bands.map((b, i) => ({ time: times[i], value: b ? (b[b.length - 1]?.lower ?? null) : null })) });
+      // EVERY selected multiplier pair is plotted (C116 fix — the old bridge
+      // returned only the FIRST upper and the LAST lower, so a [1,2,3]
+      // instance rendered 2 lines instead of 6). One upper + one lower spec
+      // PER multiplier, each id'd and labeled by its own multiplier.
+      const bands = anchoredVwapBands(list, opts);
+      const perFrame = (pick) => bands.map((b, i) => ({ time: times[i], value: b ? pick(b) : null }));
+      for (const m of instance.settings.multipliers) {
+        const mStr = String(m);
+        specs.push({ ...base, id: `${instance.instanceId}-upper-${mStr}`, band: 'upper', multiplier: m, label: `VWAP band ${mStr}${instance.settings.bandBasis === 'percent' ? '%' : 'σ'}`, points: perFrame((pairs) => {
+          const pair = pairs.find((p) => p && p.m === m);
+          return pair && Number.isFinite(pair.upper) ? pair.upper : null;
+        }) });
+        specs.push({ ...base, id: `${instance.instanceId}-lower-${mStr}`, band: 'lower', multiplier: m, label: `VWAP band ${mStr}${instance.settings.bandBasis === 'percent' ? '%' : 'σ'}`, points: perFrame((pairs) => {
+          const pair = pairs.find((p) => p && p.m === m);
+          return pair && Number.isFinite(pair.lower) ? pair.lower : null;
+        }) });
+      }
     }
     return specs;
   }
