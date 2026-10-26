@@ -127,13 +127,15 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   // Desktop composition (market-desktop-20261025): the selected-object
   // inspector is a persistent right dock at wide desktop widths and a proper
-  // overlay at <=1280px (owner 13:40: maps starve beside a 352px dock).
+  // overlay at <=1280px (owner 13:40 + the composed-build measurement: at
+  // 1280 docked, each map starves to ~305px while 4 expiry columns need
+  // ~454px — so 1280 joins the overlay band; measured at 56f218ed).
   // `inspectorOpen` collapses the dock column / closes
   // the overlay; the explicit review action (`Review contracts`) forces it
   // open via drawerOpen. matchMedia is feature-detected: environments without
   // it (jsdom) stay in dock mode so behavior tests are unaffected.
   const initialNarrow = typeof window !== "undefined" && typeof window.matchMedia === "function"
-    ? window.matchMedia("(max-width: 1279px)").matches : false;
+    ? window.matchMedia("(max-width: 1280px)").matches : false;
   const [narrow, setNarrow] = useState(initialNarrow);
   const narrowRef = useRef(initialNarrow);
   useEffect(() => {
@@ -141,7 +143,7 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
   }, [narrow]);
   useEffect(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") return undefined;
-    const query = window.matchMedia("(max-width: 1279px)");
+    const query = window.matchMedia("(max-width: 1280px)");
     const onChange = e => { setNarrow(e.matches); narrowRef.current = e.matches; };
     if (query.addEventListener) query.addEventListener("change", onChange);
     else if (query.addListener) query.addListener(onChange);
