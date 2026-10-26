@@ -223,7 +223,9 @@
 .tdk-head .triad-context-disclosure .triad-context { flex-wrap: wrap; }
 
 /* ---------- Below 1180px: the inspector becomes a proper overlay ---------- */
-@media (max-width: 1179px) {
+/* Overlay band matches the JSX threshold (owner 13:40 measured): at 1280
+   docked, each map starves to ~305px while 4 expiry columns need ~454px. */
+@media (max-width: 1280px) {
   .trinity-desktop { grid-template-columns: minmax(0, 1fr); }
   .trinity-desktop .tdk-body { grid-template-columns: minmax(0, 1fr); }
   .trinity-desktop.tdk-dock-closed .tdk-dock,
