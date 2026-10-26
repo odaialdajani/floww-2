@@ -31,6 +31,7 @@ const mountPane = async (fresh = true) => {
   return r;
 };
 const placeFib = () => {
+  fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
   fireEvent.click(screen.getByTestId('rail-tool-fib'));
   firePointer(screen.getByTestId('drawing-layer'), 'pointerdown', 150, 100);
   firePointer(screen.getByTestId('drawing-layer'), 'pointerdown', 450, 240);
@@ -42,6 +43,7 @@ test('MOUNTED: fib preset style renders per-level colors, hidden levels, bands a
   const first = await mountPane();
   placeFib();
   const id = drawingId(0);
+  fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
   fireEvent.click(screen.getByTestId('rail-select-' + id));
   // fib full-family style through the drawing style: distinct per-level colors,
   // one level hidden, bands on, labels off
@@ -68,10 +70,12 @@ test('MOUNTED: fib preset style renders per-level colors, hidden levels, bands a
 
 test('MOUNTED: line extendRight projects to the domain edge; refusals keep the incumbent rendering', async () => {
   const r = await mountPane();
+  fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
   fireEvent.click(screen.getByTestId('rail-tool-trend'));
   firePointer(screen.getByTestId('drawing-layer'), 'pointerdown', 150, 100);
   firePointer(screen.getByTestId('drawing-layer'), 'pointerdown', 450, 240);
   const id = drawingId(0);
+  fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
   fireEvent.click(screen.getByTestId('rail-select-' + id));
   const drawing = drawingStore()[0];
   // extendRight through the style row is not exposed for line yet — apply via
@@ -89,6 +93,7 @@ test('MOUNTED: line extendRight projects to the domain edge; refusals keep the i
   const r3 = await mountPane();
   placeFib();
   const fid = drawingId(0);
+  fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
   fireEvent.click(screen.getByTestId('rail-select-' + fid));
   const fd = drawingStore()[0];
   window.localStorage.setItem('floww.drawings.SPY', JSON.stringify([{ ...fd, anchors: [{ t: fd.anchors[0].t, p: -5 }, { t: fd.anchors[1].t, p: -1 }], style: { logScale: true } }]));

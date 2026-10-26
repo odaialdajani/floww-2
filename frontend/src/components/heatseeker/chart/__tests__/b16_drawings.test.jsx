@@ -184,7 +184,9 @@ test('B16 MOUNTED: create by pointer, drag with pan suppressed, nudge by keyboar
   await waitFor(() => expect(screen.getByTestId('recorded-price-chart')).toBeInTheDocument());
   expect(screen.getByTestId('drawing-layer')).toBeInTheDocument();
   // Creation: pick trend, place two anchors — both magnetized to OHLC times.
+  fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
   fireEvent.click(screen.getByTestId('rail-tool-trend'));
+  fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
   expect(screen.getByTestId('rail-cancel')).toBeInTheDocument();
   firePointer(screen.getByTestId('drawing-layer'), 'pointerdown', 150, 100);
   expect(screen.getAllByTestId('draft-anchor')).toHaveLength(1);
@@ -222,12 +224,14 @@ test('B16 MOUNTED: create by pointer, drag with pan suppressed, nudge by keyboar
   fireEvent.keyDown(window, { key: 'ArrowUp' });
   expect(JSON.parse(window.localStorage.getItem('floww.drawings.SPY'))[0].revision).toBe(lockedRev);
   // Escape cancels an active draft before any anchor lands.
+  fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
   fireEvent.click(screen.getByTestId('rail-tool-text'));
   fireEvent.keyDown(window, { key: 'Escape' });
   expect(screen.queryByTestId('rail-cancel')).not.toBeInTheDocument();
   firePointer(screen.getByTestId('drawing-layer'), 'pointerdown', 200, 200);
   expect(JSON.parse(window.localStorage.getItem('floww.drawings.SPY'))).toHaveLength(1); // nothing added
   // Undo removes the drawing and persists the removal.
+  fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
   fireEvent.click(screen.getByTestId('rail-undo'));
   expect(JSON.parse(window.localStorage.getItem('floww.drawings.SPY'))).toEqual([]);
   unmount();
@@ -247,5 +251,6 @@ test('B16 MOUNTED: persisted drawings survive a real remount through the layer',
   first.unmount();
   render(<PriceNodeHistory ticker="SPY" open />);
   await waitFor(() => expect(screen.getByTestId('drawing-shape')).toBeInTheDocument());
+  fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
   expect(screen.getByTestId('rail-drawing')).toHaveTextContent('rectangle');
 });

@@ -39,6 +39,7 @@ const mountPane = async (ticker = 'SPY') => {
   return r;
 };
 const placeTrend = () => {
+  fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
   fireEvent.click(screen.getByTestId('rail-tool-trend'));
   firePointer(screen.getByTestId('drawing-layer'), 'pointerdown', 150, 100);
   firePointer(screen.getByTestId('drawing-layer'), 'pointerdown', 450, 260);
@@ -60,12 +61,16 @@ test('MOUNTED: creation applies the starred/active per-tool default and links th
   const r = await mountPane();
   placeTrend(); // drawing 1 — built-in tier default while no user preset exists
   const [d1] = drawingIds();
+  fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
   fireEvent.click(screen.getByTestId('rail-select-' + d1));
   fireEvent.change(screen.getByTestId('rail-style-color'), { target: { value: '#e3c16a' } }); // Gold
   // C091 create from the SELECTED drawing's style; then set it ACTIVE
+  fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
   fireEvent.change(screen.getByTestId('rail-preset-name'), { target: { value: 'gold-trend' } });
+  fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
   fireEvent.click(screen.getByTestId('rail-preset-create'));
   await waitFor(() => expect(screen.getByText(/gold-trend/)).toBeInTheDocument());
+  fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
   fireEvent.click(screen.getByTestId('rail-preset-active-' + firstUserPresetId()));
   // persisted under the ticker scope
   const stored = presetsFromStore('SPY');
@@ -76,11 +81,14 @@ test('MOUNTED: creation applies the starred/active per-tool default and links th
   placeTrend();
   const ids = drawingIds();
   const d2 = ids.find(x => x !== d1);
+  fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
   fireEvent.click(screen.getByTestId('rail-select-' + d2));
   await waitFor(() => expect(screen.getByTestId('rail-style-color').value).toBe('#e3c16a'));
   // starred beats active: create a SECOND preset with a different style and star it
   fireEvent.change(screen.getByTestId('rail-style-color'), { target: { value: '#5ec986' } }); // Green
+  fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
   fireEvent.change(screen.getByTestId('rail-preset-name'), { target: { value: 'starred-trend' } });
+  fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
   fireEvent.click(screen.getByTestId('rail-preset-create'));
   await waitFor(() => expect(screen.getByText(/starred-trend/)).toBeInTheDocument());
   // rows render in list order — the LAST star button belongs to starred-trend
@@ -90,6 +98,7 @@ test('MOUNTED: creation applies the starred/active per-tool default and links th
   placeTrend();
   const ids3 = drawingIds();
   const d3 = ids3.find(x => !ids.includes(x));
+  fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
   fireEvent.click(screen.getByTestId('rail-select-' + d3));
   await waitFor(() => expect(screen.getByTestId('rail-style-color').value).toBe('#5ec986'));
   r.unmount();
@@ -99,29 +108,39 @@ test('MOUNTED: Apply copies to the selected drawing only; dirty dot honest; lock
   await mountPane();
   placeTrend();
   const [d1] = drawingIds();
+  fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
   fireEvent.click(screen.getByTestId('rail-select-' + d1));
   fireEvent.change(screen.getByTestId('rail-style-color'), { target: { value: '#e3c16a' } });
+  fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
   fireEvent.change(screen.getByTestId('rail-preset-name'), { target: { value: 'gold-trend' } });
+  fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
   fireEvent.click(screen.getByTestId('rail-preset-create'));
   await waitFor(() => expect(screen.getByText(/gold-trend/)).toBeInTheDocument());
   const pid = firstUserPresetId();
+  fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
   fireEvent.click(screen.getByTestId('rail-preset-active-' + pid));
   // link the drawing to the preset first — Apply records presetId
+  fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
   fireEvent.click(screen.getByTestId('rail-preset-apply-' + pid));
   // drift the drawing -> dirty dot appears on the linked preset
   fireEvent.change(screen.getByTestId('rail-style-color'), { target: { value: '#5ec986' } });
+  fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
   await waitFor(() => expect(screen.getByTestId('rail-preset-dirty-' + pid)).toBeInTheDocument());
   // Apply restores the preset style and clears dirty — selected drawing only
+  fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
   fireEvent.click(screen.getByTestId('rail-preset-apply-' + pid));
   await waitFor(() => expect(screen.getByTestId('rail-style-color').value).toBe('#e3c16a'));
   expect(screen.queryByTestId('rail-preset-dirty-' + pid)).not.toBeInTheDocument();
   // locked drawing: Apply is refused by the rail AND the callback
   fireEvent.click(screen.getByTestId('rail-lock-' + d1));
+  fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
   expect(screen.getByTestId('rail-preset-apply-' + pid)).toBeDisabled();
   fireEvent.click(screen.getByTestId('rail-lock-' + d1)); // unlock again
   // explicit Update copies the CURRENT drawing style into the preset
   fireEvent.change(screen.getByTestId('rail-style-color'), { target: { value: '#5ec986' } });
+  fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
   await waitFor(() => expect(screen.getByTestId('rail-preset-dirty-' + pid)).toBeInTheDocument());
+  fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
   fireEvent.click(screen.getByTestId('rail-preset-update-' + pid));
   await waitFor(() => expect(presetsFromStore('SPY')[0].style.color).toBe('#5ec986'));
   expect(screen.queryByTestId('rail-preset-dirty-' + pid)).not.toBeInTheDocument();
@@ -131,22 +150,29 @@ test('MOUNTED: reset returns the preset to the built-in default; delete removes 
   await mountPane();
   placeTrend();
   const [d1] = drawingIds();
+  fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
   fireEvent.click(screen.getByTestId('rail-select-' + d1));
   fireEvent.change(screen.getByTestId('rail-style-color'), { target: { value: '#e3c16a' } });
+  fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
   fireEvent.change(screen.getByTestId('rail-preset-name'), { target: { value: 'gold-trend' } });
+  fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
   fireEvent.click(screen.getByTestId('rail-preset-create'));
   await waitFor(() => expect(screen.getByText(/gold-trend/)).toBeInTheDocument());
   const pid = firstUserPresetId();
   // C131 reset -> the family built-in default style
+  fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
   fireEvent.click(screen.getByTestId('rail-preset-reset-' + pid));
   await waitFor(() => {
     const p = presetsFromStore('SPY')[0];
     expect(p.style).toEqual(defaultStyleForTool('trend'));
   });
   // the rail carries the explicit local-only label
+  fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
   expect(screen.getByTestId('rail-presets-local')).toHaveTextContent(/Local to this device/i);
+  fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
   expect(screen.getByTestId('rail-presets-scope')).toHaveTextContent(/SPY/);
   // delete removes the row and the store row
+  fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
   fireEvent.click(screen.getByTestId('rail-preset-delete-' + pid));
   await waitFor(() => expect(presetsFromStore('SPY')).toHaveLength(0));
   expect(screen.queryByText(/gold-trend/)).not.toBeInTheDocument();
@@ -156,9 +182,12 @@ test('MOUNTED: scope isolation — presets never bleed across tickers', async ()
   const r = await mountPane();
   placeTrend();
   const [d1] = drawingIds();
+  fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
   fireEvent.click(screen.getByTestId('rail-select-' + d1));
   fireEvent.change(screen.getByTestId('rail-style-color'), { target: { value: '#e3c16a' } });
+  fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
   fireEvent.change(screen.getByTestId('rail-preset-name'), { target: { value: 'gold-trend' } });
+  fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
   fireEvent.click(screen.getByTestId('rail-preset-create'));
   await waitFor(() => expect(screen.getByText(/gold-trend/)).toBeInTheDocument());
   r.unmount();
@@ -169,6 +198,7 @@ test('MOUNTED: scope isolation — presets never bleed across tickers', async ()
   q.unmount();
   // back on SPY: the preset survives the remount (local persistence)
   await mountPane();
+  fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
   expect(screen.getByText(/gold-trend/)).toBeInTheDocument();
 });
 
@@ -181,9 +211,11 @@ test('MOUNTED: cap refusal and future-version envelope are surfaced honestly', a
   }
   savePresets('SPY', list);
   const capped = await mountPane();
+  fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
   expect(screen.getByTestId('rail-preset-cap')).toBeInTheDocument();
   placeTrend();
   const [d1] = drawingIds();
+  fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
   fireEvent.click(screen.getByTestId('rail-select-' + d1));
   // at cap the rail refuses by hiding the create row entirely — no partial op
   expect(screen.queryByTestId('rail-preset-name')).not.toBeInTheDocument();
@@ -193,6 +225,7 @@ test('MOUNTED: cap refusal and future-version envelope are surfaced honestly', a
   // future storage envelope: not ours to interpret — honest refusal, nothing overwritten
   window.localStorage.setItem('floww.drawing.presets.SPY', JSON.stringify({ v: PRESET_STORAGE_VERSION + 5, presets: [{ id: 'x', name: 'x', tool: 'trend' }] }));
   const { unmount } = await mountPane();
+  fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
   expect(screen.queryAllByTestId('rail-preset')).toHaveLength(0);
   await waitFor(() => expect(screen.getByTestId('preset-error')).toBeInTheDocument());
   expect(screen.getByTestId('preset-error').textContent).toContain('newer preset storage version');

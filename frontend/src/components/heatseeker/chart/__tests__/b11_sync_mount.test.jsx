@@ -5,6 +5,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 // must reach ACTUAL CHART EVENTS in the mounted workspace — a user change on
 // one pane propagates to the other panes' real requests and real renderer
 // state (price never crosses unlike symbols), not just reducer helpers.
+jest.setTimeout(15000); // two full panes x four mounted workspace panels under concurrent-lane load
 jest.mock('axios', () => ({ get: jest.fn(), post: jest.fn() }));
 
 // 120 synthetic frames: more than the 80-candle default window so a real

@@ -108,12 +108,21 @@ test('C121: profile levels/VA controls change the real rows and render POC/VAH/V
   });
   // the value area paints distinct rows and the POC/VAH/VAL facts render
   expect(document.querySelectorAll('[data-testid="profile-va-row"]').length).toBeGreaterThan(0);
-  expect(screen.getByTestId('profile-fact-poc')).toHaveTextContent(/POC /);
-  expect(screen.getByTestId('profile-fact-vah')).toHaveTextContent(/VAH /);
-  expect(screen.getByTestId('profile-fact-val')).toHaveTextContent(/VAL /);
+  // FINITE GEOMETRY, not just text: every fact label's y must parse as a
+  // finite number (the object-vs-price NaN defect survived textContent-only
+  // pins and only surfaced as browser SVG attribute errors).
+  const finiteY = id => {
+    const el = screen.getByTestId(id);
+    expect(Number.isFinite(Number(el.getAttribute('y')))).toBe(true);
+    expect(Number.isFinite(Number(el.getAttribute('x')))).toBe(true);
+  };
+  expect(screen.getByTestId('profile-fact-poc')).toHaveTextContent(/POC [0-9]/);
+  expect(screen.getByTestId('profile-fact-vah')).toHaveTextContent(/VAH [0-9]/);
+  expect(screen.getByTestId('profile-fact-val')).toHaveTextContent(/VAL [0-9]/);
+  finiteY('profile-fact-poc'); finiteY('profile-fact-vah'); finiteY('profile-fact-val');
   // VA% shifts the value area — the VA row count changes
   const vaBefore = document.querySelectorAll('[data-testid="profile-va-row"]').length;
-  setInput('profile-va', 0.9);
+  setInput('profile-va-pct', 0.9);
   await waitFor(() => {
     const vaAfter = document.querySelectorAll('[data-testid="profile-va-row"]').length;
     expect(Math.abs(vaAfter - vaBefore)).toBeGreaterThanOrEqual(0);

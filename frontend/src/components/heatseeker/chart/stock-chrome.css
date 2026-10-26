@@ -1,0 +1,58 @@
+/* Stock-local chrome (visual-reset layout pass): the compact command row and
+   workspace sizing for the Stock pane ONLY — imported by RecordedPriceChart /
+   Stock-local modules; the shared App.css is untouched. Dark tokens only. */
+
+/* ONE compact command row: identity + interval + replay + readout + scale +
+   the Indicators/Drawings openers all ride the same line. */
+.recorded-chart-tools { flex-wrap: wrap; row-gap: 4px; }
+.recorded-chart-tools .recorded-chart-readout { font-size: 11px; gap: 6px; }
+.recorded-chart-tools .recorded-chart-readout strong { font-size: 11px; }
+.recorded-chart-tools .recorded-chart-readout b { font-weight: 600; }
+.recorded-chart-replay-inline { display: inline-flex; align-items: center; gap: 6px; margin-left: 4px; }
+.recorded-chart-replay-inline button { font-size: 11px; padding: 2px 8px; }
+.recorded-chart-replay-inline input[type="range"] { width: 110px; }
+.recorded-chart-scale button { font-size: 11px; padding: 2px 7px; }
+.recorded-chart-tools select { font-size: 12px; }
+.stock-dock-actions .stock-dock-btn { font-size: 11px; padding: 2px 9px; }
+.price-history-summary { font-size: 11px; }
+
+/* The workspace: one bounded right column, stable header/tabs/close. */
+.stock-inspector { border-radius: 8px; }
+.stock-inspector-tab { font-size: 11px; padding: 3px 8px; }
+.stock-inspector-title { font-size: 12px; }
+.stock-inspector-body .price-history-drawings { border: none; padding: 0; margin: 0; }
+.stock-inspector-body details.price-studies-panel { border: none; }
+
+/* The OHLC readout overlays the candle canvas — never a stacked row. */
+.recorded-chart-surface.recorded-chart-surface { position: relative; }
+.recorded-chart-readout-overlay { position: absolute; top: 2px; left: 4px; right: auto; z-index: 30;
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center; pointer-events: none;
+  font-size: 10px; color: #c9d6e2; background: rgba(13,17,23,0.55); border-radius: 4px; padding: 2px 6px; max-width: 92%; }
+.recorded-chart-readout-overlay .recorded-chart-popover { pointer-events: auto; }
+.recorded-chart-readout-overlay strong { font-size: 11px; color: #dce8f2; }
+.recorded-chart-readout-overlay .recorded-chart-popover { display: inline-block; font-size: 11px; }
+/* the command row: ONE compact line at desktop widths (doubled class
+   out-specifies the shared row rule without touching App.css). */
+.recorded-chart-tools.recorded-chart-tools { flex-wrap: nowrap; white-space: nowrap; gap: 6px; align-items: center; }
+.recorded-chart-replay-inline.recorded-chart-replay-inline { gap: 4px; margin-left: 0; }
+.recorded-chart-replay-inline input[type="range"] { width: 90px; }
+.recorded-chart-replay-inline button { font-size: 10px; padding: 1px 5px; }
+.stock-dock-actions.stock-dock-actions { gap: 4px; }
+.stock-dock-actions .stock-dock-btn.stock-dock-btn { font-size: 10px; padding: 2px 7px; }
+.recorded-chart-tools .price-history-summary { font-size: 10px; max-width: 110px; overflow: hidden; text-overflow: ellipsis; }
+.recorded-chart-tools .price-chart-symbol { font-size: 13px; margin-right: 4px; }
+.recorded-chart-tools select { font-size: 12px; padding: 1px 4px; }
+.recorded-chart-tools button { font-size: 11px; padding: 2px 7px; }
+.recorded-chart-tools .recorded-chart-scale { gap: 3px; }
+.recorded-chart-tools summary { font-size: 11px; padding: 2px 7px; }
+
+/* The replay controls ride the command row as ONE compact inline group:
+   their legacy band styling (border/margins/wrap/flex:1 slider) is
+   neutralized ONLY inside the row — the standalone replay row is gone. */
+.recorded-chart-tools .price-history-replay.price-history-replay { flex-wrap: nowrap; padding-top: 0; margin-top: 0; border-top: 0; gap: 4px; flex: 0 1 auto; min-width: 0; margin-left: 0; }
+.recorded-chart-tools .price-history-replay input { flex: 0 0 80px; min-width: 80px; width: 80px; }
+.recorded-chart-tools .price-history-replay button { min-height: 26px; padding: 2px 8px; font-size: 11px; }
+.recorded-chart-tools .price-history-replay span { font-size: 10px; max-width: 118px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recorded-chart-tools.recorded-chart-tools > button, .recorded-chart-tools.recorded-chart-tools > select { min-height: 26px; padding: 2px 7px; font-size: 11px; }
+.recorded-chart-tools.recorded-chart-tools .recorded-chart-popover > summary { min-height: 26px; padding: 2px 8px; font-size: 11px; }
+.recorded-chart-tools .stock-dock-btn.recorded-chart-tools-btn, .stock-dock-actions .stock-dock-btn { min-height: 26px; }
