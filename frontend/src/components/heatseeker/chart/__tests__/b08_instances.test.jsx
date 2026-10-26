@@ -149,7 +149,6 @@ test('MOUNTED: two differently configured studies render independently and survi
   window.localStorage.clear();
   const { unmount } = render(<PriceNodeHistory ticker="SPY" open />);
   await waitFor(() => expect(screen.getByTestId('recorded-price-chart')).toHaveAttribute('data-candles', '4'));
-  fireEvent.click(screen.getByTestId('studies-panel-summary'));
   // the panel surface: preset chip (SMA 20) + catalog Add (EMA 20), then edit
   // BOTH instances independently through their own settings inputs (small
   // periods so the 4-frame fixture yields real values)
@@ -169,7 +168,6 @@ test('MOUNTED: two differently configured studies render independently and survi
   await waitFor(() => expect(document.querySelectorAll('[data-testid^="study-line-"]')).toHaveLength(2));
   // invalid period input is CLAMPED by the panel (fallback to the current
   // value; no silent invalid state, no new line, no instance created)
-  fireEvent.click(screen.getByTestId('studies-panel-summary'));
   fireEvent.click(screen.getByTestId('catalog-add-sma'));
   const sid = [...document.querySelectorAll('[data-testid^="instance-period-"]')].map(e => e.getAttribute('data-testid').slice('instance-period-'.length))[0];
   fireEvent.change(screen.getByTestId('instance-period-' + sid), { target: { value: '0' } });

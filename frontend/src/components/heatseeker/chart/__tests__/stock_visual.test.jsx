@@ -30,8 +30,11 @@ test('the dock renders open with all three tabs; studies reachable without any T
   const dock = screen.getByTestId('stock-inspector');
   expect(dock).toHaveAttribute('data-open', 'true');
   expect(dock).toHaveAttribute('data-active-tab', 'indicators');
-  // the studies panel lives in the Indicators tab — no nested Tools disclosure
-  expect(screen.getByTestId('studies-panel-summary')).toBeInTheDocument();
+  // the catalog paints IN the Indicators tab — no nested summary, no Tools disclosure
+  expect(screen.queryByTestId('studies-panel-summary')).not.toBeInTheDocument();
+  expect(screen.getByTestId('indicators-search')).toBeInTheDocument();
+  expect(screen.queryAllByTestId(/^catalog-add-/).length + document.querySelectorAll('[data-testid^="catalog-add-"]').length).toBeGreaterThan(0);
+  expect(document.querySelector('[data-testid="indicators-panel"]').closest('details')).toBeNull();
   // the three dock buttons are visible in the chart row
   expect(screen.getByTestId('stock-dock-open-indicators')).toBeInTheDocument();
   expect(screen.getByTestId('stock-dock-open-data')).toBeInTheDocument();
@@ -53,7 +56,9 @@ test('tabs switch with real content; close and reopen are stable', async () => {
   await waitFor(() => expect(screen.getByTestId('stock-inspector')).toHaveAttribute('data-open', 'false'));
   fireEvent.click(screen.getByTestId('stock-dock-open-indicators'));
   await waitFor(() => expect(screen.getByTestId('stock-inspector')).toHaveAttribute('data-open', 'true'));
-  expect(screen.getByTestId('studies-panel-summary')).toBeInTheDocument();
+  // reopening the Indicators tab re-exposes the catalog directly — no summary
+  expect(screen.getByTestId('indicators-search')).toBeInTheDocument();
+  expect(screen.getByTestId('indicators-panel').closest('details')).toBeNull();
 });
 
 test('the Volume pane row drives the REAL measured-volume bars pane — both ways', async () => {
@@ -61,7 +66,6 @@ test('the Volume pane row drives the REAL measured-volume bars pane — both way
   // default: the measured volume bars pane renders (real rects under the candles)
   const bars = () => document.querySelectorAll('[data-testid="volume-bar"]').length;
   expect(bars()).toBeGreaterThan(0);
-  fireEvent.click(screen.getByTestId('studies-panel-summary'));
   // the pane row turns the REAL bars pane OFF — not the profile, not a saved row
   fireEvent.click(screen.getByTestId('pane-toggle-volume-pane'));
   await waitFor(() => expect(bars()).toBe(0));

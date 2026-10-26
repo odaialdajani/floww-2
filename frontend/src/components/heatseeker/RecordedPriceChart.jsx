@@ -2,13 +2,14 @@ import React,{useCallback,useEffect,useId,useMemo,useRef,useState} from 'react';
 import {chartTime,checkedCandles,clampWindow,contractClosesForFrames,NODE_COLORS,NODE_LABELS,pinchFactors,priceRange,savedLevels,zoomPrice,zoomTime} from './recordedPriceChartData';
 import {openingEnvelope,sessionEnvelope,sessionVwapBands,sessionVwapValues} from './chart/indicators/priceStudies';
 import {volumeProfile} from './chart/indicators/profile';
+import { profileConfig, tpoConfig } from './chart/indicators/paneStudies';
 import './RecordedPriceChart.css';
 const price=value=>Number.isFinite(value)?value.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'Unavailable';
 const bound=(value,low,high)=>Math.max(low,Math.min(high,value));
 const axisTime=value=>new Date(value).toLocaleString('en-US',{timeZone:'America/New_York',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false});
 const closeDetails=element=>{const details=element.closest('details');if(details){details.open=false;details.querySelector('summary')?.focus();}};
 
-export default function RecordedPriceChart({ticker,frames,revision='',onInteract,metricCoverage={},toolbarControls=null,toolbarActions=null,historyPeriodControls=null,historyControls=null,replayControls=null,dataDetails=null,readingStatus="Data details",emptyContent=null,showAtlas=true,exposureLine=null,darkLevels=null,flowBars=null,alertLines=null,cvdLine=null,contractBars=null,contractSymbol=null,contractStatus=null,fitAllFrames=null,renderDrawingLayer=null,syncSeq=0,syncView=null,syncPrice=null,syncCrosshair=null,onSync=null,studyLines=null,mappedShapes=null,volumeInstanceActive=false, overlays=null, onOverlaysChange=null}) {
+export default function RecordedPriceChart({ticker,frames,revision='',onInteract,metricCoverage={},toolbarControls=null,toolbarActions=null,historyPeriodControls=null,historyControls=null,replayControls=null,dataDetails=null,readingStatus="Data details",emptyContent=null,showAtlas=true,exposureLine=null,darkLevels=null,flowBars=null,alertLines=null,cvdLine=null,contractBars=null,contractSymbol=null,contractStatus=null,fitAllFrames=null,renderDrawingLayer=null,syncSeq=0,syncView=null,syncPrice=null,syncCrosshair=null,onSync=null,studyLines=null,mappedShapes=null,volumeInstanceActive=false, overlays=null, onOverlaysChange=null, paneCfg=null, onPaneCfg=null, cvdStudyPending=false}) {
  const data=useMemo(()=>checkedCandles(frames),[frames]);
  const premiumCloses=useMemo(()=>contractClosesForFrames(data,contractBars),[data,contractBars]);
  const surface=useRef(null),pointers=useRef(new Map()),gesture=useRef(null),previousLength=useRef(0);
@@ -207,6 +208,13 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
     <div className="recorded-chart-history"><button type="button" aria-label="Earlier candles" disabled={!windowView.start} onClick={()=>shift(-Math.max(1,Math.floor(windowView.count/2)))}>Earlier</button><button type="button" aria-label="Later candles" disabled={windowView.start+windowView.count>=data.length} onClick={()=>shift(Math.max(1,Math.floor(windowView.count/2)))}>Later</button><button type="button" disabled={!data.length} onClick={()=>{notify();setView({start:0,count:data.length});setManualPrice(null);}}>Fit history</button></div>
     <fieldset className="recorded-chart-layers" aria-label="Saved node lines"><legend>Saved lines</legend>{Object.entries(NODE_LABELS).map(([metric,label])=><label key={metric} style={{'--node-color':NODE_COLORS[metric]}}><input type="checkbox" checked={metrics.includes(metric)} disabled={!availableMetrics.includes(metric)} onChange={e=>{setMetrics(old=>e.target.checked?[...old,metric]:old.filter(value=>value!==metric));setManualPrice(null);}}/>{label}{!availableMetrics.includes(metric)&&<span> unavailable</span>}</label>)}<label><input type="checkbox" checked={allNodes} onChange={e=>{setAllNodes(e.target.checked);setManualPrice(null);}}/>All saved levels</label></fieldset>
     <fieldset className="recorded-chart-layers recorded-chart-overlays" aria-label="Chart overlays"><legend>Overlays</legend>
+     {paneCfg&&onPaneCfg&&<span className="pane-study-settings" data-testid="profile-settings" role="group" aria-label="Volume profile and TPO settings">
+      <label>Profile mode<select data-testid="profile-mode" value={paneCfg.profile?.mode??'visible'} onChange={e=>onPaneCfg({profile:{...(paneCfg.profile||{}),mode:e.target.value}})}><option value="visible">visible window</option><option value="fixed-200">fixed 200</option></select></label>
+      <label>Levels<input data-testid="profile-levels" aria-label="Profile levels" type="number" min="8" max="200" value={paneCfg.profile?.levels??''} onChange={e=>{const n=Math.round(Number(e.target.value));onPaneCfg({profile:{...(paneCfg.profile||{}),levels:Number.isInteger(n)&&n>=8&&n<=200?n:null}});}}/></label>
+      <label>VA%<input data-testid="profile-va" aria-label="Value area pct" type="number" min="0.5" max="0.9" step="0.01" value={paneCfg.profile?.vaPct??0.68} onChange={e=>{const n=Number(e.target.value);onPaneCfg({profile:{...(paneCfg.profile||{}),vaPct:n>=0.5&&n<=0.9?n:(paneCfg.profile?.vaPct??0.68)}});}}/></label>
+      <label>TPO m<input data-testid="tpo-minutes" aria-label="TPO period minutes" type="number" min="1" max="480" value={paneCfg.tpo?.periodMinutes??30} onChange={e=>{const n=Math.round(Number(e.target.value));onPaneCfg({tpo:{...(paneCfg.tpo||{}),periodMinutes:Number.isInteger(n)&&n>=1&&n<=480?n:30}});}}/></label>
+      <label>TPO mode<select data-testid="tpo-mode" value={paneCfg.tpo?.mode??'bar-resolution'} onChange={e=>onPaneCfg({tpo:{...(paneCfg.tpo||{}),mode:e.target.value}})}><option value="bar-resolution">bar-resolution</option><option value="tick-true">tick-true</option></select></label>
+     </span>}
      <label><input type="checkbox" aria-label="Toggle volume pane" checked={effVolume} onChange={e=>OVL?setOvl('volume',e.target.checked):setVolumeLocal(v=>!v)}/>{'Volume pane'}</label>
      <label><input type="checkbox" aria-label="Toggle VWAP" checked={effVwap} disabled={!data.some(frame=>Number.isFinite(frame.volume))} onChange={e=>OVL?setOvl('vwap',e.target.checked):setVwapOn(e.target.checked)}/>VWAP{!data.some(frame=>Number.isFinite(frame.volume))&&<span> unavailable</span>}</label>
      <label><input type="checkbox" aria-label="Toggle profile" checked={effProfile||volumeInstanceActive} disabled={!data.some(frame=>Number.isFinite(frame.volume))} onChange={e=>OVL?setOvl('profile',e.target.checked):setProfileOn(e.target.checked)}/>Profile{!data.some(frame=>Number.isFinite(frame.volume))&&<span> unavailable</span>}{volumeInstanceActive&&!effProfile&&<span> · on (volume instance)</span>}</label>
@@ -265,11 +273,40 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
         if(pts.length<2)return null;
         return <g key={'vwapband:'+m}><polyline data-testid="vwap-band" points={pts.map(p=>p.x+','+p.uy).join(' ')} fill="none" stroke="#e08e45" strokeWidth="1" strokeDasharray="4 3" opacity="0.8"/><polyline data-testid="vwap-band" points={pts.map(p=>p.x+','+p.ly).join(' ')} fill="none" stroke="#e08e45" strokeWidth="1" strokeDasharray="4 3" opacity="0.8"/></g>;});})()}
       {showAtlas&&(effProfile||volumeInstanceActive)&&data.some(frame=>Number.isFinite(frame.volume))&&(()=>{
-       const prof=volumeProfile(visible,{rows:Math.min(48,Math.max(8,visible.length))});
+       // C121: with a configuration the profile IS the configured study —
+       // fixed-200/visible mode, levels 8..200, VA% 0.5..0.9, POC/VAH/VAL facts.
+       const cfgP=paneCfg?.profile;
+       let prof;
+       if(cfgP){
+         const attempted=profileConfig(visible,{mode:cfgP.mode??'visible',levels:Number.isInteger(cfgP.levels)&&cfgP.levels>=8?cfgP.levels:undefined,vaPct:typeof cfgP.vaPct==='number'?cfgP.vaPct:0.68,basis:'total'});
+         if(attempted.status!=='ok')return <g data-testid="profile-study-refused"><text x={left} y={top+12} fill="#d65656" fontSize="11">{attempted.reason}</text></g>;
+         prof={rows:attempted.rows,poc:attempted.poc,value_area:attempted.valueArea,status:'ok',approximation:attempted.approximation,facts:attempted.facts};
+       } else {
+         prof=volumeProfile(visible,{rows:Math.min(48,Math.max(8,visible.length))});
+       }
        if(prof.status!=='ok')return null;
        const peak=Math.max(...prof.rows.map(r=>r.volume),1),bw=64,bx=Math.max(left,right-bw-4);
+       const va=prof.value_area;
        return <g data-testid="volume-profile"><title>Volume profile (bar-range approximation)</title>{prof.rows.map((r,ri)=>{const isPoc=r.price===prof.poc.price&&r.volume===prof.poc.volume;
-        return <rect key={'vp:'+ri} data-testid={isPoc?'profile-poc':'profile-row'} x={bx+(bw-Math.max(1,(r.volume/peak)*bw))} y={y(r.price)-2} width={Math.max(1,(r.volume/peak)*bw)} height={4} fill={isPoc?'#e8bd65':'#5a6b7d'} opacity={isPoc?0.95:0.6}><title>{'Volume '+price(r.price)+': '+Math.round(r.volume).toLocaleString('en-US')+' shares'}</title></rect>;})}</g>;})()}
+        const inVa=va&&r.price>=va.low&&r.price<=va.high;
+        return <rect key={'vp:'+ri} data-testid={isPoc?'profile-poc':(inVa?'profile-va-row':'profile-row')} x={bx+(bw-Math.max(1,(r.volume/peak)*bw))} y={y(r.price)-2} width={Math.max(1,(r.volume/peak)*bw)} height={4} fill={isPoc?'#e8bd65':(inVa?'#72a3c9':'#5a6b7d')} opacity={isPoc?0.95:0.6}><title>{'Volume '+price(r.price)+': '+Math.round(r.volume).toLocaleString('en-US')+' shares'+(inVa&&!isPoc?' · value area':'')}</title></rect>;})}
+       {prof.facts&&<g data-testid="profile-facts">
+        <text x={bx} y={y(prof.facts.poc)-6} fill="#e8bd65" fontSize="10" data-testid="profile-fact-poc">POC {price(prof.facts.poc.price)}</text>
+        <text x={bx} y={y(prof.facts.vah)-16} fill="#72a3c9" fontSize="10" data-testid="profile-fact-vah">VAH {price(prof.facts.vah)}</text>
+        <text x={bx} y={y(prof.facts.val)+8} fill="#72a3c9" fontSize="10" data-testid="profile-fact-val">VAL {price(prof.facts.val)}</text>
+       </g>}</g>;})()}
+      {showAtlas&&paneCfg&&(()=>{ // C124-126: bar-resolution TPO — REAL plotted period boxes + typed refusals
+       const cfgT=paneCfg.tpo;
+       const epochBars=visible.map(f=>{const ms=Date.parse(f.time);return Number.isFinite(ms)?{...f,time:ms}:null;}).filter(Boolean);
+       const tpo=tpoConfig(epochBars,{mode:cfgT?.mode??'bar-resolution',periodMinutes:cfgT?.periodMinutes??30});
+       if(tpo.status!=='ok')return <g data-testid="tpo-refused"><text x={left} y={top+26} fill="#d65656" fontSize="11" data-testid="tpo-refusal-text">{tpo.reason}</text></g>;
+       const colW=Math.max(3,10), tbx=Math.max(left,right-140);
+       return <g data-testid="tpo-context"><title>{'Bar-resolution TPO approximation · '+tpo.note}</title>
+        {tpo.periods.map((p,pi)=>{const py0=y(p.high),py1=y(p.low);
+         if(!Number.isFinite(py0)||!Number.isFinite(py1))return null;
+         return <rect key={'tpo:'+pi} data-testid="tpo-period-box" x={tbx+colW*pi+2} y={Math.min(py0,py1)} width={colW-2} height={Math.max(2,Math.abs(py1-py0))} fill="#7d6ac0" opacity="0.5"><title>{'Period '+p.period+' '+price(p.high)+'/'+price(p.low)+' · '+tpo.approximation}</title></rect>;})}
+        {tpo.sessionFacts&&<text x={tbx} y={top+38} fill="#7d6ac0" fontSize="10" data-testid="tpo-session-facts">{'TPO '+(cfgT?.periodMinutes??30)+'m · session '+price(tpo.sessionFacts.high)+'/'+price(tpo.sessionFacts.low)+' · '+(tpo.periods.length)+' periods · bar-resolution (tick-true needs the admitted tape)'}</text>}
+       </g>;})()}
       {hover!==null&&selected&&<g data-export-layer="crosshair"><line x1={left+(hover+0.5)*spacing} x2={left+(hover+0.5)*spacing} y1={top} y2={bottom} stroke="#a8b3be" strokeDasharray="3 4"/><line x1={left} x2={right} y1={y(selected.close)} y2={y(selected.close)} stroke="#a8b3be" strokeDasharray="3 4"/></g>}
     </g>
     {renderDrawingLayer && renderDrawingLayer({
@@ -319,6 +356,9 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
     </svg>;})()}
     {!!data.length&&effCvd&&(()=>{ // CVD pane: BVC-estimated cumulative flow — honest gaps, never zero-filled.
      if(!showAtlas||!Array.isArray(cvdLine))return null;
+     // C118 PENDING: the anchor/MA/zero-axis math is under H2 module REWORK
+     // (H3 verdict) — the pane keeps the incumbent RAW estimated path; the
+     // settings persist but are visibly pending, never silently applied.
      const byTime=new Map(cvdLine.filter(p=>p&&typeof p.time==='string').map(p=>[p.time,p]));
      const known=visible.map(frame=>{const entry=byTime.get(frame.time);const v=entry?entry.cvd:undefined;return typeof v==='number'&&Number.isFinite(v)?v:null;});
      if(!known.some(v=>v!==null))return null;
@@ -329,9 +369,15 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
      if(cur.length)segments.push(cur);
      const lines=segments.filter(s=>s.length>1),dots=[];
      segments.filter(s=>s.length===1).forEach(s=>dots.push(s[0]));
+     const cvdCfg=paneCfg?.cvd;
      return <div className="recorded-cvd-pane" data-testid="cvd-pane" aria-label="Estimated cumulative volume delta">
+       {cvdStudyPending&&<div className="pane-study-settings" data-testid="cvd-settings" role="group" aria-label="Estimated CVD settings">
+         <span className="pane-study-pending" data-testid="cvd-settings-pending" role="note">CVD anchor / MA / zero-axis settings are PENDING the reviewed module (H3 REWORK on the CVD helper: dropped missing bars, MA across gaps) — the pane keeps the raw estimated path until then.</span>
+         <span className="pane-study-approx" data-testid="cvd-approx-label">estimated (BVC) — not a classified tape</span>
+       </div>}
        <svg viewBox={'0 0 '+size.width+' '+h} preserveAspectRatio="none" style={{width:'100%',height:h}} role="img" aria-label="CVD estimate per candle">
         {lines.map((seg,si)=><polyline data-testid="cvd-line" key={'cvd:'+si} points={seg.map(p=>p.x.toFixed(1)+','+p.y.toFixed(1)).join(' ')} fill="none" stroke="#9d7bea" strokeWidth="1.5"><title>CVD estimate</title></polyline>)}
+
         {dots.map((p,di)=><circle data-testid="cvd-point" key={'cvddot:'+di} cx={p.x} cy={p.y} r="2" fill="#9d7bea" opacity="0.9"><title>CVD estimate (single known candle)</title></circle>)}
        </svg>
        <div className="recorded-cvd-summary"><span data-testid="cvd-status">Estimated CVD · shares · {vals.length}/{visible.length} known</span><details><summary role="button">CVD method</summary><p>CVD estimated via bulk volume classification (Easley, López de Prado &amp; O&apos;Hara 2012); a bar-volume estimate, not classified trade-by-trade CVD. Unknown ≠ zero; gaps are honest. Range {lo.toLocaleString('en-US')}–{hi.toLocaleString('en-US')} shares (own scale).</p></details></div>
