@@ -125,6 +125,7 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
     if(!Array.isArray(studyLines)||!studyLines.length)return null;
     return studyLines.map(spec=>{
       if(!spec||!Array.isArray(spec.points))return null;
+      if(spec.pane)return null; // the momentum panes render in their OWN scales
       const byTime=new Map(spec.points.filter(p=>p&&typeof p.time==='string').map(p=>[p.time,p.value]));
       const segs=[];let cur=[];
       visible.forEach((frame,index)=>{
@@ -356,7 +357,55 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
       {win.map((frame,index)=>{const v=frame.volume;if(!Number.isFinite(v))return null;const bh=v===0?0:Math.max(1,v/peak*(h-(missing?18:4)));
        return <rect data-testid="volume-bar" key={frame.time} x={left+index*spacing+Math.max(1,spacing*0.15)} y={h-bh} width={Math.max(1,Math.min(spacing*0.7,14))} height={bh} fill={frame.close>=frame.open?'#3f8f7d':'#8f4a52'} opacity="0.85"><title>{chartTime(frame.time,true)+' — '+(Number.isFinite(v)?v.toLocaleString('en-US'):'0')+' shares'}</title></rect>;})}
     </svg>;})()}
-    {!!data.length&&effCvd&&(()=>{ // CVD pane: BVC-estimated cumulative flow — honest gaps, never zero-filled.
+    {(()=>{ // Owner 13:40 slice 2 — the momentum panes over H2's frozen
+      // producer specs. RSI: its OWN fixed 0..100 percent scale. MACD: line +
+      // signal strokes and histogram bars around zero on ONE shared
+      // zero-anchored scale. ATR: its own price scale. Warmup/refused nulls
+      // BREAK lines — never bridged, never zero-filled; an all-null series
+      // renders the honest refusal and nothing else.
+      if(!Array.isArray(studyLines)||!data.length)return null;
+      const specsOf=n=>studyLines.filter(sp=>sp&&sp.pane===n&&Array.isArray(sp.points));
+      const finiteVals=sp=>sp.points.filter(p=>p&&typeof p.value==='number'&&Number.isFinite(p.value)).map(p=>p.value);
+      const segsOf=(sp,scale)=>{const byTime=new Map(sp.points.map(p=>[p&&p.time,p&&p.value]));const segs=[];let cur=[];
+        visible.forEach((frame,index)=>{const v=byTime.get(frame.time);
+          if(typeof v!=='number'||!Number.isFinite(v)){if(cur.length>1)segs.push(cur);cur=[];return;}
+          cur.push({x:left+(index+0.5)*spacing,y:scale(v)});});
+        if(cur.length>1)segs.push(cur);return segs;};
+      const panes=[];
+      for(const name of ['rsi','macd','atr']){
+        const specs=specsOf(name);if(!specs.length)continue;
+        const all=specs.flatMap(finiteVals);
+        const refused=!all.length; // every point null: the whole series refused
+        const h=name==='macd'?72:56,pad=5;
+        let lo,hi;
+        if(name==='rsi'){lo=0;hi=100;} // the contract's fixed percent scale
+        else if(refused){lo=0;hi=1;}
+        else if(name==='macd'){const m=Math.max(...all.map(Math.abs),1e-9);lo=-m;hi=m;} // zero-anchored
+        else {lo=Math.min(...all);hi=Math.max(...all);if(hi===lo){lo-=1;hi+=1;}}
+        const span=(hi-lo)||1,scale=v=>h-pad-((v-lo)/span)*(h-pad*2),zero=scale(0);
+        panes.push(<div className={'recorded-momentum-pane'+(refused?' recorded-pane-refused':'')} data-testid={'momentum-pane-'+name} role="img" key={'mp:'+name}
+          aria-label={(name==='rsi'?'RSI':name==='macd'?'MACD':'ATR')+' study pane'}>
+          <svg viewBox={'0 0 '+size.width+' '+h} preserveAspectRatio="none" style={{width:'100%',height:h}}>
+            {refused?null:<>{name==='rsi'&&<><line x1={left} x2={right} y1={scale(30)} y2={scale(30)} stroke="#3a4756" strokeDasharray="2 4"/><line x1={left} x2={right} y1={scale(70)} y2={scale(70)} stroke="#3a4756" strokeDasharray="2 4"/></>}{name==='macd'&&<line x1={left} x2={right} y1={zero} y2={zero} stroke="#3a4756" strokeDasharray="2 4"/>}{specs.map(sp=>{
+              if(sp.band==='histogram')return null;
+              return segsOf(sp,scale).map((seg,si)=><polyline data-testid={name+'-line'} key={sp.id+':'+si} points={seg.map(p=>p.x.toFixed(1)+','+p.y.toFixed(1)).join(' ')} fill="none" stroke={sp.band==='signal'?'#e3c16a':'#5ec986'} strokeWidth="1.4"><title>{sp.label}</title></polyline>);})}
+            {specs.filter(sp=>sp.band==='histogram').map(sp=>{const byTime=new Map(sp.points.map(p=>[p&&p.time,p&&p.value]));const bars=[];
+              visible.forEach((frame,index)=>{const v=byTime.get(frame.time);if(typeof v!=='number'||!Number.isFinite(v))return;
+                const vy=scale(v);bars.push(<rect data-testid="macd-histogram" key={'mh:'+index} x={left+index*spacing+Math.max(1,spacing*0.3)} y={Math.min(zero,vy)} width={Math.max(1,spacing*0.4)} height={Math.max(1,Math.abs(zero-vy))} fill={v>=0?'#57c5b0':'#e48d94'} opacity="0.7"/>);});
+              return bars;})}
+            </>}
+            {refused&&<text x={left} y={Math.round(h/2)} fill="#d65656" fontSize="10" data-testid="momentum-refused-note">series refused — a non-finite close is in the loaded window; nothing drawn</text>}
+          </svg>
+          <div className="recorded-momentum-label" data-testid={'momentum-label-'+name}>
+            <strong>{name.toUpperCase()}</strong>
+            <span>{specs.map(sp=>sp.label).filter((v,i,a)=>a.indexOf(v)===i).join(' · ')}</span>
+            {!refused&&<small>{name==='rsi'?'0–100 fixed scale':name==='macd'?'price delta · zero-anchored':'own price scale'}</small>}
+          </div>
+        </div>);
+      }
+      return panes.length?panes:null;
+    })()}
+        {!!data.length&&effCvd&&(()=>{ // CVD pane: BVC-estimated cumulative flow — honest gaps, never zero-filled.
      if(!showAtlas||(cvdStudy?false:!Array.isArray(cvdLine)))return null;
      // C118: with the corrected study (58815e74) the drawn path IS the
      // configured one. Holes stay null here — the segmentation below breaks
