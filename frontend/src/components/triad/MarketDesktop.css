@@ -1,0 +1,269 @@
+/* Market desktop composition (OpenCode market-desktop-20261025, 2026-10-25).
+ * One calm grouped command header, raw/adjusted comparison first in the main
+ * column, and ONE bounded selected-object inspector docked right at wide
+ * desktop widths (352px, inside the 340-360px contract) or a proper overlay
+ * below 1180px. Reuses the existing desk palette tokens — no new brand.
+ * Unique `tdk-` namespace; no shared/global selectors are modified. */
+
+.trinity-desktop {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 352px;
+  gap: 0 12px;
+  align-items: start;
+  font-size: 13px;
+  color: #d7e6e8;
+  padding: 0 2px 14px;
+}
+.trinity-desktop.tdk-dock-closed { grid-template-columns: minmax(0, 1fr) 0; }
+/* Collapsed at ANY width: the dock itself is hidden, not just squeezed. */
+.trinity-desktop.tdk-dock-closed .tdk-dock { display: none; }
+/* Direct children that are not the header or the body span the full width. */
+.trinity-desktop > .triad-band-note,
+.trinity-desktop > .triad-empty-desk { grid-column: 1 / -1; margin: 0 2px 8px; }
+
+/* The body is the actual two-column working area: comparison left,
+ * selected-object inspector right. */
+.tdk-body {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 352px;
+  gap: 0 12px;
+  align-items: start;
+  min-width: 0;
+}
+.trinity-desktop.tdk-dock-closed .tdk-body { grid-template-columns: minmax(0, 1fr) 0; }
+
+/* ---------- Command header: short, grouped by job ---------- */
+.tdk-head {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 0 8px;
+  padding: 7px 10px 8px;
+  background: #0b1117;
+  border: 1px solid #263044;
+  border-radius: 8px;
+}
+.tdk-head-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
+.tdk-head-group { display: inline-flex; align-items: center; gap: 6px; padding-right: 10px; border-right: 1px solid #1d2740; }
+.tdk-head-group:last-child { border-right: none; }
+.tdk-head-label {
+  font-size: 12px; color: #8fa8b5; letter-spacing: 0.02em; white-space: nowrap;
+}
+.trinity-desktop .tdk-head input {
+  background: #101625; border: 1px solid #34405b; border-radius: 5px;
+  color: #e6eef2; font-size: 13px; min-height: 28px; padding: 3px 8px; width: 88px;
+  font-variant-numeric: tabular-nums;
+}
+.trinity-desktop .tdk-head select {
+  background: #101625; border: 1px solid #34405b; border-radius: 5px;
+  color: #cbd5e1; font-size: 12.5px; min-height: 28px; padding: 3px 6px; max-width: 210px;
+}
+.tdk-head .triad-mobile-switch { display: none; }
+.tdk-head-toggle {
+  background: transparent; border: 1px solid #34405b; border-radius: 5px; color: #cbd5e1;
+  font-size: 12px; min-height: 28px; padding: 3px 10px; cursor: pointer; white-space: nowrap;
+}
+.tdk-head-toggle[aria-pressed="true"] { color: #e3c16a; border-color: #6b5a2a; }
+.tdk-head-toggle:hover { background: #16202e; }
+
+/* Subordinate identity row: one quiet line, not competing panels. */
+.tdk-head-sub {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  font-size: 12px; color: #8fa8b5; font-variant-numeric: tabular-nums; min-width: 0;
+}
+.tdk-head-sub .triad-loaded-dates { display: inline; margin: 0; font-size: 12px; color: #8fa8b5; overflow-wrap: anywhere; }
+.tdk-head-sub .triad-source { margin: 0; font-size: 12px; color: #9bb0bd; overflow-wrap: anywhere; }
+.tdk-chip {
+  display: inline-flex; align-items: center; gap: 5px; border: 1px solid #223047;
+  border-radius: 10px; padding: 1px 9px; background: #0d1520; color: #b7c9d4;
+  font-size: 12px; white-space: nowrap;
+}
+.tdk-chip b { color: #e3c16a; font-weight: 600; }
+
+/* ---------- Main column: the comparison is the working canvas ---------- */
+.tdk-main { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.trinity-desktop .triad-pair { height: clamp(360px, 44vh, 560px); }
+.trinity-desktop .triad-walls { margin: 0; }
+.trinity-desktop .triad-walls .triad-wall-chip {
+  min-height: 26px; font-size: 12.5px; padding: 2px 10px;
+}
+.tdk-secondary { display: flex; flex-direction: column; gap: 6px; }
+
+/* Scope admission + empty desk keep their honest blocks, calmly styled. */
+.trinity-desktop .triad-scope-notice { margin: 0; }
+.trinity-desktop .triad-empty-desk { margin: 0 0 6px; }
+
+/* ---------- Selected-object inspector ----------
+ * Charcoal/black chart-aligned surfaces (root 22:40: the earlier teal wash
+ * was stronger than the approved restrained palette) — same family as the
+ * candle/map surfaces, gold accents, calm slate borders. */
+.tdk-dock {
+  position: sticky;
+  top: 6px;
+  max-height: calc(100vh - 26px);
+  display: flex; flex-direction: column;
+  min-width: 0; min-height: 0;
+  background: #0d1117;
+  border: 1px solid #263044;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.tdk-dock[hidden] { display: none; }
+.tdk-dock-head {
+  display: flex; align-items: center; gap: 8px; flex: none;
+  padding: 8px 10px; border-bottom: 1px solid #263044; background: #0b0f14;
+}
+.tdk-dock-title { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: #8fa8b5; }
+.tdk-dock-id { font-size: 13px; color: #e8f2f6; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tdk-dock-close {
+  margin-left: auto; background: transparent; border: 1px solid #34405b; border-radius: 5px;
+  color: #cbd5e1; font-size: 12px; min-width: 26px; min-height: 24px; cursor: pointer;
+}
+.tdk-dock-close:hover { background: #1b2330; }
+/* Stable tab strip directly beneath identity/close — the body alone scrolls. */
+.tdk-dock-tabs {
+  flex: none; display: flex; gap: 2px;
+  padding: 0 6px; background: #0b0f14; border-bottom: 1px solid #263044;
+}
+.tdk-dock-tabs button {
+  background: transparent; border: none; border-bottom: 2px solid transparent;
+  color: #9bb0bd; font-size: 12.5px; padding: 6px 9px 5px; cursor: pointer; white-space: nowrap;
+}
+.tdk-dock-tabs button:hover { color: #c6d7df; }
+.tdk-dock-tabs button[aria-selected="true"] { color: #e3c16a; border-bottom-color: #e3c16a; }
+.tdk-dock-tabs button:focus-visible { outline: 2px solid #e3c16a; outline-offset: -2px; }
+.tdk-dock-body {
+  flex: 1 1 auto; min-height: 0; overflow: auto; padding: 8px 10px 10px;
+  scrollbar-width: thin;
+}
+.tdk-dock-panel { display: flex; flex-direction: column; gap: 8px; }
+.tdk-dock-panel[hidden] { display: none; }
+.tdk-dock-panel h3 { font-size: 13px; margin: 0; color: #d7e6e8; }
+
+/* Empty state: one concise, concrete selection prompt. */
+.tdk-empty {
+  display: flex; flex-direction: column; gap: 6px; padding: 12px 8px;
+  border: 1px dashed #223047; border-radius: 7px; background: #0b0f14;
+  font-size: 13px; color: #b7c9d4; text-align: left;
+}
+.tdk-empty strong { color: #e3c16a; font-size: 13px; font-weight: 600; }
+.tdk-empty small { color: #8fa8b5; font-size: 12px; line-height: 1.5; }
+
+/* Selected readings: compact human scale, exact values in titles. */
+.tdk-values { display: flex; gap: 8px; flex-wrap: wrap; }
+.tdk-value {
+  display: flex; flex-direction: column; min-width: 86px;
+  background: #10161f; border: 1px solid #223047; border-radius: 6px; padding: 5px 8px;
+}
+.tdk-value-label { font-size: 12px; color: #8fa8b5; }
+.tdk-value-num { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; color: #e8f2f6; }
+.tdk-value-num.pos { color: #19d27c; }
+.tdk-value-num.neg { color: #ff4d5e; }
+
+/* The selected-wall card is the Wall panel body: identity first, then
+ * readings, confirmation conditions and the deliberate review action. */
+.tdk-dock .triad-scenario {
+  margin: 0; background: #10161f; border: 1px solid #263044; border-radius: 7px; padding: 8px 10px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.tdk-dock .triad-scenario-zone { font-size: 13px; font-weight: 600; color: #e8f2f6; }
+.tdk-dock .triad-readiness { font-size: 12.5px; padding: 0; }
+.tdk-dock .triad-readiness strong { color: #e3c16a; font-size: 13px; }
+.tdk-dock .triad-readiness small { font-size: 12px; }
+.tdk-dock .triad-scenario-side { font-size: 12px; display: flex; flex-direction: column; gap: 2px; }
+.tdk-dock .triad-contracts-btn {
+  min-height: 30px; font-size: 13px; border-radius: 5px;
+  background: #1a2433; border: 1px solid #3b5a68; color: #e8f2f6; cursor: pointer; font-weight: 600;
+}
+.tdk-dock .triad-contracts-btn:hover { background: #223145; }
+.tdk-dock .triad-price { background: #0b0f14; border: 1px solid #1d2740; border-radius: 6px; padding: 6px 8px; }
+.tdk-dock .triad-price-caption { font-size: 12px; color: #8fa8b5; }
+
+/* One readable LIVE/age/quality line; the exact snapshot/UUID/formula
+ * strings fold into the closed provenance details (root 22:40). */
+.tdk-provenance {
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+  font-size: 12px; color: #9bb0bd; font-variant-numeric: tabular-nums;
+  border-top: 1px solid #1d2740; padding-top: 6px;
+}
+.tdk-provenance-live { color: #b7c9d4; white-space: nowrap; }
+.tdk-provenance-details summary {
+  cursor: pointer; list-style: none; color: #8fa8b5; font-size: 12px; white-space: nowrap;
+  border: 1px solid #223047; border-radius: 10px; padding: 1px 9px; background: #0b0f14;
+}
+.tdk-provenance-details summary::-webkit-details-marker { display: none; }
+.tdk-provenance-details[open] > summary::before { content: "▾ "; }
+.tdk-provenance-details:not([open]) > summary::before { content: "▸ "; }
+.tdk-provenance-details dl { margin: 6px 0 0; display: grid; grid-template-columns: max-content 1fr; gap: 2px 10px; }
+.tdk-provenance-details dt { font-size: 12px; color: #8fa8b5; }
+.tdk-provenance-details dd { margin: 0; font-size: 12px; color: #cbd5e1; overflow-wrap: anywhere; }
+
+.tdk-hint {
+  padding: 10px 8px; border: 1px dashed #223047; border-radius: 6px;
+  font-size: 12.5px; color: #9bb0bd; background: #0b0f14;
+}
+
+/* Deliberate secondary disclosures below the maps stay calm. */
+.trinity-desktop .triad-context-disclosure { margin: 0; }
+.tdk-head .triad-context-disclosure {
+  display: inline-flex; border: none; background: transparent; border-radius: 5px;
+}
+.tdk-head .triad-context-disclosure > summary {
+  border: 1px solid #34405b; border-radius: 5px; background: #101625;
+  padding: 3px 10px; min-height: 28px; display: inline-flex; align-items: center;
+}
+.tdk-head .triad-context-disclosure[open] { position: relative; }
+.tdk-head .triad-context-disclosure .triad-context-body {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 30; min-width: 380px; max-width: 560px;
+  background: #0d1117; border: 1px solid #263044; border-radius: 7px;
+  padding: 8px 10px; box-shadow: 0 10px 28px rgba(0,0,0,.45);
+}
+.tdk-head .triad-context-disclosure .triad-context { flex-wrap: wrap; }
+
+/* ---------- Below 1180px: the inspector becomes a proper overlay ---------- */
+@media (max-width: 1179px) {
+  .trinity-desktop { grid-template-columns: minmax(0, 1fr); }
+  .trinity-desktop .tdk-body { grid-template-columns: minmax(0, 1fr); }
+  .trinity-desktop.tdk-dock-closed .tdk-dock,
+  .trinity-desktop:not(.tdk-dock-open) .tdk-dock { display: none; }
+  .trinity-desktop.tdk-dock-open .tdk-dock {
+    position: fixed; top: 10px; right: 10px; bottom: 10px;
+    width: min(356px, calc(100vw - 28px)); max-height: none; z-index: 60;
+    box-shadow: 0 14px 40px rgba(0,0,0,.55);
+  }
+  .trinity-desktop.tdk-dock-open .tdk-backdrop {
+    display: block; position: fixed; inset: 0; z-index: 50;
+    background: rgba(4, 10, 14, 0.55);
+  }
+}
+.tdk-backdrop { display: none; }
+
+/* Phone pair switch keeps its existing behavior at very narrow widths. */
+@media (max-width: 640px) {
+  .tdk-head .triad-mobile-switch { display: flex; gap: 8px; }
+}
+
+/* Market main context header — the readable observation line (root 09:20):
+   LIVE/REPLAY + quality + honest observation age outside; the exact
+   snapshot id, full UTC clock, source and formula inside the NAMED CLOSED
+   Provenance detail. Charcoal tokens only; no new visual brand. */
+.tdk-head-sub .tdk-observation { margin: 0; display: inline-flex; align-items: baseline; gap: 10px; min-width: 0; }
+.tdk-head-sub .tdk-observation-line { font-size: 12px; color: #9bb0bd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tdk-observation .tdk-provenance-details { display: inline-block; }
+.tdk-observation .tdk-provenance-details > summary {
+  cursor: pointer; font-size: 12px; color: #7d94a6; list-style: none;
+  border: 1px solid #263041; border-radius: 6px; padding: 1px 8px; white-space: nowrap;
+}
+.tdk-observation .tdk-provenance-details > summary::-webkit-details-marker { display: none; }
+.tdk-observation .tdk-provenance-details[open] > summary { color: #dce8f2; border-color: #3a4a63; }
+.tdk-observation .tdk-provenance-details dl {
+  position: relative; z-index: 5; margin: 6px 0 0; padding: 8px 10px;
+  background: #0d1117; border: 1px solid #263041; border-radius: 8px;
+  font-size: 12px; color: #9bb0bd; max-width: 420px;
+  display: grid; grid-template-columns: auto 1fr; gap: 2px 10px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+.tdk-observation .tdk-provenance-details dt { color: #7d94a6; }
+.tdk-observation .tdk-provenance-details dd { margin: 0; overflow-wrap: anywhere; color: #dce8f2; }
