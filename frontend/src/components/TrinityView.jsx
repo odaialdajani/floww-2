@@ -8,6 +8,7 @@ import { useReviewJournal } from "./triad/useReviewJournal";
 import { ALL_BASES, surfaceStatus, wallValues, wallRead } from "../lib/solsticeMetrics";
 import StrikeExposureProfile from "./triad/StrikeExposureProfile";
 import MarketObservationLine from './triad/MarketObservationLine';
+import { marketMoney, exactMoney } from './triad/marketFormat';
 import AskFlow from "./heatseeker/AskFlow";
 import HeatmapLandmarks from "./heatseeker/HeatmapLandmarks";
 import { usePublishScreenContext } from "../agent/useScreenContext";
@@ -126,12 +127,13 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   // Desktop composition (market-desktop-20261025): the selected-object
   // inspector is a persistent right dock at wide desktop widths and a proper
-  // overlay below 1180px. `inspectorOpen` collapses the dock column / closes
+  // overlay at <=1280px (owner 13:40: maps starve beside a 352px dock).
+  // `inspectorOpen` collapses the dock column / closes
   // the overlay; the explicit review action (`Review contracts`) forces it
   // open via drawerOpen. matchMedia is feature-detected: environments without
   // it (jsdom) stay in dock mode so behavior tests are unaffected.
   const initialNarrow = typeof window !== "undefined" && typeof window.matchMedia === "function"
-    ? window.matchMedia("(max-width: 1179px)").matches : false;
+    ? window.matchMedia("(max-width: 1279px)").matches : false;
   const [narrow, setNarrow] = useState(initialNarrow);
   const narrowRef = useRef(initialNarrow);
   useEffect(() => {
@@ -139,7 +141,7 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
   }, [narrow]);
   useEffect(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") return undefined;
-    const query = window.matchMedia("(max-width: 1179px)");
+    const query = window.matchMedia("(max-width: 1279px)");
     const onChange = e => { setNarrow(e.matches); narrowRef.current = e.matches; };
     if (query.addEventListener) query.addEventListener("change", onChange);
     else if (query.addListener) query.addListener(onChange);
@@ -148,7 +150,11 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
       else if (query.removeListener) query.removeListener(onChange);
     };
   }, []);
-  const [inspectorOpen, setInspectorOpen] = useState(!initialNarrow);
+  // Owner 13:40 desktop composition: the dock starts CLOSED — the empty
+  // 352px inspector no longer eats ~30% of the desk while nothing is
+  // selected. A REAL selection (cell click, strike click, wall pick) or the
+  // header toggle opens it; close/reopen/tabs are all retained.
+  const [inspectorOpen, setInspectorOpen] = useState(false);
   // O5: same focus ownership as the Solstice inspector drawer.
   const drawerCloseRef = useRef(null);
   const drawerPrevFocusRef = useRef(null);
@@ -370,10 +376,9 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
     setWallId(id);
     setCell(null);
     setDrawerOpen(false);
-    // On narrow desktop the inspector is an overlay: selecting a wall is the
-    // one concrete action that should surface it. Wide-desktop dock mode is
-    // unaffected (the inspector is already visible).
-    if (narrowRef.current) setInspectorOpen(true);
+    // A wall pick is a REAL selection: surface the inspector on every
+    // desktop (owner 13:40) — narrow mode overlays it, wide mode docks it.
+    setInspectorOpen(true);
   }, []);
 
   const onGridCell = useCallback((strike, colKey = null, pane = "raw") => {
@@ -385,6 +390,7 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
     }
     setCell({ strike, colKey });
     setActivePane(pane);
+    setInspectorOpen(true); // a REAL selection opens the inspector (owner 13:40)
   }, [walls, selectWall]);
 
   const openContracts = useCallback(() => setDrawerOpen(true), []);
@@ -523,8 +529,8 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
       {!isReplay && scope === "0dte" && !sameDayAdmitted && !(walls || []).length && (
         <div className="triad-empty-desk" data-testid="triad-empty-desk">
           <p role="status" data-testid="triad-scope-admission">
-            <strong>Same-day admission unavailable — the loaded observation is not verified 0DTE.</strong>
-            0DTE was your explicit request, not a saved choice — nothing is saved between visits, and the desk does not substitute a broader scope by itself. Exact loaded dates remain visible; no same-session expiry or entitlement is invented.
+            <strong>0DTE not admitted — the loaded observation is not verified 0DTE.</strong>
+            0DTE was your explicit request, not a saved choice; no same-session expiry was invented — switch to all loaded expiries:
           </p>
           <span className="triad-empty-desk-identity">
             {isReplay ? "REPLAY" : "LIVE"} · loaded expiries: {loadedExpiries.total === 0
@@ -539,6 +545,14 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
       )}
       <div className="tdk-body">
       <main className="tdk-main">
+      {/* Owner 13:40: ONE concise selection cue while the dock is closed and
+          nothing is selected — the comparison keeps the full width; selecting
+          a strike/wall (or the header toggle) opens the inspector. */}
+      {!inspectorOpen && !cell && !selectedWall && (
+        <div className="triad-selection-cue" data-testid="triad-selection-cue">
+          Select a strike or wall to open its inspector — the comparison stays full width until then.
+        </div>
+      )}
       <div className="triad-pair" data-testid="triad-raw-adjusted" data-mobile-pane={mobilePane}>
         <div className="triad-pane" data-testid="triad-pane-raw">
           <div className="triad-pane-header" title="Raw structural GEX — gex_net_v1/gex_gross_v1, USD per 1% spot move">
@@ -546,7 +560,7 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
             <PaneUnits testid="triad-pane-units-raw" text="Raw structural GEX — gex_net_v1/gex_gross_v1, USD per 1% spot move" />
           </div>
           <SkylitHeatmapGrid data={payload} spot={spot} ticker={ticker}
-            viewMode="gex" metric="raw" showLandmarks={false} scrollRef={rawMapRef} onScroll={syncMaps} axes={pairAxes} scale={pairScale} onCellClick={(s, e) => onGridCell(s, e, "raw")} selected={cell ? { strike: cell.strike, expiry: cell.colKey } : null} wallBand={selectedWall} />
+            viewMode="gex" metric="raw" showLandmarks={false} scrollRef={rawMapRef} displayMode="market" formatValue={marketMoney} formatTitle={exactMoney} onScroll={syncMaps} axes={pairAxes} scale={pairScale} onCellClick={(s, e) => onGridCell(s, e, "raw")} selected={cell ? { strike: cell.strike, expiry: cell.colKey } : null} wallBand={selectedWall} />
         </div>
         <div className="triad-pane" data-testid="triad-pane-adjusted">
           <div className="triad-pane-header" title={adjDef?.units || "No per-strike surface for this basis in the snapshot"}>
@@ -555,7 +569,7 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
           </div>
           {adjAvailable ? (
             <SkylitHeatmapGrid data={payload} spot={spot} ticker={ticker}
-              viewMode="gex" metric={basis} showLandmarks={false} scrollRef={adjustedMapRef} onScroll={syncMaps} axes={pairAxes} scale={pairScale} onCellClick={(s, e) => onGridCell(s, e, "adjusted")} selected={cell ? { strike: cell.strike, expiry: cell.colKey } : null} wallBand={selectedWall} />
+              viewMode="gex" metric={basis} showLandmarks={false} scrollRef={adjustedMapRef} displayMode="market" formatValue={marketMoney} formatTitle={exactMoney} onScroll={syncMaps} axes={pairAxes} scale={pairScale} onCellClick={(s, e) => onGridCell(s, e, "adjusted")} selected={cell ? { strike: cell.strike, expiry: cell.colKey } : null} wallBand={selectedWall} />
           ) : (
             <div className="triad-unavailable" data-testid="triad-adjusted-unavailable"
               title={basis === "window" ? "window_dadgex has no per-strike surface in the snapshot contract" : "adjusted surface missing from this snapshot"}>

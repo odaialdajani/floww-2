@@ -98,7 +98,7 @@ test("renders backend packet values verbatim with units; no invented fields", as
   expect(screen.getByTestId("triad-pane-raw").textContent).toContain("USD/1% move");
   expect(screen.getByTestId("triad-pane-adjusted").textContent).toContain("dadgex");
   // Backend cell value passes through (5.0M), not recomputed client-side.
-  expect(screen.getByTestId("triad-pane-raw").textContent).toContain("$5,000.0K");
+  expect(screen.getByTestId("triad-pane-raw").textContent).toContain("$5.0M"); // human scale (owner 13:40); the exact 5,000,000 rides the title
   // Source line carries snapshot + formula provenance.
   expect(screen.getByTestId("triad-source").textContent).toContain("snap-triad-1");
 });
@@ -158,7 +158,7 @@ test("missing adjusted surface renders unavailable, raw untouched", async () => 
   });
   await act(async () => { render(<TrinityView />); });
   await waitFor(() => expect(screen.getByTestId("triad-adjusted-unavailable")).toBeInTheDocument());
-  expect(screen.getByTestId("triad-pane-raw").textContent).toContain("$5,000.0K");
+  expect(screen.getByTestId("triad-pane-raw").textContent).toContain("$5.0M"); // human scale (owner 13:40); the exact 5,000,000 rides the title
 });
 
 test("context strip describes coverage, never prescribes size; SPX missing is labeled", async () => {
@@ -403,4 +403,26 @@ test("wall region shows a Below/Spot/Above position strip bound to the zone", as
   }
   expect(screen.getByText("Below")).toBeInTheDocument();
   expect(screen.getByText("Above")).toBeInTheDocument();
+});
+
+test("owner 13:40 composition: the dock starts CLOSED with one concise cue; a real cell selection opens it", async () => {
+  await act(async () => { render(<TrinityView />); });
+  await waitFor(() => expect(screen.getByTestId("triad-raw-adjusted")).toBeInTheDocument());
+  // CLOSED start: the cue teaches the one concrete action; the dock column is
+  // COLLAPSED (tdk-dock-closed => grid 0px + display:none), so the comparison
+  // keeps the full width. jsdom keeps the mount; the CLASS is the state truth.
+  expect(screen.getByTestId("triad-selection-cue")).toBeInTheDocument();
+  expect(screen.getByTestId("triad-selection-cue").textContent).toMatch(/Select a strike or wall/i);
+  expect(screen.getByTestId("triad-view").className).toMatch(/tdk-dock-closed/);
+  // A REAL selection opens the inspector (the dock column expands)
+  const cell = await screen.findByRole("gridcell", { name: /760 by 2026-10-02/i });
+  await act(async () => { fireEvent.click(cell); });
+  await waitFor(() => expect(screen.getByTestId("triad-view").className).toMatch(/tdk-dock-open/));
+  // ...and the cue is gone once a selection exists
+  expect(screen.queryByTestId("triad-selection-cue")).toBeNull();
+  // close/reopen retained: the header toggle still flips it
+  fireEvent.click(screen.getByTestId("triad-inspector-toggle"));
+  expect(screen.getByTestId("triad-view").className).toMatch(/tdk-dock-closed/);
+  fireEvent.click(screen.getByTestId("triad-inspector-toggle"));
+  expect(screen.getByTestId("triad-view").className).toMatch(/tdk-dock-open/);
 });
