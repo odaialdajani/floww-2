@@ -9,7 +9,7 @@ const bound=(value,low,high)=>Math.max(low,Math.min(high,value));
 const axisTime=value=>new Date(value).toLocaleString('en-US',{timeZone:'America/New_York',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false});
 const closeDetails=element=>{const details=element.closest('details');if(details){details.open=false;details.querySelector('summary')?.focus();}};
 
-export default function RecordedPriceChart({ticker,frames,revision='',onInteract,metricCoverage={},toolbarControls=null,toolbarActions=null,historyPeriodControls=null,historyControls=null,replayControls=null,dataDetails=null,readingStatus="Data details",emptyContent=null,showAtlas=true,exposureLine=null,darkLevels=null,flowBars=null,alertLines=null,cvdLine=null,contractBars=null,contractSymbol=null,contractStatus=null,fitAllFrames=null,renderDrawingLayer=null,syncSeq=0,syncView=null,syncPrice=null,syncCrosshair=null,onSync=null,studyLines=null,mappedShapes=null,volumeInstanceActive=false, overlays=null, onOverlaysChange=null, paneCfg=null, onPaneCfg=null, cvdStudyPending=false}) {
+export default function RecordedPriceChart({ticker,frames,revision='',onInteract,metricCoverage={},toolbarControls=null,toolbarActions=null,historyPeriodControls=null,historyControls=null,replayControls=null,dataDetails=null,readingStatus="Data details",emptyContent=null,showAtlas=true,exposureLine=null,darkLevels=null,flowBars=null,alertLines=null,cvdLine=null,contractBars=null,contractSymbol=null,contractStatus=null,fitAllFrames=null,renderDrawingLayer=null,syncSeq=0,syncView=null,syncPrice=null,syncCrosshair=null,onSync=null,studyLines=null,mappedShapes=null,volumeInstanceActive=false, overlays=null, onOverlaysChange=null, paneCfg=null, onPaneCfg=null, cvdStudy=null, cvdStudyRefusal=null}) {
  const data=useMemo(()=>checkedCandles(frames),[frames]);
  const premiumCloses=useMemo(()=>contractClosesForFrames(data,contractBars),[data,contractBars]);
  const surface=useRef(null),pointers=useRef(new Map()),gesture=useRef(null),previousLength=useRef(0);
@@ -355,12 +355,16 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
        return <rect data-testid="volume-bar" key={frame.time} x={left+index*spacing+Math.max(1,spacing*0.15)} y={h-bh} width={Math.max(1,Math.min(spacing*0.7,14))} height={bh} fill={frame.close>=frame.open?'#3f8f7d':'#8f4a52'} opacity="0.85"><title>{chartTime(frame.time,true)+' — '+(Number.isFinite(v)?v.toLocaleString('en-US'):'0')+' shares'}</title></rect>;})}
     </svg>;})()}
     {!!data.length&&effCvd&&(()=>{ // CVD pane: BVC-estimated cumulative flow — honest gaps, never zero-filled.
-     if(!showAtlas||!Array.isArray(cvdLine))return null;
-     // C118 PENDING: the anchor/MA/zero-axis math is under H2 module REWORK
-     // (H3 verdict) — the pane keeps the incumbent RAW estimated path; the
-     // settings persist but are visibly pending, never silently applied.
-     const byTime=new Map(cvdLine.filter(p=>p&&typeof p.time==='string').map(p=>[p.time,p]));
+     if(!showAtlas||(cvdStudy?false:!Array.isArray(cvdLine)))return null;
+     // C118: with the corrected study (58815e74) the drawn path IS the
+     // configured one. Holes stay null here — the segmentation below breaks
+     // the polyline at every null, so nothing draws across a gap or a
+     // session boundary; the raw payload path is the no-config fallback.
+     const src=Array.isArray(cvdStudy?.points)?cvdStudy.points:(Array.isArray(cvdLine)?cvdLine.filter(p=>p&&typeof p.time==='string'):[]);
+     const byTime=new Map(src.map(p=>[p?.time,p]));
      const known=visible.map(frame=>{const entry=byTime.get(frame.time);const v=entry?entry.cvd:undefined;return typeof v==='number'&&Number.isFinite(v)?v:null;});
+     const maKnown=cvdStudy&&cvdStudy.maPeriod>1?visible.map(frame=>{const entry=byTime.get(frame.time);const v=entry?entry.ma:undefined;return typeof v==='number'&&Number.isFinite(v)?v:null;}):null;
+     const maY=v=>h-pad-((v-lo)/span)*(h-pad*2);
      if(!known.some(v=>v!==null))return null;
      const vals=known.filter(v=>v!==null),lo=Math.min(...vals),hi=Math.max(...vals),span=(hi-lo)||1;
      const h=56,pad=6,cy=v=>h-pad-((v-lo)/span)*(h-pad*2);
@@ -371,12 +375,20 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
      segments.filter(s=>s.length===1).forEach(s=>dots.push(s[0]));
      const cvdCfg=paneCfg?.cvd;
      return <div className="recorded-cvd-pane" data-testid="cvd-pane" aria-label="Estimated cumulative volume delta">
-       {cvdStudyPending&&<div className="pane-study-settings" data-testid="cvd-settings" role="group" aria-label="Estimated CVD settings">
-         <span className="pane-study-pending" data-testid="cvd-settings-pending" role="note">CVD anchor / MA / zero-axis settings are PENDING the reviewed module (H3 REWORK on the CVD helper: dropped missing bars, MA across gaps) — the pane keeps the raw estimated path until then.</span>
+       <div className="pane-study-settings" data-testid="cvd-settings" role="group" aria-label="Estimated CVD settings">
+         {cvdStudyRefusal?<span className="pane-study-refusal" data-testid="cvd-study-refusal" role="note">{cvdStudyRefusal}</span>:<>
+           {onPaneCfg&&<label>Anchor<select data-testid="cvd-anchor" value={paneCfg?.cvd?.anchor??'none'} onChange={e=>onPaneCfg({cvd:{...(paneCfg?.cvd||{}),anchor:e.target.value}})}><option value="none">none</option><option value="session">session</option></select></label>}
+           {onPaneCfg&&<label>MA<input data-testid="cvd-ma" aria-label="CVD MA period" type="number" min="1" max="200" value={paneCfg?.cvd?.maPeriod??1} onChange={e=>{const n=Math.round(Number(e.target.value));if(Number.isInteger(n)&&n>=1&&n<=200)onPaneCfg({cvd:{...(paneCfg?.cvd||{}),maPeriod:n}});}}/></label>}
+           {onPaneCfg&&<label>Zero axis<select data-testid="cvd-zero-axis" value={paneCfg?.cvd?.zeroAxis??'free'} onChange={e=>onPaneCfg({cvd:{...(paneCfg?.cvd||{}),zeroAxis:e.target.value}})}><option value="free">free</option><option value="zero-at-anchor">zero at session</option></select></label>}
+         </>}
          <span className="pane-study-approx" data-testid="cvd-approx-label">estimated (BVC) — not a classified tape</span>
-       </div>}
+       </div>
        <svg viewBox={'0 0 '+size.width+' '+h} preserveAspectRatio="none" style={{width:'100%',height:h}} role="img" aria-label="CVD estimate per candle">
         {lines.map((seg,si)=><polyline data-testid="cvd-line" key={'cvd:'+si} points={seg.map(p=>p.x.toFixed(1)+','+p.y.toFixed(1)).join(' ')} fill="none" stroke="#9d7bea" strokeWidth="1.5"><title>CVD estimate</title></polyline>)}
+        {maKnown&&(()=>{ // C118: the MA segments exactly like the path — a hole
+          // or an anchor boundary closes the run, so it never bridges either.
+          const segs=[];let run=[];maKnown.forEach((v,i)=>{if(v===null){if(run.length>1)segs.push(run);run=[];return;}run.push({x:left+(i+0.5)*spacing,y:maY(v)});});if(run.length>1)segs.push(run);
+          return segs.map((seg,si)=><polyline data-testid="cvd-ma-line" key={'cvdma:'+si} points={seg.map(p=>p.x.toFixed(1)+','+p.y.toFixed(1)).join(' ')} fill="none" stroke="#e3c16a" strokeWidth="1" strokeDasharray="3 3"><title>{'CVD MA '+(cvdStudy?.maPeriod??1)}</title></polyline>);})()}
 
         {dots.map((p,di)=><circle data-testid="cvd-point" key={'cvddot:'+di} cx={p.x} cy={p.y} r="2" fill="#9d7bea" opacity="0.9"><title>CVD estimate (single known candle)</title></circle>)}
        </svg>
