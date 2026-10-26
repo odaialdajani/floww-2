@@ -276,3 +276,13 @@
   border-bottom: 1px solid #1f2733;
 }
 .triad-selection-cue::before { content: "◎ "; color: #e3c16a; }
+
+/* All 4 loaded expiry columns readable SIDE-BY-SIDE at 1470 with the
+   selected inspector open (owner 13:40): measured — the docked pane is 401px
+   and Strike(86) + 4x92 = 454px clips the last column by 54px. The market
+   mode tightens its OWN columns: cells to 78px min / 10px h-padding, the
+   strike rail to 60px min — 60 + 4x78 = 372 <= 401 with slack. The 13px type
+   is untouched; the human-scale text carries the meaning. Scoped to
+   .skh-market ONLY: the Stock grid keeps its exact default. */
+.skylit-heatmap-wrapper.skh-market .trin-grid-table .trin-cell { min-width: 78px; padding: 0 5px; }
+.skylit-heatmap-wrapper.skh-market .trin-grid-table .trin-strike-cell { min-width: 60px; padding: 0 6px 0 4px; }
