@@ -143,6 +143,7 @@ export function ProfileBars({ raw, adj, rawMax, adjMax, adjLabel, partial, inval
 const GridRow = memo(function GridRow({
   strike, r, cells, colorExtent, kingExp, rowBadges, isSpot, spot, conc, concPct,
   selExp, selStrike, inWall, rowMiss, rowInv, prof, onCell, onStrike, landmark,
+  formatValue = null, formatTitle = null,
 }) {
   const sk = strikeKey(strike);
   const spotOffset = isSpot && spot != null ? Number(spot) - strike : null;
@@ -178,9 +179,10 @@ const GridRow = memo(function GridRow({
         const absent = has ? 0 : miss;
         const absentInv = has ? 0 : inv;
         const sel = selExp === e && selStrike;
-        const txt = fmtK(v);
+        const txt = formatValue ? formatValue(v) : fmtK(v);
+        const titleTxt = formatTitle ? formatTitle(v) : (txt || "$0");
         const label = has
-          ? `${strike} by ${e}, value ${txt || "$0"}${isKing ? ", largest cell" : ""}${partial ? `, partial: ${partial} excluded for unknown delta` : ""}${inv ? `, ${inv} excluded for invalid delta` : ""}${sel ? ", selected" : ""}`
+          ? `${strike} by ${e}, value ${titleTxt}${isKing ? ", largest cell" : ""}${partial ? `, partial: ${partial} excluded for unknown delta` : ""}${inv ? `, ${inv} excluded for invalid delta` : ""}${sel ? ", selected" : ""}`
           : `${strike} by ${e}, ${absent ? "delta unknown" : absentInv ? "delta invalid (unusable reading)" : "no data"}`;
         return (
           <td
@@ -207,7 +209,7 @@ const GridRow = memo(function GridRow({
             aria-selected={sel ? true : undefined}
             aria-label={label}
             title={has
-              ? `${strike} · ${e} · ${txt || "$0"}${partial ? ` · partial (${partial} δ-unknown excluded)` : ""}${inv ? ` · ${inv} δ-invalid excluded (unusable reading)` : ""} (largest cell ★ = max |cell|)`
+              ? `${strike} · ${e} · ${titleTxt}${partial ? ` · partial (${partial} δ-unknown excluded)` : ""}${inv ? ` · ${inv} δ-invalid excluded (unusable reading)` : ""} (largest cell ★ = max |cell|)`
               : `${strike} · ${e} · ${absent ? `${absent} contract(s), delta unknown — not zero` : absentInv ? `${absentInv} contract(s), delta invalid — not zero` : "no data (not zero)"}`}
           >
             {pct != null && (
@@ -241,6 +243,13 @@ function SkylitHeatmapGrid({
   metric = "raw",
   onCellClick,
   onStrikeClick,
+  // H2's ADDITIVE Market display lease (owner 13:40): displayMode 'market'
+  // adds the skh-market scoped class ONLY; formatValue/formatTitle are
+  // optional formatter overrides (cell text / cell title). With them absent
+  // the Stock default path is BYTE/BEHAVIOR EQUIVALENT — fmtK everywhere.
+  displayMode = "stock",
+  formatValue = null,
+  formatTitle = null,
   // compact (in-frame) | full (expanded) | calendar (wide, quiet cells)
   density = "compact",
   // Window the rendered rows to N strikes centered on spot (or anchor).
@@ -584,6 +593,8 @@ function SkylitHeatmapGrid({
         r={r}
         cells={rowCells.get(strike) || []}
         colorExtent={colorExtent}
+        formatValue={formatValue}
+        formatTitle={formatTitle}
         kingExp={king && king.strikeKey === sk ? king.expiry : null}
         rowBadges={badges[sk] || EMPTY}
         isSpot={strike === spotStrike}
@@ -607,7 +618,7 @@ function SkylitHeatmapGrid({
 
   const densityClass = density === "full" ? " density-full" : density === "calendar" ? " density-calendar" : "";
   return (
-    <div className="skylit-heatmap-wrapper">
+    <div className={`skylit-heatmap-wrapper${displayMode === "market" ? " skh-market" : ""}`}>
       {showLandmarks && <HeatmapLandmarks data={data} reading={landmarks} />}
       <div className="heatmap-view-controls" role="group" aria-label="Map position">
         <button type="button" disabled={spotStrike == null || !shownStrikes.includes(spotStrike)}

@@ -267,3 +267,12 @@
 }
 .tdk-observation .tdk-provenance-details dt { color: #7d94a6; }
 .tdk-observation .tdk-provenance-details dd { margin: 0; overflow-wrap: anywhere; color: #dce8f2; }
+
+/* Owner 13:40 desktop composition: the ONE concise selection cue shown while
+   the dock is closed and nothing is selected — the comparison keeps full
+   width until a real selection (or the header toggle) opens the inspector. */
+.triad-selection-cue {
+  font-size: 12px; color: #8fa6ba; padding: 2px 0 6px; margin: 0;
+  border-bottom: 1px solid #1f2733;
+}
+.triad-selection-cue::before { content: "◎ "; color: #e3c16a; }
