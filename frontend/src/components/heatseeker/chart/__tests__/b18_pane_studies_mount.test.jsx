@@ -48,17 +48,51 @@ const setInput = (tid, val) => {
   act(() => { setter.call(i, String(val)); i.dispatchEvent(new Event('input', { bubbles: true })); });
 };
 
-test('C118: CVD settings render EXPLICIT PENDING until the reviewed module lands', async () => {
+test('C118: CVD anchor/MA/zero-axis visibly change the real path; holes never bridge', async () => {
   await mountPane();
-  // the settings surface exists with the honest pending note — no unreviewed
-  // anchor/MA/zero-axis math is applied to the drawn estimated path
   expect(screen.getByTestId('cvd-settings')).toBeInTheDocument();
-  expect(screen.getByTestId('cvd-settings-pending')).toHaveTextContent(/PENDING/i);
-  expect(screen.getByTestId('cvd-settings-pending')).toHaveTextContent(/REWORK/i);
   expect(screen.getByTestId('cvd-approx-label')).toHaveTextContent(/estimated/i);
-  // the raw estimated path draws exactly as before — no rebase/MA geometry
-  expect(cvdGeometry()).toBeTruthy();
-  expect(document.querySelectorAll('[data-testid="cvd-ma-line"]').length).toBe(0);
+  const gNone = cvdGeometry();
+  expect(gNone).toBeTruthy();
+  // anchor alone groups the MA and prepares the rebase; zero-axis is what
+  // visibly rebases the path to zero at each session anchor
+  setSelect('cvd-anchor', 'session');
+  await waitFor(() => expect(cvdGeometry()).toBeTruthy());
+  setSelect('cvd-zero-axis', 'zero-at-anchor');
+  await waitFor(() => expect(cvdGeometry()).not.toBe(gNone), { timeout: 3000 });
+  // MA period 3: the window RESETS at the session boundary — the MA renders
+  // as per-session segments that never span the boundary
+  setInput('cvd-ma', 2);
+  await waitFor(() => expect(document.querySelectorAll('[data-testid="cvd-ma-line"]').length).toBeGreaterThan(0), { timeout: 3000 });
+  const maPoints = [...document.querySelectorAll('[data-testid="cvd-ma-line"]')].map(l => l.getAttribute('points'));
+  expect(maPoints.length).toBe(2); // one segment per session — the boundary breaks it
+  // reload survival: the configured pane state persists per ticker scope
+  const persisted = JSON.parse(window.localStorage.getItem('floww.pane.config.SPY'));
+  expect(persisted.cvd).toMatchObject({ anchor: 'session', maPeriod: 2, zeroAxis: 'zero-at-anchor' });
+});
+
+test('C118: a missing CVD bar stays an explicit hole — the path and MA never bridge it', async () => {
+  // one frame with NO cvd_line entry: a real gap, never zero-filled or drawn across
+  const holed = CVD_LINE.slice(0, 4).concat(CVD_LINE.slice(5));
+  const axios = require('axios');
+  axios.get.mockImplementation(async () => ({ data: { ticker: 'SPY', frames: FRAMES, candles_with_recorded_nodes: 6, scopes: [] } }));
+  const { unmount } = render(<PriceNodeHistory ticker="SPY" open cvdLine={holed} />);
+  await waitFor(() => expect(screen.getByTestId('recorded-price-chart')).toHaveAttribute('data-candles', '6'), { timeout: 4000 });
+  // the hole splits day 2 into two SINGLE-known bars: the day-1 run draws one
+  // polyline (3 points) and the isolated bars draw as SEPARATE dots — nothing
+  // ever bridges the hole. The polyline's points string must contain exactly
+  // the day-1 x positions, never the post-hole bars.
+  const line = document.querySelector('[data-testid="cvd-line"]');
+  expect(line).not.toBeNull();
+  expect(line.getAttribute('points').split(' ')).toHaveLength(4); // the run BEFORE the hole
+  expect(document.querySelectorAll('[data-testid="cvd-point"]').length).toBe(1); // the isolated bar AFTER the hole
+  setInput('cvd-ma', 2);
+  await waitFor(() => {
+    // the MA runs only on day 1's contiguous run — one segment, never bridging
+    const maSegments = document.querySelectorAll('[data-testid="cvd-ma-line"]').length;
+    expect(maSegments).toBe(1);
+  }, { timeout: 3000 });
+  unmount();
 });
 
 test('C121: profile levels/VA controls change the real rows and render POC/VAH/VAL facts', async () => {

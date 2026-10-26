@@ -8,6 +8,7 @@ import { defaultPresetFor, createPreset, updatePresetStyle, deletePreset, resetP
 import { buildPresetRenderSpec } from "./chart/drawings/presetRendering";
 import StockInspector from "./chart/StockInspector";
 import IndicatorsPanel from "./chart/indicators/IndicatorsPanel";
+import { cvdConfig } from "./chart/indicators/paneStudies";
 import { loadDrawings, saveDrawings } from "./chart/drawings/drawingPersistence";
 import { reduceDrawings, createDrawing, geometryFor, magnetPoint, nudgeDrawing, canEdit, suppressesPan, unprojectPoint, viewportFor, TOOLS as REDUCER_TOOLS } from "./chart/drawings/drawingReducer";
 import { barAt, sweepExtrema, visibleSnapshot } from "./chart/replay/replayReducer";
@@ -283,12 +284,13 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
     setChartOverlays(o => ({ ...o, [paneKey === "volume-pane" ? "volume" : paneKey]: !(o[paneKey === "volume-pane" ? "volume" : paneKey]) }));
   };
   const STUDY_COLORS = ["#e8bd65", "#5ec986", "#72d7df", "#c4a1ef", "#e06c75", "#8fd3e8"];
-  // C118 PENDING: H3's paneStudies verdict (REWORK) found the CVD helper
-  // drops missing bars and the SMA crosses gaps/session boundaries. The
-  // settings persist here, but NO unreviewed math is applied to the drawn
-  // path — the pane keeps the incumbent raw estimated path and the settings
-  // row carries the explicit pending note until H2's corrected freeze is
-  // reviewed. The Profile/TPO letters are independently passed and live.
+  // C118 ACTIVATED on the corrected dependency (58815e74): explicit holes
+  // survive (a missing bar stays cvd:null — never silently dropped) and the
+  // MA resets at every hole and every anchor boundary. The drawn path below
+  // segments on those nulls, so nothing bridges a gap or a session start.
+  // 'estimated' stays part of every output — never a classified-tape claim.
+  const cvdPayload = cvdLine ?? payload?.cvd_line ?? null;
+  const cvdStudy = cvdPayload ? cvdConfig(cvdPayload, paneCfg.cvd) : null;
   const studyLineSpecs = useMemo(() => studyInstances.filter(inst => inst.visible !== false).flatMap((inst, i) => studySpecs(inst, frames).map(spec => ({ ...spec, color: STUDY_COLORS[i % STUDY_COLORS.length] }))), [studyInstances, frames]);
   // B09 mapped levels (b09_mapped_levels_contract v2): cross-instrument
   // source->target mapping through the contract route — the backend is the ONE
@@ -731,7 +733,7 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
     {!primary&&<button type="button" className="skylit-trade-mode-btn" aria-expanded={open} onClick={()=>{setOpen(!open);setPlaying(false);}}>Price chart + historical nodes</button>}
     {open&&<div className="stock-pane-row" data-testid="stock-pane-row">
     <div className="stock-pane-main">
-    {open&&<RecordedPriceChart renderDrawingLayer={renderDrawingLayer} ticker={ticker} frames={frames.slice(0,position+1)} fitAllFrames={fitMode==="fit-all"?frames:null} revision={ticker+":"+days+":"+minutes+":"+payload?.query_key+":"+reload} onInteract={pauseInteraction} metricCoverage={payload?.metric_line_coverage} toolbarControls={controls} toolbarActions={null} historyPeriodControls={historyPeriodControls} historyControls={null} replayControls={replayControls} dataDetails={details} readingStatus={readingStatus} emptyContent={empty} showAtlas={showAtlas} exposureLine={exposureLine??payload?.exposure_line??null} darkLevels={darkLevels} alertLines={alertLines??null} cvdLine={cvdLine??payload?.cvd_line??null} contractBars={payload?.contract_bars??null} contractSymbol={payload?.contract_symbol??(contract||null)} contractStatus={payload?.contract_status??null} flowBars={Array.isArray(flowBars)&&flowBars.length===frames.length?flowBars.slice(0,position+1):flowBars} syncSeq={sync?.seq||0} syncView={sync?.time||null} syncPrice={sync?.price||null} syncCrosshair={sync?.crosshair!=null?sync.crosshair:null} onSync={onSyncEvent} studyLines={studyLineSpecs} mappedShapes={mapped?.status === 'available' ? mapped.shapes : null} volumeInstanceActive={studyInstances.some(i=>i&&i.kind==="volume")} overlays={chartOverlays} onOverlaysChange={setChartOverlays} paneCfg={paneCfg} onPaneCfg={onPaneCfg} cvdStudyPending={true}/>}
+    {open&&<RecordedPriceChart renderDrawingLayer={renderDrawingLayer} ticker={ticker} frames={frames.slice(0,position+1)} fitAllFrames={fitMode==="fit-all"?frames:null} revision={ticker+":"+days+":"+minutes+":"+payload?.query_key+":"+reload} onInteract={pauseInteraction} metricCoverage={payload?.metric_line_coverage} toolbarControls={controls} toolbarActions={null} historyPeriodControls={historyPeriodControls} historyControls={null} replayControls={replayControls} dataDetails={details} readingStatus={readingStatus} emptyContent={empty} showAtlas={showAtlas} exposureLine={exposureLine??payload?.exposure_line??null} darkLevels={darkLevels} alertLines={alertLines??null} cvdLine={cvdLine??payload?.cvd_line??null} contractBars={payload?.contract_bars??null} contractSymbol={payload?.contract_symbol??(contract||null)} contractStatus={payload?.contract_status??null} flowBars={Array.isArray(flowBars)&&flowBars.length===frames.length?flowBars.slice(0,position+1):flowBars} syncSeq={sync?.seq||0} syncView={sync?.time||null} syncPrice={sync?.price||null} syncCrosshair={sync?.crosshair!=null?sync.crosshair:null} onSync={onSyncEvent} studyLines={studyLineSpecs} mappedShapes={mapped?.status === 'available' ? mapped.shapes : null} volumeInstanceActive={studyInstances.some(i=>i&&i.kind==="volume")} overlays={chartOverlays} onOverlaysChange={setChartOverlays} paneCfg={paneCfg} onPaneCfg={onPaneCfg} cvdStudy={cvdStudy && cvdStudy.status === "ok" ? cvdStudy : null} cvdStudyRefusal={cvdStudy && cvdStudy.status === "refused" ? cvdStudy.reason : null}/>}
     {open&&forcedScope!=null&&!followMap&&<p role="note">Saved-view review — these recorded expiry dates are not the current map scope.</p>}
     {/* B10 (C044): interval future whitespace + typed scenario zone. The
         slots are EMPTY CANVAS markers — no forecasts; the zone is recorded
