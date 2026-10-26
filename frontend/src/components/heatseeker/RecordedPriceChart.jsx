@@ -31,11 +31,13 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
   if(syncCrosshair!=null)setHover(syncCrosshair);
   adopting.current=false;},[syncSeq]); // eslint-disable-line react-hooks/exhaustive-deps
  const fitLevels=useMemo(()=>fitData?fitData.flatMap(frame=>savedLevels(frame,metrics,allNodes)):[],[fitData,metrics,allNodes]);
+  const [volumeLocal,setVolumeLocal]=useState(true);
   const [exporting,setExporting]=useState(false),[exportError,setExportError]=useState(''),[vwapOn,setVwapOn]=useState(true),[bandsOn,setBandsOn]=useState(false),[profileOn,setProfileOn]=useState(true),[envelopeOn,setEnvelopeOn]=useState(false),[cvdOn,setCvdOn]=useState(true);
   // Visual-reset: the overlay toggles can be externally controlled (one state
   // shared with the Indicators panel); standalone use keeps the internal state.
   const OVL = overlays;
   const effVwap = OVL ? !!OVL.vwap : vwapOn;
+  const effVolume = OVL ? OVL.volume !== undefined ? !!OVL.volume : true : true;
   const effBands = OVL ? !!OVL.bands : bandsOn;
   const effProfile = OVL ? !!OVL.profile : profileOn;
   const effCvd = OVL ? !!OVL.cvd : cvdOn;
@@ -205,6 +207,7 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
     <div className="recorded-chart-history"><button type="button" aria-label="Earlier candles" disabled={!windowView.start} onClick={()=>shift(-Math.max(1,Math.floor(windowView.count/2)))}>Earlier</button><button type="button" aria-label="Later candles" disabled={windowView.start+windowView.count>=data.length} onClick={()=>shift(Math.max(1,Math.floor(windowView.count/2)))}>Later</button><button type="button" disabled={!data.length} onClick={()=>{notify();setView({start:0,count:data.length});setManualPrice(null);}}>Fit history</button></div>
     <fieldset className="recorded-chart-layers" aria-label="Saved node lines"><legend>Saved lines</legend>{Object.entries(NODE_LABELS).map(([metric,label])=><label key={metric} style={{'--node-color':NODE_COLORS[metric]}}><input type="checkbox" checked={metrics.includes(metric)} disabled={!availableMetrics.includes(metric)} onChange={e=>{setMetrics(old=>e.target.checked?[...old,metric]:old.filter(value=>value!==metric));setManualPrice(null);}}/>{label}{!availableMetrics.includes(metric)&&<span> unavailable</span>}</label>)}<label><input type="checkbox" checked={allNodes} onChange={e=>{setAllNodes(e.target.checked);setManualPrice(null);}}/>All saved levels</label></fieldset>
     <fieldset className="recorded-chart-layers recorded-chart-overlays" aria-label="Chart overlays"><legend>Overlays</legend>
+     <label><input type="checkbox" aria-label="Toggle volume pane" checked={effVolume} onChange={e=>OVL?setOvl('volume',e.target.checked):setVolumeLocal(v=>!v)}/>{'Volume pane'}</label>
      <label><input type="checkbox" aria-label="Toggle VWAP" checked={effVwap} disabled={!data.some(frame=>Number.isFinite(frame.volume))} onChange={e=>OVL?setOvl('vwap',e.target.checked):setVwapOn(e.target.checked)}/>VWAP{!data.some(frame=>Number.isFinite(frame.volume))&&<span> unavailable</span>}</label>
      <label><input type="checkbox" aria-label="Toggle profile" checked={effProfile||volumeInstanceActive} disabled={!data.some(frame=>Number.isFinite(frame.volume))} onChange={e=>OVL?setOvl('profile',e.target.checked):setProfileOn(e.target.checked)}/>Profile{!data.some(frame=>Number.isFinite(frame.volume))&&<span> unavailable</span>}{volumeInstanceActive&&!effProfile&&<span> · on (volume instance)</span>}</label>
      <label><input type="checkbox" aria-label="Toggle VWAP bands" checked={effBands} disabled={!data.some(frame=>Number.isFinite(frame.volume))} onChange={e=>OVL?setOvl('bands',e.target.checked):setBandsOn(e.target.checked)}/>Bands{!data.some(frame=>Number.isFinite(frame.volume))&&<span> unavailable</span>}</label>
@@ -303,7 +306,8 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
     const win=flowBars.slice(windowView.start,windowView.start+windowView.count);
     const peak=Math.max(1,...win.flatMap(b=>[Math.abs(b?.call||0),Math.abs(b?.put||0)]));
     return <div className="recorded-flow-pane" data-testid="flow-pane" aria-label="Options flow per candle">{win.map((b,bi)=><div key={bi} className="recorded-flow-bar"><div className="recorded-flow-call" style={{height:(Math.abs(b?.call||0)/peak*20)+'px'}}/><div className="recorded-flow-put" style={{height:(Math.abs(b?.put||0)/peak*20)+'px'}}/></div>)}</div>;})()}
-   {!!data.length&&(()=>{ // Volume pane: real provider volume only — never fabricated.
+   {!!data.length&&effVolume&&(()=>{ // Volume pane: real provider volume only — never fabricated. Gated by the
+    // shared Volume-pane state (chart checkbox + the Indicators panel row drive ONE state).
     const win=visible,hasVol=win.some(frame=>Number.isFinite(frame.volume)),missing=win.filter(frame=>!Number.isFinite(frame.volume)).length;
     if(!hasVol)return <div className="recorded-chart-empty recorded-volume-empty"><small>Volume unavailable for these candles.</small></div>;
     const peak=Math.max(1,...win.map(frame=>Number(frame.volume)||0));

@@ -56,24 +56,25 @@ test('tabs switch with real content; close and reopen are stable', async () => {
   expect(screen.getByTestId('studies-panel-summary')).toBeInTheDocument();
 });
 
-test('Add Volume visibly drives the REAL measured-volume pane — never a no-op row', async () => {
+test('the Volume pane row drives the REAL measured-volume bars pane — both ways', async () => {
   await mountPane();
-  // default: the measured profile pane renders (chart toggle on)
-  expect(document.querySelectorAll('[data-testid="volume-profile"]').length).toBeGreaterThan(0);
-  // user turns the pane off
-  fireEvent.click(screen.getByLabelText('Toggle profile'));
-  await waitFor(() => expect(document.querySelector('[data-testid="volume-profile"]')).toBeNull());
-  // the panel's REAL Volume pane toggle drives the measured pane — on
+  // default: the measured volume bars pane renders (real rects under the candles)
+  const bars = () => document.querySelectorAll('[data-testid="volume-bar"]').length;
+  expect(bars()).toBeGreaterThan(0);
   fireEvent.click(screen.getByTestId('studies-panel-summary'));
+  // the pane row turns the REAL bars pane OFF — not the profile, not a saved row
   fireEvent.click(screen.getByTestId('pane-toggle-volume-pane'));
-  await waitFor(() => expect(document.querySelector('[data-testid="volume-profile"]')).not.toBeNull());
-  // the chart's toggle reflects the instance-forced state honestly
-  expect(screen.getByLabelText('Toggle profile')).toBeChecked();
-  expect(screen.getByText(/on \(volume instance\)/)).toBeInTheDocument();
-  // toggling the pane off removes the instance and returns the user's state
+  await waitFor(() => expect(bars()).toBe(0));
+  expect(screen.getByLabelText('Toggle volume pane')).not.toBeChecked();
+  // the panel row's pressed state mirrors the REAL pane state (adversarial)
+  expect(screen.getByTestId('pane-toggle-volume-pane')).toHaveAttribute('aria-pressed', 'false');
+  // and back ON
   fireEvent.click(screen.getByTestId('pane-toggle-volume-pane'));
-  await waitFor(() => expect(document.querySelector('[data-testid="volume-profile"]')).toBeNull());
-  expect(screen.getByLabelText('Toggle profile')).not.toBeChecked();
+  await waitFor(() => expect(bars()).toBeGreaterThan(0));
+  expect(screen.getByLabelText('Toggle volume pane')).toBeChecked();
+  // the chart's own checkbox drives the SAME shared state
+  fireEvent.click(screen.getByLabelText('Toggle volume pane'));
+  await waitFor(() => expect(bars()).toBe(0));
 });
 
 test('the review tab shows the real current selection and families context', async () => {

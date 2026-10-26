@@ -175,9 +175,10 @@ test('MOUNTED: two differently configured studies render independently and survi
   fireEvent.change(screen.getByTestId('instance-period-' + sid), { target: { value: '0' } });
   expect(screen.getByTestId('instance-period-' + sid)).toHaveValue(2);
   expect(document.querySelectorAll('[data-testid^="study-line-"]').length).toBe(2);
-  // the exposure-vwap kind is DECLARED but this pane has no board source: typed refusal
-  fireEvent.click(screen.getByTestId('catalog-add-exposure-vwap'));
-  expect(screen.getByTestId('studies-refusal')).toHaveTextContent(/eligible board source/i);
+  // the exposure-vwap kind is DECLARED but this pane has no board source: the
+  // catalog row renders UNAVAILABLE with its typed reason — no fake Add button
+  const evRow = screen.getByTestId('catalog-row-exposure-vwap');
+  expect(evRow).toHaveTextContent(/board source/i);
   expect(document.querySelectorAll('[data-testid^="study-line-"]').length).toBe(2);
 });
 

@@ -133,7 +133,7 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
   // stable tabs (Indicators / Data / Review), explicit close, authoritative
   // selection stays with this pane. Open by default on desktop entry so the
   // studies/catalog discovery is never buried under Tools→another disclosure.
-  const [chartOverlays, setChartOverlays] = useState({ vwap: true, bands: false, profile: true, cvd: true });
+  const [chartOverlays, setChartOverlays] = useState({ vwap: true, bands: false, profile: true, cvd: true, volume: true });
   const [dockOpen, setDockOpen] = useState(true);
   const [dockTab, setDockTab] = useState("indicators");
   const openDock = tab => { setDockTab(tab); setDockOpen(true); };
@@ -260,12 +260,9 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
   const removeStudy = id => commitStudies(studyInstances.filter(s => s.instanceId !== id));
   const toggleStudyVisible = id => commitStudies(studyInstances.map(s => s.instanceId === id ? { ...s, visible: s.visible === false } : s));
   const togglePane = paneKey => {
-    if (paneKey === "volume-pane") {
-      const vol = studyInstances.find(s => s && s.kind === "volume");
-      if (vol) removeStudy(vol.instanceId); else addStudy("volume");
-      return;
-    }
-    setChartOverlays(o => ({ ...o, [paneKey]: !o[paneKey] }));
+    // the REAL pane states: volume-pane gates the measured-volume BARS pane
+    // (70 real rects), profile/cvd their own plots — one shared state
+    setChartOverlays(o => ({ ...o, [paneKey === "volume-pane" ? "volume" : paneKey]: !(o[paneKey === "volume-pane" ? "volume" : paneKey]) }));
   };
   const STUDY_COLORS = ["#e8bd65", "#5ec986", "#72d7df", "#c4a1ef", "#e06c75", "#8fd3e8"];
   const studyLineSpecs = useMemo(() => studyInstances.filter(inst => inst.visible !== false).flatMap((inst, i) => studySpecs(inst, frames).map(spec => ({ ...spec, color: STUDY_COLORS[i % STUDY_COLORS.length] }))), [studyInstances, frames]);
@@ -566,9 +563,9 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
     <select aria-label="Candle interval" title="Candle interval" value={minutes} onChange={e=>{setMinutes(Number(e.target.value));onSyncEvent?.({interval:Number(e.target.value)});}}><option value={1}>1 min</option><option value={5}>5 min</option><option value={15}>15 min</option><option value={30}>30 min</option><option value={60}>1 hour</option></select>
     <span className="price-history-summary" data-testid="price-history-summary" title="Selected history period and session coverage">{historyDayLabel} · {historySessionLabel}</span>
     <span className="stock-dock-actions" data-testid="stock-dock-actions">
-      <button type="button" className="stock-dock-btn" aria-pressed={dockOpen&&dockTab==="indicators"} data-testid="stock-dock-open-indicators" title="Indicators: studies and measured-pane controls" onClick={()=>dockOpen&&dockTab==="indicators"?setDockOpen(false):openDock("indicators")}>Indicators{studyInstances.length?` · ${studyInstances.length}`:""}</button>
-      <button type="button" className="stock-dock-btn" aria-pressed={dockOpen&&dockTab==="data"} data-testid="stock-dock-open-data" title="Data: saved views, reload, node recording, option contract" onClick={()=>dockOpen&&dockTab==="data"?setDockOpen(false):openDock("data")}>Data</button>
-      <button type="button" className="stock-dock-btn" aria-pressed={dockOpen&&dockTab==="review"} data-testid="stock-dock-open-review" title="Review: the Wall→Contract→AskFlow→Public brief workflow" onClick={()=>dockOpen&&dockTab==="review"?setDockOpen(false):openDock("review")}>Review</button>
+      <button type="button" className="stock-dock-btn" aria-pressed={dockOpen&&dockTab==="indicators"} data-testid="stock-dock-open-indicators" title="Indicators: studies and measured-pane controls" onClick={()=>openDock("indicators")}>Indicators{studyInstances.length?` · ${studyInstances.length}`:""}</button>
+      <button type="button" className="stock-dock-btn" aria-pressed={dockOpen&&dockTab==="data"} data-testid="stock-dock-open-data" title="Data: saved views, reload, node recording, option contract" onClick={()=>openDock("data")}>Data</button>
+      <button type="button" className="stock-dock-btn" aria-pressed={dockOpen&&dockTab==="review"} data-testid="stock-dock-open-review" title="Review: the Wall→Contract→AskFlow→Public brief workflow" onClick={()=>openDock("review")}>Review</button>
     </span></>;
   const historyPeriodControls = <>
     <label className="price-history-view">History period<select aria-label="History sessions" title="History period" value={days} onChange={e=>setDays(Number(e.target.value))}><option value={1}>1 session</option><option value={5}>1 week</option><option value={20}>1 month</option><option value={60}>3 months</option><option value={260}>1 year</option><option value={2600}>5 years</option></select></label>
@@ -594,7 +591,7 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
           instances={studyInstances}
           frames={frames}
           builtinVwapOn={chartOverlays.vwap}
-          paneState={{"volume-pane": studyInstances.some(s => s && s.kind === "volume"), cvd: chartOverlays.cvd, profile: chartOverlays.profile}}
+          paneState={{"volume-pane": chartOverlays.volume, cvd: chartOverlays.cvd, profile: chartOverlays.profile}}
           availability={{cvd: Array.isArray(cvdLine ?? payload?.cvd_line) && (cvdLine ?? payload?.cvd_line).some(p => typeof p?.cvd === "number" && Number.isFinite(p.cvd)), profile: frames.some(f => Number.isFinite(f?.volume))}}
           onCreate={addStudy}
           onUpdateSettings={(id, settings) => updateStudy(id, settings)}
