@@ -1,29 +1,33 @@
-import React, { useEffect, useMemo } from "react";
+import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { API } from "../../config/api";
 import { wallPositionOf } from "../../lib/solsticeSelection";
 import ExactContractReview from "../heatseeker/ExactContractReview";
 import AskFlow from "../heatseeker/AskFlow";
-import ReviewInspector, { ReviewSelectionContext } from "../heatseeker/ReviewInspector";
 import WallInspector from "../heatseeker/WallInspector";
 import { chartTime } from "../heatseeker/recordedPriceChartData";
 import { GroundedPublicReview } from "../public/PublicHandoffReview";
 
 // Market selected-object inspector (OpenCode market-desktop-20261025).
-// ONE bounded right workspace for the authoritative selection: identity and
-// readable labeled readings first, confirmation/quality next, the ONE
-// deliberate review action ("Review contracts") after that, and the
-// Wall -> exact Contract -> Flow -> editable Public brief tabs underneath.
-// The Contract/Flow/Public panels mount ONLY on that deliberate action —
-// ExactContractReview and GroundedPublicReview read/POST on mount, so an
-// always-mounted panel would change request behavior; the wall panel is the
-// display-only WallInspector and mounts freely.
+// Root pixel critique 22:40 refinement — the Wall/Contract/Flow/Public tab
+// strip sits DIRECTLY beneath the identity/close header and stays stable;
+// only the body below it scrolls, and exactly ONE selected panel shows.
+// The shared ReviewInspector is NOT modified (H1 writes Stock concurrently):
+// this dock owns a Market-local tab strip with the same roles/keyboard
+// contract and mounts the SAME existing panel consumers — WallInspector,
+// ExactContractReview, AskFlow (the one assistant suite), GroundedPublicReview.
+// The Contract/Flow/Public panels still mount ONLY on the deliberate
+// "Review contracts" action: those components read/POST on mount, and an
+// always-mounted panel would change request behavior.
 //
 // Every existing test surface is preserved verbatim: the dock root carries
-// data-testid="triad-contract-drawer" exactly while the review action is
-// open (the drawer semantics tests rely on), the selected-wall card keeps
-// triad-scenario/-zone/-readiness/-position/-blocker testids, and the empty
-// state keeps triad-no-wall.
+// data-testid="triad-contract-drawer" exactly while that review action is
+// open, the wall panel keeps triad-scenario/-zone/-readiness/-position/
+// -blocker testids, the empty state keeps triad-no-wall, and repeated
+// snapshot/UUID/formula strings live in one provenance details block with
+// the readable LIVE/age/quality line staying outside it.
+
+const SECTIONS = [["wall", "Wall"], ["contract", "Contract"], ["flow", "Flow"], ["publicAgent", "Public agent"]];
 
 function fmtUsdCompact(value) {
   const n = Number(value);
@@ -80,8 +84,6 @@ function ScenarioCard({ wall, scenarios, spot, quality, onContracts, ticker, rea
     const pct = (v) => Math.min(100, Math.max(0, ((v - loP) / span) * 100));
     return { z0: pct(low), z1: pct(high), sp: Number.isFinite(sp) ? pct(sp) : null };
   }, [wall, spot]);
-  // State text derives from CURRENT spot vs zone (observable now), not the
-  // packet's scenario label (which may describe an older observation).
   const wposNow = wallPositionOf(wall, spot);
   const posState = wposNow === "inside" ? "price inside wall"
     : wposNow === "below" ? "price above wall"
@@ -202,6 +204,32 @@ function WallPricePath({ ticker, wall, spot }) {
   </div>;
 }
 
+// One readable identity/age/quality line — the exact snapshot id, formula,
+// source and scope strings move into the closed details so the long live
+// UUID/formula prose stops repeating through the narrative (root 22:40).
+function ProvenanceLine({ data, replay, quality }) {
+  return (
+    <div className="tdk-provenance" data-testid="triad-dock-provenance">
+      <span className="tdk-provenance-live">
+        {replay ? "REPLAY" : "LIVE"}
+        {" · quality "}{quality?.state || "unknown"}
+        {data?.asof ? ` · generated ${chartTime(Date.parse(data.asof), true)}` : ""}
+      </span>
+      <details className="tdk-provenance-details">
+        <summary title="Exact snapshot identity, formula, source and scope for this reading">Provenance</summary>
+        <dl>
+          <dt>Snapshot</dt><dd>{data?.snapshotId || "unknown"}</dd>
+          <dt>Generated</dt><dd>{data?.asof || "time unknown"}</dd>
+          <dt>Source</dt><dd>{data?.data_source || "unknown"}</dd>
+          <dt>Formula</dt><dd>{data?.formula_version || data?.metrics?.formula_version || "unknown"}</dd>
+          <dt>Market observation</dt><dd>{data?.event_time || data?.observed_at || "unknown"}</dd>
+          <dt>Expiry scope</dt><dd>{data?.grid?.expiries?.join(", ") || "unknown"}</dd>
+        </dl>
+      </details>
+    </div>
+  );
+}
+
 function ReviewHint({ children }) {
   return <div className="tdk-hint">{children}</div>;
 }
@@ -211,14 +239,81 @@ export default function MarketInspectorDock({
   adjLabel, metric, replay, drawerOpen, onClose, closeRef, selectionScope,
   onSelection, selectionRevision, onContracts,
 }) {
+  const id = useId();
+  const tabsRef = useRef([]);
+  const [active, setActive] = useState("wall");
+  // The deliberate review action opens the exact-contract panel.
+  const startReview = () => { onContracts(); setActive("contract"); };
   // Escape closes the open review / overlay (stable bounded close).
   useEffect(() => {
     const close = e => { if (e.key === "Escape" && drawerOpen) onClose(); };
     window.addEventListener("keydown", close);
     return () => window.removeEventListener("keydown", close);
   }, [drawerOpen, onClose]);
+  // Same tab keyboard contract as the shared inspector: arrows/Home/End.
+  const onTabKey = (event, index) => {
+    let next;
+    if (event.key === "ArrowRight") next = (index + 1) % SECTIONS.length;
+    else if (event.key === "ArrowLeft") next = (index + SECTIONS.length - 1) % SECTIONS.length;
+    else if (event.key === "Home") next = 0;
+    else if (event.key === "End") next = SECTIONS.length - 1;
+    else return;
+    event.preventDefault();
+    event.stopPropagation();
+    setActive(SECTIONS[next][0]);
+    tabsRef.current[next]?.focus();
+  };
+  const closeDisclosure = event => {
+    if (event.key !== "Escape" || event.defaultPrevented) return;
+    const disclosure = event.target.closest?.("details[open]");
+    if (!disclosure || !event.currentTarget.contains(disclosure)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    disclosure.open = false;
+    disclosure.querySelector(":scope > summary")?.focus();
+  };
   const identity = wall ? `Wall ${wall.low}–${wall.high}`
     : cell?.strike != null ? `Strike ${cell.strike}` : "Nothing selected";
+  const wallPanel = !wall ? (
+    <div className="tdk-empty" data-testid="triad-no-wall">
+      {cell?.strike != null ? (
+        <strong>Strike {cell.strike} selected — no structural wall at this strike.</strong>
+      ) : (
+        <strong>Nothing selected yet.</strong>
+      )}
+      <span>Click a cell in either map — or a wall chip below the maps — and its readings, scenarios and the
+        Wall → Contract → Flow → Public brief review open here, beside the comparison.</span>
+      <small>No structural wall selected — pick a cell in either pane. An adjusted-only peak with no
+        corresponding GEX wall will say so here rather than inheriting another wall's story.</small>
+    </div>
+  ) : (
+    <>
+      <SelectedValues wall={wall} adjNet={adjNet} adjLabel={adjLabel} />
+      <ScenarioCard wall={wall} scenarios={scenarios} spot={spot} quality={quality}
+        onContracts={startReview} ticker={ticker} read={read} replay={replay} />
+      <ProvenanceLine data={data} replay={replay} quality={quality} />
+    </>
+  );
+  const contractPanel = drawerOpen
+    ? <ExactContractReview key={`${ticker}|${wall?.wall_id || ""}|${data?.snapshotId || ""}`} ticker={ticker} data={data} wall={wall} cell={cell} replay={replay} selectionScope={selectionScope} onSelection={onSelection} />
+    : <ReviewHint>Exact contract rows load with the “Review contracts” action on the Wall tab — identity, delta, spread and quote age, with recorded candidates before any exact-detail request.</ReviewHint>;
+  const flowPanel = drawerOpen
+    ? <>
+      <h3>Flow · selected reading</h3>
+      <dl className="review-inspector-context">
+        <dt>Stock / wall</dt><dd>{ticker} · {wall?.wall_id || "No classified wall"}</dd>
+        <dt>Snapshot</dt><dd>{data?.snapshotId || "Unknown"}</dd>
+        <dt>Market observation</dt><dd>{data?.event_time || data?.observed_at || "Unknown"}</dd>
+        <dt>Snapshot time</dt><dd>{data?.asof || "Unknown"} · {replay ? "Recorded" : "Live request"}</dd>
+      </dl>
+      <p>The same Ask Flow assistant explains this selection. Opening a step does not request research or prepare an order.</p>
+      <AskFlow subject={`${ticker} · exact contract review`} overlayMetric={metric} displayMode={replay ? "replay" : "live"} compact />
+    </>
+    : <ReviewHint>Ask Flow for this selection loads with the “Review contracts” action on the Wall tab. Opening a step never requests research or prepares an order.</ReviewHint>;
+  const publicPanel = drawerOpen
+    ? <><h3>Public agent · reviewed draft</h3><p>A copied brief is not delivery or activation. Review the workflow in Public before any separately approved activation.</p><GroundedPublicReview /></>
+    : <ReviewHint>The editable Public brief for this selection loads with the “Review contracts” action on the Wall tab. A copied brief is not delivery or activation.</ReviewHint>;
+  const panels = { wall: wallPanel, contract: contractPanel, flow: flowPanel, publicAgent: publicPanel };
   return (
     <aside className="tdk-dock"
       data-testid={drawerOpen ? "triad-contract-drawer" : "triad-inspector-dock"}
@@ -229,53 +324,23 @@ export default function MarketInspectorDock({
         <button ref={closeRef} className="tdk-dock-close" onClick={onClose}
           data-testid="triad-drawer-close" aria-label="Close contract review">✕</button>
       </div>
+      {/* Stable tab strip directly beneath the identity/close row; only the
+          body below it scrolls (root 22:40 critique). */}
+      <div className="tdk-dock-tabs" role="tablist" aria-label="Inspector sections" onKeyDown={closeDisclosure}>
+        {SECTIONS.map(([key, label], index) => (
+          <button key={key} ref={el => { tabsRef.current[index] = el; }}
+            type="button" role="tab" id={`${id}-${key}-tab`} aria-controls={`${id}-${key}-panel`}
+            aria-selected={active === key} tabIndex={active === key ? 0 : -1}
+            onClick={() => setActive(key)} onKeyDown={event => onTabKey(event, index)}>{label}</button>
+        ))}
+      </div>
       <div className="tdk-dock-body">
-        {!wall ? (
-          <div className="tdk-empty" data-testid="triad-no-wall">
-            {cell?.strike != null ? (
-              <strong>Strike {cell.strike} selected — no structural wall at this strike.</strong>
-            ) : (
-              <strong>Nothing selected yet.</strong>
-            )}
-            <span>Click a cell in either map — or a wall chip below the maps — and its readings, scenarios and the
-              Wall → Contract → Flow → Public brief review open here, beside the comparison.</span>
-            <small>No structural wall selected — pick a cell in either pane. An adjusted-only peak with no
-              corresponding GEX wall will say so here rather than inheriting another wall's story.</small>
-          </div>
-        ) : (
-          <>
-            <SelectedValues wall={wall} adjNet={adjNet} adjLabel={adjLabel} />
-            <ScenarioCard wall={wall} scenarios={scenarios} spot={spot} quality={quality}
-              onContracts={onContracts} ticker={ticker} read={read} replay={replay} />
-            <ReviewInspector
-              selectionKey={`${ticker}|${wall.wall_id || ""}|${selectionScope}|${replay}|${selectionRevision}|${drawerOpen ? "review-open" : "review-closed"}`}
-              initialTab={drawerOpen ? "contract" : "wall"}
-              context={<ReviewSelectionContext ticker={ticker} data={data} wall={wall} cell={cell} metric={metric} replay={replay} />}
-              wall={<WallInspector wall={wall} interaction={data?.interactions?.find(i => i.wall_id === wall.wall_id)}
-                metrics={data?.metrics} grids={data?.metrics?.grids} displayGrid={data?.grid} quality={data?.quality}
-                metric={metric} scenario={scenario} snapshotId={data?.snapshotId} replay={replay} />}
-              contract={drawerOpen
-                ? <ExactContractReview key={`${ticker}|${wall.wall_id || ""}|${data?.snapshotId || ""}`} ticker={ticker} data={data} wall={wall} cell={cell} replay={replay} selectionScope={selectionScope} onSelection={onSelection} />
-                : <ReviewHint>Exact contract rows load with the “Review contracts” action on the wall card — identity, delta, spread and quote age, with recorded candidates before any exact-detail request.</ReviewHint>}
-              flow={drawerOpen
-                ? <>
-                  <h3>Flow · selected reading</h3>
-                  <dl className="review-inspector-context">
-                    <dt>Stock / wall</dt><dd>{ticker} · {wall.wall_id || "No classified wall"}</dd>
-                    <dt>Snapshot</dt><dd>{data?.snapshotId || "Unknown"}</dd>
-                    <dt>Market observation</dt><dd>{data?.event_time || data?.observed_at || "Unknown"}</dd>
-                    <dt>Snapshot time</dt><dd>{data?.asof || "Unknown"} · {replay ? "Recorded" : "Live request"}</dd>
-                  </dl>
-                  <p>The same Ask Flow assistant explains this selection. Opening a step does not request research or prepare an order.</p>
-                  <AskFlow subject={`${ticker} · exact contract review`} overlayMetric={metric} displayMode={replay ? "replay" : "live"} compact />
-                </>
-                : <ReviewHint>Ask Flow for this selection loads with the “Review contracts” action. Opening a step never requests research or prepares an order.</ReviewHint>}
-              publicAgent={drawerOpen
-                ? <><h3>Public agent · reviewed draft</h3><p>A copied brief is not delivery or activation. Review the workflow in Public before any separately approved activation.</p><GroundedPublicReview /></>
-                : <ReviewHint>The editable Public brief for this selection loads with the “Review contracts” action. A copied brief is not delivery or activation.</ReviewHint>}
-            />
-          </>
-        )}
+        {SECTIONS.map(([key]) => (
+          <section key={key} role="tabpanel" className="tdk-dock-panel"
+            id={`${id}-${key}-panel`} aria-labelledby={`${id}-${key}-tab`} hidden={active !== key} tabIndex={0}>
+            {panels[key]}
+          </section>
+        ))}
       </div>
     </aside>
   );
