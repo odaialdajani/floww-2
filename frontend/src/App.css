@@ -4885,6 +4885,7 @@ input[class*="bg-slate-800"], select[class*="bg-slate-800"], textarea[class*="bg
 .stock-inspector-head { display: flex; flex-direction: column; gap: 6px; border-bottom: 1px solid #2c3440; padding-bottom: 8px; }
 .stock-inspector-title { font-size: 13px; color: #dce8f2; letter-spacing: 0.02em; }
 .stock-inspector-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+.stock-inspector-head { flex-wrap: wrap; row-gap: 6px; }
 .stock-inspector-tab { background: transparent; border: 1px solid #2c3440; border-radius: 6px; color: #9fb0c0;
   padding: 4px 10px; font-size: 12px; cursor: pointer; }
 .stock-inspector-tab.is-active { color: #e3c16a; border-color: #6b5a2a; background: #1d2330; }
@@ -4905,6 +4906,15 @@ input[class*="bg-slate-800"], select[class*="bg-slate-800"], textarea[class*="bg
   .stock-pane-row { flex-direction: column; }
   .stock-inspector { flex: 1 1 auto; max-width: none; }
   .stock-inspector[data-open="false"] { display: none; }
-  .stock-inspector[data-open="true"] { position: fixed; right: 14px; top: 76px; width: 320px; max-width: 320px;
-    z-index: 220; box-shadow: 0 12px 32px rgba(0,0,0,0.5); max-height: 70vh; }
+  /* Narrow-desktop overlay: the dock can never exceed the viewport or clip
+     its own controls — width caps at 100vw minus gutters, height leaves the
+     chart row reachable, and the tab row wraps instead of overflowing. */
+  .stock-inspector[data-open="true"] { position: fixed; top: 72px;
+    /* gutter-anchored on BOTH sides: the dock spans between 12px gutters of
+       whatever containing block resolves, capped at 320px — it can never
+       clip off either edge of a real narrow desktop pane (319px measured). */
+    left: 12px; right: 12px; width: auto; max-width: 320px;
+    z-index: 220; box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+    max-height: min(70vh, calc(100vh - 96px)); }
+  .stock-inspector-tabs { width: 100%; }
 }
