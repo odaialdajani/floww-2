@@ -8,7 +8,16 @@
 .wall-desk .wall-desk-empty h2 { font-size: 17px; margin: 0 0 8px; }
 .wall-desk .wall-desk-empty button + button { margin-left: 8px; }
 .wall-desk .chart-caption, .wall-desk details, .wall-desk aside { overflow-wrap: anywhere; }
-.wall-desk .wall-desk-table-scroll { width: 100%; overflow-x: auto; }
+.wall-desk .wall-desk-table-scroll { width: 100%; overflow-x: auto; overflow-y: auto; max-height: min(480px, 60dvh); }
+/* M2 G5 (Hermes-2, 2026-10-24): the exact-contract table was a 16k-px wall in
+   the page flow — every one of the 149 rows rendered at full height, so
+   "prioritize the near-spot/selected row" had nothing to prioritize and the
+   desk read top-down from strike 550. The region was already declared a
+   scroll region (class name, role="region", tabIndex=0, focus outline);
+   this completes that design with a vertical bound. ALL rows and clocks
+   stay in the DOM (no windowing, no filtering); the near-spot row is
+   centered on load and the selected strike on selection via
+   TriadChainTable's priorityStrike effect. Measured in m2-gaps-closure.json. */
 .wall-desk .contract-table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .wall-desk .contract-table th, .wall-desk .contract-table td { padding: 8px; text-align: left; vertical-align: top; border-bottom: 1px solid #323232; }
 .wall-desk .contract-table th { white-space: nowrap; color: #aab6be; }

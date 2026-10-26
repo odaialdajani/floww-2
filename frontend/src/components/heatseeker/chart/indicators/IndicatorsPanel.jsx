@@ -17,12 +17,16 @@ const GROUPS = [
   { id: 'price', label: 'Price overlays' },
   { id: 'panes', label: 'Panes & flow' },
   { id: 'context', label: 'Context' },
-];
+,
+  { id: 'momentum', label: 'Momentum' },];
 const CATALOG = [
   { group: 'price', kind: 'sma', name: 'SMA', keywords: 'simple moving average' },
   { group: 'price', kind: 'ema', name: 'EMA', keywords: 'exponential moving average' },
   { group: 'price', kind: 'bollinger', name: 'Bollinger', keywords: 'bb bands deviation' },
   { group: 'price', kind: 'vwap', name: 'VWAP', keywords: 'volume weighted average price session week month quarter year' },
+  { group: 'momentum', kind: 'rsi', pane: 'rsi', name: 'RSI', keywords: 'relative strength index wilder momentum oscillator 0 100' },
+  { group: 'momentum', kind: 'macd', pane: 'macd', name: 'MACD', keywords: 'moving average convergence divergence line signal histogram' },
+  { group: 'momentum', kind: 'atr', pane: 'atr', name: 'ATR', keywords: 'average true range wilder volatility' },
   { group: 'panes', kind: 'volume', pane: 'volume-pane', name: 'Volume', keywords: 'measured volume bars' },
   { group: 'panes', kind: 'cvd', pane: 'cvd', name: 'CVD', keywords: 'cumulative volume delta estimated' },
   { group: 'panes', kind: 'profile', pane: 'profile', name: 'Volume profile', keywords: 'value area poc visible bars' },
@@ -33,9 +37,12 @@ const DEFAULT_SETTINGS = {
   ema: { period: 20 },
   bollinger: { period: 20, multiple: 2 },
   vwap: { source: 'hlc3', bandBasis: 'std', multipliers: [1, 2, 3], bands: false, anchor: 'session' },
+  rsi: { period: 14 },
+  macd: { fast: 12, slow: 26, signal: 9 },
+  atr: { period: 14 },
 };
 const ANCHORS = ['session', 'week', 'month', 'quarter', 'year'];
-const PRESET_CHIPS = { ema: 'EMA 9', sma: 'SMA 20', bollinger: 'Bollinger 20 · 2σ', vwap: 'VWAP · session' };
+const PRESET_CHIPS = { ema: 'EMA 9', sma: 'SMA 20', bollinger: 'Bollinger 20 · 2σ', vwap: 'VWAP · session', rsi: 'RSI 14', macd: 'MACD 12·26·9', atr: 'ATR 14' };
 
 const instanceLabel = (inst) => {
   const s = inst.settings || {};
@@ -43,6 +50,9 @@ const instanceLabel = (inst) => {
   if (inst.kind === 'ema') return `EMA ${s.period}`;
   if (inst.kind === 'bollinger') return `BB ${s.period} · ${s.multiple}σ`;
   if (inst.kind === 'vwap') return `VWAP ${s.source || 'hlc3'} · ${s.anchor || 'session'}`;
+  if (inst.kind === 'rsi') return `RSI ${s.period}`;
+  if (inst.kind === 'macd') return `MACD ${s.fast}·${s.slow}·${s.signal}`;
+  if (inst.kind === 'atr') return `ATR ${s.period}`;
   return inst.kind;
 };
 
@@ -168,6 +178,31 @@ export default function IndicatorsPanel({
                 }} />
             </label>
           )}
+        </span>
+      );
+    }
+    if (inst.kind === 'rsi' || inst.kind === 'atr') {
+      return (
+        <span className="ind-editors">
+          <label>Period
+            <input type="number" min={inst.kind === 'rsi' ? 2 : 1} max={500}
+              data-testid={'instance-period-' + id} value={s.period}
+              onChange={(e) => update(inst, { period: num(e.target.value, inst.kind === 'rsi' ? 2 : 1, 500, s.period) })} />
+          </label>
+        </span>
+      );
+    }
+    if (inst.kind === 'macd') {
+      const f = (key, min, max) => (
+        <input type="number" min={min} max={max}
+          data-testid={'instance-' + key + '-' + id} value={s[key]}
+          onChange={(e) => update(inst, { [key]: num(e.target.value, min, max, s[key]) })} />
+      );
+      return (
+        <span className="ind-editors">
+          <label>Fast {f('fast', 1, 500)}</label>
+          <label>Slow {f('slow', 2, 500)}</label>
+          <label>Signal {f('signal', 1, 500)}</label>
         </span>
       );
     }
