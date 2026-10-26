@@ -134,6 +134,24 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
   // selection stays with this pane. Open by default on desktop entry so the
   // studies/catalog discovery is never buried under Tools→another disclosure.
   const [chartOverlays, setChartOverlays] = useState({ vwap: true, bands: false, profile: true, cvd: true, volume: true });
+  // Pane study configuration (C118 CVD / C121 profile / C124-126 TPO): one
+  // per-ticker persisted scope, committed whole — settings that visibly change
+  // the real plots and survive reload. Defaults are the incumbent behaviors.
+  const PANE_CFG_KEY = "floww.pane.config." + String(ticker || "").toUpperCase();
+  const [paneCfg, setPaneCfg] = useState(() => {
+    try { const raw = window.localStorage.getItem(PANE_CFG_KEY); const parsed = raw ? JSON.parse(raw) : null;
+      return parsed && typeof parsed === "object" ? {
+        cvd: { anchor: parsed.cvd?.anchor ?? "none", maPeriod: parsed.cvd?.maPeriod ?? 1, zeroAxis: parsed.cvd?.zeroAxis ?? "free" },
+        profile: { mode: parsed.profile?.mode ?? "visible", levels: parsed.profile?.levels ?? null, vaPct: parsed.profile?.vaPct ?? 0.68 },
+        tpo: { mode: parsed.tpo?.mode ?? "bar-resolution", periodMinutes: parsed.tpo?.periodMinutes ?? 30 },
+      } : { cvd: { anchor: "none", maPeriod: 1, zeroAxis: "free" }, profile: { mode: "visible", levels: null, vaPct: 0.68 }, tpo: { mode: "bar-resolution", periodMinutes: 30 } };
+    } catch { return { cvd: { anchor: "none", maPeriod: 1, zeroAxis: "free" }, profile: { mode: "visible", levels: null, vaPct: 0.68 }, tpo: { mode: "bar-resolution", periodMinutes: 30 } }; }
+  });
+  const commitPaneCfg = next => {
+    setPaneCfg(next);
+    try { window.localStorage.setItem(PANE_CFG_KEY, JSON.stringify(next)); } catch { /* in-memory only */ }
+  };
+  const onPaneCfg = patch => commitPaneCfg({ ...paneCfg, ...patch });
   const [dockOpen, setDockOpen] = useState(true);
   const [dockTab, setDockTab] = useState("indicators");
   const openDock = tab => { setDockTab(tab); setDockOpen(true); };
@@ -265,6 +283,12 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
     setChartOverlays(o => ({ ...o, [paneKey === "volume-pane" ? "volume" : paneKey]: !(o[paneKey === "volume-pane" ? "volume" : paneKey]) }));
   };
   const STUDY_COLORS = ["#e8bd65", "#5ec986", "#72d7df", "#c4a1ef", "#e06c75", "#8fd3e8"];
+  // C118 PENDING: H3's paneStudies verdict (REWORK) found the CVD helper
+  // drops missing bars and the SMA crosses gaps/session boundaries. The
+  // settings persist here, but NO unreviewed math is applied to the drawn
+  // path — the pane keeps the incumbent raw estimated path and the settings
+  // row carries the explicit pending note until H2's corrected freeze is
+  // reviewed. The Profile/TPO letters are independently passed and live.
   const studyLineSpecs = useMemo(() => studyInstances.filter(inst => inst.visible !== false).flatMap((inst, i) => studySpecs(inst, frames).map(spec => ({ ...spec, color: STUDY_COLORS[i % STUDY_COLORS.length] }))), [studyInstances, frames]);
   // B09 mapped levels (b09_mapped_levels_contract v2): cross-instrument
   // source->target mapping through the contract route — the backend is the ONE
@@ -584,9 +608,12 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
   </>;
   // Visual-reset: the studies catalog and mapped-levels panels now live in
   // the right workspace Indicators tab — same testids, no discovery dead end.
-  const studiesPanelContent = <>    <details className="price-studies-panel" data-testid="studies-panel">
-      <summary data-testid="studies-panel-summary" role="button" aria-label="Indicators">Indicators{studyInstances.length ? ` · ${studyInstances.length}` : ""}</summary>
-      <div className="price-studies-content">
+  const studiesPanelContent = <>    <div className="price-studies-panel price-studies-content" data-testid="studies-panel">
+      {/* Root's composed-UI finding: selecting the Indicators tab must EXPOSE
+          the searchable catalog immediately — the dock tab is the disclosure;
+          no second closed summary sits between them. Mapped levels stays a
+          deliberate secondary details below. */}
+      <div className="price-studies-live">
         <IndicatorsPanel
           instances={studyInstances}
           frames={frames}
@@ -601,7 +628,7 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
         />
         {studyRefusal && <p role="alert" data-testid="studies-refusal">{studyRefusal}</p>}
       </div>
-    </details>
+    </div>
     <details className="price-mapped-levels" data-testid="mapped-levels-panel">
       <summary data-testid="mapped-levels-summary" role="button" aria-label="Mapped levels">Mapped levels{mapped?.status === 'available' ? ` · ${mapped.shapes.length}` : ''}</summary>
       <div className="price-mapped-content">
@@ -704,7 +731,7 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
     {!primary&&<button type="button" className="skylit-trade-mode-btn" aria-expanded={open} onClick={()=>{setOpen(!open);setPlaying(false);}}>Price chart + historical nodes</button>}
     {open&&<div className="stock-pane-row" data-testid="stock-pane-row">
     <div className="stock-pane-main">
-    {open&&<RecordedPriceChart renderDrawingLayer={renderDrawingLayer} ticker={ticker} frames={frames.slice(0,position+1)} fitAllFrames={fitMode==="fit-all"?frames:null} revision={ticker+":"+days+":"+minutes+":"+payload?.query_key+":"+reload} onInteract={pauseInteraction} metricCoverage={payload?.metric_line_coverage} toolbarControls={controls} toolbarActions={null} historyPeriodControls={historyPeriodControls} historyControls={null} replayControls={replayControls} dataDetails={details} readingStatus={readingStatus} emptyContent={empty} showAtlas={showAtlas} exposureLine={exposureLine??payload?.exposure_line??null} darkLevels={darkLevels} alertLines={alertLines??null} cvdLine={cvdLine??payload?.cvd_line??null} contractBars={payload?.contract_bars??null} contractSymbol={payload?.contract_symbol??(contract||null)} contractStatus={payload?.contract_status??null} flowBars={Array.isArray(flowBars)&&flowBars.length===frames.length?flowBars.slice(0,position+1):flowBars} syncSeq={sync?.seq||0} syncView={sync?.time||null} syncPrice={sync?.price||null} syncCrosshair={sync?.crosshair!=null?sync.crosshair:null} onSync={onSyncEvent} studyLines={studyLineSpecs} mappedShapes={mapped?.status === 'available' ? mapped.shapes : null} volumeInstanceActive={studyInstances.some(i=>i&&i.kind==="volume")} overlays={chartOverlays} onOverlaysChange={setChartOverlays}/>}
+    {open&&<RecordedPriceChart renderDrawingLayer={renderDrawingLayer} ticker={ticker} frames={frames.slice(0,position+1)} fitAllFrames={fitMode==="fit-all"?frames:null} revision={ticker+":"+days+":"+minutes+":"+payload?.query_key+":"+reload} onInteract={pauseInteraction} metricCoverage={payload?.metric_line_coverage} toolbarControls={controls} toolbarActions={null} historyPeriodControls={historyPeriodControls} historyControls={null} replayControls={replayControls} dataDetails={details} readingStatus={readingStatus} emptyContent={empty} showAtlas={showAtlas} exposureLine={exposureLine??payload?.exposure_line??null} darkLevels={darkLevels} alertLines={alertLines??null} cvdLine={cvdLine??payload?.cvd_line??null} contractBars={payload?.contract_bars??null} contractSymbol={payload?.contract_symbol??(contract||null)} contractStatus={payload?.contract_status??null} flowBars={Array.isArray(flowBars)&&flowBars.length===frames.length?flowBars.slice(0,position+1):flowBars} syncSeq={sync?.seq||0} syncView={sync?.time||null} syncPrice={sync?.price||null} syncCrosshair={sync?.crosshair!=null?sync.crosshair:null} onSync={onSyncEvent} studyLines={studyLineSpecs} mappedShapes={mapped?.status === 'available' ? mapped.shapes : null} volumeInstanceActive={studyInstances.some(i=>i&&i.kind==="volume")} overlays={chartOverlays} onOverlaysChange={setChartOverlays} paneCfg={paneCfg} onPaneCfg={onPaneCfg} cvdStudyPending={true}/>}
     {open&&forcedScope!=null&&!followMap&&<p role="note">Saved-view review — these recorded expiry dates are not the current map scope.</p>}
     {/* B10 (C044): interval future whitespace + typed scenario zone. The
         slots are EMPTY CANVAS markers — no forecasts; the zone is recorded
