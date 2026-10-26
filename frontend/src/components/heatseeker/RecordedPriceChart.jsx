@@ -3,6 +3,7 @@ import {chartTime,checkedCandles,clampWindow,contractClosesForFrames,NODE_COLORS
 import {openingEnvelope,sessionEnvelope,sessionVwapBands,sessionVwapValues} from './chart/indicators/priceStudies';
 import {volumeProfile} from './chart/indicators/profile';
 import { profileConfig, tpoConfig } from './chart/indicators/paneStudies';
+import './chart/stock-chrome.css';
 import './RecordedPriceChart.css';
 const price=value=>Number.isFinite(value)?value.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'Unavailable';
 const bound=(value,low,high)=>Math.max(low,Math.min(high,value));
@@ -201,8 +202,8 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
       separate stacked row. */}
   <div className="recorded-chart-tools" data-testid="chart-control-row">
    {toolbarControls}
-   <div className="recorded-chart-readout" aria-live="off" data-testid="chart-reading-row"><strong>{selected?chartTime(selected.time,true):'Waiting for a candle'} <span>New York</span></strong>{selected&&<span>Open <b>{price(selected.open)}</b> High <b>{price(selected.high)}</b> Low <b>{price(selected.low)}</b> Close <b>{price(selected.close)}</b></span>}<details className="recorded-chart-popover recorded-chart-data"><summary role="button" aria-label="Chart data details">{readingStatus}</summary><div className="recorded-chart-popover-content">{dataDetails||<p>Prices and lines use their own stored times. Missing readings remain unavailable.</p>}<button type="button" onClick={event=>closeDetails(event.currentTarget)}>Close data details</button></div></details></div>
    <div className="recorded-chart-scale"><button type="button" aria-label="Zoom in time" disabled={!data.length} onClick={()=>zoom('time',0.75)}>+</button><button type="button" aria-label="Zoom out time" disabled={!data.length} onClick={()=>zoom('time',1.35)}>-</button><button type="button" aria-label="Auto scale" aria-pressed={!manualPrice} disabled={!data.length} title={manualPrice?"Price scale locked; click to fit visible prices":"Fits visible prices; click to lock"} onClick={()=>setManualPrice(held=>held?null:range)}>Auto scale {manualPrice?'locked':'on'}</button></div>
+   {replayControls&&<span className="recorded-chart-replay-inline" data-testid="chart-replay-row">{replayControls}</span>}
    <details className="recorded-chart-popover"><summary role="button" aria-label="Chart tools">Tools</summary><div className="recorded-chart-popover-content">
     {historyPeriodControls&&<div className="recorded-chart-period" data-testid="history-period-controls">{historyPeriodControls}</div>}
     <div className="recorded-chart-history"><button type="button" aria-label="Earlier candles" disabled={!windowView.start} onClick={()=>shift(-Math.max(1,Math.floor(windowView.count/2)))}>Earlier</button><button type="button" aria-label="Later candles" disabled={windowView.start+windowView.count>=data.length} onClick={()=>shift(Math.max(1,Math.floor(windowView.count/2)))}>Later</button><button type="button" disabled={!data.length} onClick={()=>{notify();setView({start:0,count:data.length});setManualPrice(null);}}>Fit history</button></div>
@@ -211,7 +212,7 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
      {paneCfg&&onPaneCfg&&<span className="pane-study-settings" data-testid="profile-settings" role="group" aria-label="Volume profile and TPO settings">
       <label>Profile mode<select data-testid="profile-mode" value={paneCfg.profile?.mode??'visible'} onChange={e=>onPaneCfg({profile:{...(paneCfg.profile||{}),mode:e.target.value}})}><option value="visible">visible window</option><option value="fixed-200">fixed 200</option></select></label>
       <label>Levels<input data-testid="profile-levels" aria-label="Profile levels" type="number" min="8" max="200" value={paneCfg.profile?.levels??''} onChange={e=>{const n=Math.round(Number(e.target.value));onPaneCfg({profile:{...(paneCfg.profile||{}),levels:Number.isInteger(n)&&n>=8&&n<=200?n:null}});}}/></label>
-      <label>VA%<input data-testid="profile-va" aria-label="Value area pct" type="number" min="0.5" max="0.9" step="0.01" value={paneCfg.profile?.vaPct??0.68} onChange={e=>{const n=Number(e.target.value);onPaneCfg({profile:{...(paneCfg.profile||{}),vaPct:n>=0.5&&n<=0.9?n:(paneCfg.profile?.vaPct??0.68)}});}}/></label>
+      <label>VA%<input data-testid="profile-va-pct" aria-label="Value area pct" type="number" min="0.5" max="0.9" step="0.01" value={paneCfg.profile?.vaPct??0.68} onChange={e=>{const n=Number(e.target.value);onPaneCfg({profile:{...(paneCfg.profile||{}),vaPct:n>=0.5&&n<=0.9?n:(paneCfg.profile?.vaPct??0.68)}});}}/></label>
       <label>TPO m<input data-testid="tpo-minutes" aria-label="TPO period minutes" type="number" min="1" max="480" value={paneCfg.tpo?.periodMinutes??30} onChange={e=>{const n=Math.round(Number(e.target.value));onPaneCfg({tpo:{...(paneCfg.tpo||{}),periodMinutes:Number.isInteger(n)&&n>=1&&n<=480?n:30}});}}/></label>
       <label>TPO mode<select data-testid="tpo-mode" value={paneCfg.tpo?.mode??'bar-resolution'} onChange={e=>onPaneCfg({tpo:{...(paneCfg.tpo||{}),mode:e.target.value}})}><option value="bar-resolution">bar-resolution</option><option value="tick-true">tick-true</option></select></label>
      </span>}
@@ -227,8 +228,9 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
    </div></details>
    <div className="recorded-chart-actions">{toolbarActions}</div>
   </div>
-  {replayControls&&<div className="recorded-chart-replay-row" data-testid="chart-replay-row">{replayControls}</div>}
   {!!data.length?<div ref={surface} className="recorded-chart-surface" role="region" aria-label={ticker+' candle chart'} aria-describedby={'chart-help-'+id} tabIndex={0} onKeyDown={keyboard} onPointerDown={begin} onPointerMove={move} onPointerUp={end} onPointerCancel={end} onPointerLeave={()=>{if(!pointers.current.size)setHover(null);}}>
+  {/* the OHLC readout rides the CANVAS top-left as an overlay — off the command row so the row stays ONE compact line. */}
+        <div className="recorded-chart-readout-overlay" aria-live="off" data-testid="chart-reading-row"><strong>{selected?chartTime(selected.time,true):'Waiting for a candle'} <span>New York</span></strong>{selected&&<span>Open <b>{price(selected.open)}</b> High <b>{price(selected.high)}</b> Low <b>{price(selected.low)}</b> Close <b>{price(selected.close)}</b></span>}<details className="recorded-chart-popover recorded-chart-data"><summary role="button" aria-label="Chart data details">{readingStatus}</summary><div className="recorded-chart-popover-content">{dataDetails||<p>Prices and lines use their own stored times. Missing readings remain unavailable.</p>}<button type="button" onClick={event=>closeDetails(event.currentTarget)}>Close data details</button></div></details></div>
    <svg viewBox={'0 0 '+size.width+' '+size.height} aria-label={ticker+' recorded price candles'} role="img">
     <defs><clipPath id={'chart-clip-'+id}><rect x={left} y={top} width={plotWidth} height={plotHeight}/></clipPath></defs>
     {Array.from({length:6},(_,i)=>{const level=range.high-(range.high-range.low)*i/5,yy=y(level);return <g key={i}><line x1={left} x2={right} y1={yy} y2={yy} stroke="#27313c" strokeWidth="1"/><text x={right+10} y={yy+4} className="recorded-price-label">{price(level)}</text></g>;})}
@@ -291,7 +293,7 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
         const inVa=va&&r.price>=va.low&&r.price<=va.high;
         return <rect key={'vp:'+ri} data-testid={isPoc?'profile-poc':(inVa?'profile-va-row':'profile-row')} x={bx+(bw-Math.max(1,(r.volume/peak)*bw))} y={y(r.price)-2} width={Math.max(1,(r.volume/peak)*bw)} height={4} fill={isPoc?'#e8bd65':(inVa?'#72a3c9':'#5a6b7d')} opacity={isPoc?0.95:0.6}><title>{'Volume '+price(r.price)+': '+Math.round(r.volume).toLocaleString('en-US')+' shares'+(inVa&&!isPoc?' · value area':'')}</title></rect>;})}
        {prof.facts&&<g data-testid="profile-facts">
-        <text x={bx} y={y(prof.facts.poc)-6} fill="#e8bd65" fontSize="10" data-testid="profile-fact-poc">POC {price(prof.facts.poc.price)}</text>
+        <text x={bx} y={y(prof.facts.poc.price)-6} fill="#e8bd65" fontSize="10" data-testid="profile-fact-poc">POC {price(prof.facts.poc.price)}</text>
         <text x={bx} y={y(prof.facts.vah)-16} fill="#72a3c9" fontSize="10" data-testid="profile-fact-vah">VAH {price(prof.facts.vah)}</text>
         <text x={bx} y={y(prof.facts.val)+8} fill="#72a3c9" fontSize="10" data-testid="profile-fact-val">VAL {price(prof.facts.val)}</text>
        </g>}</g>;})()}

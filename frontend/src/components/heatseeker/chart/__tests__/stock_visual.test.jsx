@@ -90,6 +90,7 @@ test('the review tab shows the real current selection and families context', asy
   // the families note names all eight honestly and points to the workflow band
   expect(screen.getByTestId('stock-review-families')).toHaveTextContent(/levels, patterns, income, history, moves, structure, exposure, briefing/);
   // a placed drawing reflects in the Review tab (real selected-object context)
+  fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
   fireEvent.click(screen.getByTestId('rail-tool-trend'));
   const layer = screen.getByTestId('drawing-layer');
   const event = new window.MouseEvent('pointerdown', { bubbles: true, cancelable: true, clientX: 150, clientY: 100 });
@@ -97,7 +98,9 @@ test('the review tab shows the real current selection and families context', asy
   const event2 = new window.MouseEvent('pointerdown', { bubbles: true, cancelable: true, clientX: 450, clientY: 240 });
   event2.pointerType = 'mouse'; act(() => { layer.dispatchEvent(event2); });
   const id = [...document.querySelectorAll('[data-testid^="rail-select-"]')].map(b => b.getAttribute('data-testid').slice('rail-select-'.length))[0];
+  fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
   fireEvent.click(screen.getByTestId('rail-select-' + id));
+  fireEvent.click(screen.getByTestId('stock-inspector-tab-review'));
   await waitFor(() => expect(screen.getByTestId('stock-review-selection')).toHaveTextContent(/trend drawing/));
   expect(screen.getByTestId('stock-review-selection')).toHaveTextContent(/built-in|unlinked/);
 });

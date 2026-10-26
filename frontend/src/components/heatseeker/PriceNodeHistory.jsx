@@ -590,6 +590,7 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
     <span className="price-history-summary" data-testid="price-history-summary" title="Selected history period and session coverage">{historyDayLabel} · {historySessionLabel}</span>
     <span className="stock-dock-actions" data-testid="stock-dock-actions">
       <button type="button" className="stock-dock-btn" aria-pressed={dockOpen&&dockTab==="indicators"} data-testid="stock-dock-open-indicators" title="Indicators: studies and measured-pane controls" onClick={()=>openDock("indicators")}>Indicators{studyInstances.length?` · ${studyInstances.length}`:""}</button>
+      <button type="button" className="stock-dock-btn" aria-pressed={dockOpen&&dockTab==="drawings"} data-testid="stock-dock-open-drawings" title="Drawings: tools, presets, selection" onClick={()=>openDock("drawings")}>Drawings{drawings.length?` · ${drawings.length}`:""}</button>
       <button type="button" className="stock-dock-btn" aria-pressed={dockOpen&&dockTab==="data"} data-testid="stock-dock-open-data" title="Data: saved views, reload, node recording, option contract" onClick={()=>openDock("data")}>Data</button>
       <button type="button" className="stock-dock-btn" aria-pressed={dockOpen&&dockTab==="review"} data-testid="stock-dock-open-review" title="Review: the Wall→Contract→AskFlow→Public brief workflow" onClick={()=>openDock("review")}>Review</button>
     </span></>;
@@ -610,6 +611,41 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
   </>;
   // Visual-reset: the studies catalog and mapped-levels panels now live in
   // the right workspace Indicators tab — same testids, no discovery dead end.
+  // The Drawings tab content — the rail + preset manager live in the workspace
+  // (Root: preset editing was below the fold; now it is one tab away).
+  const drawingsPanelContent = <>
+      
+      {/* B16: real coordinate conversion + pointer/keyboard geometry. The
+          layer renders every visible drawing through the live frames'
+          time/price domain; creation picks a tool then places anchors
+          (OHLC-magnet); a selected drawing drags with pan suppressed;
+          arrows nudge; Escape cancels; Undo pops. */}
+
+      <DrawingRail drawings={drawings} selectedId={selectedDrawing}
+      tools={REDUCER_TOOLS.map(id=>({id,anchors:anchorsFor(id)}))} draftTool={draftTool} onStyle={(id,style)=>persistDrawings(reduceDrawings(drawings,{type:"style",id,style}))}
+      onToolPick={id=>{setDraftTool(draftTool===id?null:id);setDraftAnchors([]);}}
+      onUndo={()=>persistDrawings(reduceDrawings(drawings,{type:"undo"}))}
+      onCancelDraft={()=>{setDraftTool(null);setDraftAnchors([]);}}
+      onSelect={setSelectedDrawing}
+      onDelete={id => { if (selectedDrawing === id) setSelectedDrawing(null); persistDrawings(reduceDrawings(drawings, { type: "delete", id })); }}
+      onToggleLock={id => persistDrawings(drawings.map(d => d.id === id ? { ...d, locked: !d.locked } : d))}
+      onToggleHide={id => persistDrawings(drawings.map(d => d.id === id ? { ...d, visible: d.visible === false } : d))}
+      presets={presetList}
+      presetScope={ticker}
+      onPresetCreate={request => requestPresetOp(createPreset(presetList, request))}
+      onPresetUpdate={(id, style) => requestPresetOp(updatePresetStyle(presetList, id, style))}
+      onPresetApply={id => {
+        // the SELECTED drawing only — never a silent restyle of many
+        const preset = presetList.find(p => p && p.id === id);
+        const target = drawings.find(d => d && d.id === selectedDrawing);
+        if (!preset || !target || target.locked) return;
+        persistDrawings(drawings.map(d => d.id === target.id ? applyPresetToDrawing(d, preset) : d));
+      }}
+      onPresetToggleStar={id => requestPresetOp(toggleStar(presetList, id))}
+      onPresetSetActive={id => requestPresetOp(setActivePreset(presetList, id))}
+      onPresetReset={id => requestPresetOp(resetPresetStyleToBuiltIn(presetList, id))}
+      onPresetDelete={id => requestPresetOp(deletePreset(presetList, id))} />
+      {presetError && <p className="price-preset-error" data-testid="preset-error" role="note">{presetError}</p>}</>;
   const studiesPanelContent = <>    <div className="price-studies-panel price-studies-content" data-testid="studies-panel">
       {/* Root's composed-UI finding: selecting the Indicators tab must EXPOSE
           the searchable catalog immediately — the dock tab is the disclosure;
@@ -748,40 +784,7 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
     {/* P1-5 (UX review): secondary strips below the chart collapse into slim
         lines — drawings behind a one-line disclosure, velocity as an inline
         hairline row. Rail testids and interactions are unchanged. */}
-    {open&&<details className="price-history-drawings" data-testid="drawings-disclosure">
-      <summary role="button" aria-label="Drawings">Drawings{drawings.length ? ` · ${drawings.length}` : ""}</summary>
-      {/* B16: real coordinate conversion + pointer/keyboard geometry. The
-          layer renders every visible drawing through the live frames'
-          time/price domain; creation picks a tool then places anchors
-          (OHLC-magnet); a selected drawing drags with pan suppressed;
-          arrows nudge; Escape cancels; Undo pops. */}
-
-      <DrawingRail drawings={drawings} selectedId={selectedDrawing}
-      tools={REDUCER_TOOLS.map(id=>({id,anchors:anchorsFor(id)}))} draftTool={draftTool} onStyle={(id,style)=>persistDrawings(reduceDrawings(drawings,{type:"style",id,style}))}
-      onToolPick={id=>{setDraftTool(draftTool===id?null:id);setDraftAnchors([]);}}
-      onUndo={()=>persistDrawings(reduceDrawings(drawings,{type:"undo"}))}
-      onCancelDraft={()=>{setDraftTool(null);setDraftAnchors([]);}}
-      onSelect={setSelectedDrawing}
-      onDelete={id => { if (selectedDrawing === id) setSelectedDrawing(null); persistDrawings(reduceDrawings(drawings, { type: "delete", id })); }}
-      onToggleLock={id => persistDrawings(drawings.map(d => d.id === id ? { ...d, locked: !d.locked } : d))}
-      onToggleHide={id => persistDrawings(drawings.map(d => d.id === id ? { ...d, visible: d.visible === false } : d))}
-      presets={presetList}
-      presetScope={ticker}
-      onPresetCreate={request => requestPresetOp(createPreset(presetList, request))}
-      onPresetUpdate={(id, style) => requestPresetOp(updatePresetStyle(presetList, id, style))}
-      onPresetApply={id => {
-        // the SELECTED drawing only — never a silent restyle of many
-        const preset = presetList.find(p => p && p.id === id);
-        const target = drawings.find(d => d && d.id === selectedDrawing);
-        if (!preset || !target || target.locked) return;
-        persistDrawings(drawings.map(d => d.id === target.id ? applyPresetToDrawing(d, preset) : d));
-      }}
-      onPresetToggleStar={id => requestPresetOp(toggleStar(presetList, id))}
-      onPresetSetActive={id => requestPresetOp(setActivePreset(presetList, id))}
-      onPresetReset={id => requestPresetOp(resetPresetStyleToBuiltIn(presetList, id))}
-      onPresetDelete={id => requestPresetOp(deletePreset(presetList, id))} />
-      {presetError && <p className="price-preset-error" data-testid="preset-error" role="note">{presetError}</p>}
-    </details>}
+    
     {open&&velocityRows.length>0&&(
       <div className="price-history-velocity" data-testid="velocity-strip" aria-label="Fastest-moving nodes">
         <strong>Node velocity</strong><span> over {velocityDtText(comparison.velocity_dt_seconds)}</span>
@@ -796,8 +799,9 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
 
     </div>
     <StockInspector open={dockOpen} activeTab={dockTab} onTabChange={setDockTab} onClose={()=>setDockOpen(false)}
-      counts={{indicators:studyInstances.length||null,data:null,review:null}}
+      counts={{indicators:studyInstances.length||null,drawings:drawings.length||null,data:null,review:null}}
       indicators={studiesPanelContent}
+      drawings={drawingsPanelContent}
       data={historyControls}
       review={<div className="stock-review-tab" data-testid="stock-review-context">
         <strong className="stock-review-head">Current selection</strong>

@@ -9,12 +9,13 @@ import React from "react";
 // content, so unavailable data stays honestly unavailable.
 const TABS = [
   { id: "indicators", label: "Indicators" },
+  { id: "drawings", label: "Drawings" },
   { id: "data", label: "Data" },
   { id: "review", label: "Review" },
 ];
 
-export default function StockInspector({ open = true, activeTab = "indicators", onTabChange, onClose, indicators = null, data = null, review = null, counts = null }) {
-  const body = activeTab === "data" ? data : activeTab === "review" ? review : indicators;
+export default function StockInspector({ open = true, activeTab = "indicators", onTabChange, onClose, indicators = null, drawings = null, data = null, review = null, counts = null }) {
+  const body = activeTab === "drawings" ? drawings : activeTab === "data" ? data : activeTab === "review" ? review : indicators;
   return (
     <aside className="stock-inspector" data-testid="stock-inspector" data-open={!!open} data-active-tab={activeTab} aria-label="Stock workspace">
       <header className="stock-inspector-head">
@@ -32,9 +33,19 @@ export default function StockInspector({ open = true, activeTab = "indicators", 
         {onClose && <button type="button" className="stock-inspector-close" data-testid="stock-inspector-close" aria-label="Close workspace" onClick={onClose}>×</button>}
       </header>
       {open ? (
-        <div className="stock-inspector-body" data-testid="stock-inspector-body" role="tabpanel">
-          {body || <p className="stock-inspector-empty">No content for this tab.</p>}
-        </div>
+        /* Mount-once tab panels: every tab's content stays mounted so its
+           controls/testids are always in the DOM; ONLY the active panel is
+           painted (hidden panels are display:none) — the canonical
+           stock-inspector-body testid rides the ACTIVE panel alone. */
+        TABS.map(tab => {
+          const content = tab.id === "drawings" ? drawings : tab.id === "data" ? data : tab.id === "review" ? review : indicators;
+          return (
+            <div key={tab.id} className="stock-inspector-body" data-testid={activeTab === tab.id ? "stock-inspector-body" : "stock-inspector-panel-" + tab.id}
+              data-tab={tab.id} role="tabpanel" hidden={activeTab !== tab.id}>
+              {content || <p className="stock-inspector-empty">No content for this tab.</p>}
+            </div>
+          );
+        })
       ) : (
         <div className="stock-inspector-closed" data-testid="stock-inspector-closed">
           <span>Workspace closed — open a tab from the chart row.</span>
