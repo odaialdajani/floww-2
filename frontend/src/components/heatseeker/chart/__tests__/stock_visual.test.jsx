@@ -63,16 +63,15 @@ test('Add Volume visibly drives the REAL measured-volume pane — never a no-op 
   // user turns the pane off
   fireEvent.click(screen.getByLabelText('Toggle profile'));
   await waitFor(() => expect(document.querySelector('[data-testid="volume-profile"]')).toBeNull());
-  // adding a Volume study instance turns the REAL pane back on — visible, not a saved row
+  // the panel's REAL Volume pane toggle drives the measured pane — on
   fireEvent.click(screen.getByTestId('studies-panel-summary'));
-  fireEvent.click(screen.getByTestId('study-add-volume'));
+  fireEvent.click(screen.getByTestId('pane-toggle-volume-pane'));
   await waitFor(() => expect(document.querySelector('[data-testid="volume-profile"]')).not.toBeNull());
   // the chart's toggle reflects the instance-forced state honestly
   expect(screen.getByLabelText('Toggle profile')).toBeChecked();
   expect(screen.getByText(/on \(volume instance\)/)).toBeInTheDocument();
-  // removing the instance returns the pane to the user's off state
-  const instanceRow = document.querySelector('[data-testid^="study-instance-"]');
-  fireEvent.click(within(instanceRow).getByRole('button', { name: /remove study/i }));
+  // toggling the pane off removes the instance and returns the user's state
+  fireEvent.click(screen.getByTestId('pane-toggle-volume-pane'));
   await waitFor(() => expect(document.querySelector('[data-testid="volume-profile"]')).toBeNull());
   expect(screen.getByLabelText('Toggle profile')).not.toBeChecked();
 });

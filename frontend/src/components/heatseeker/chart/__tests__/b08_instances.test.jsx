@@ -150,10 +150,14 @@ test('MOUNTED: two differently configured studies render independently and survi
   const { unmount } = render(<PriceNodeHistory ticker="SPY" open />);
   await waitFor(() => expect(screen.getByTestId('recorded-price-chart')).toHaveAttribute('data-candles', '4'));
   fireEvent.click(screen.getByTestId('studies-panel-summary'));
-  fireEvent.change(screen.getByTestId('study-add-period'), { target: { value: '2' } });
-  fireEvent.click(screen.getByTestId('study-add-sma'));
-  fireEvent.change(screen.getByTestId('study-add-period'), { target: { value: '3' } });
-  fireEvent.click(screen.getByTestId('study-add-ema'));
+  // the panel surface: preset chip (SMA 20) + catalog Add (EMA 20), then edit
+  // BOTH instances independently through their own settings inputs (small
+  // periods so the 4-frame fixture yields real values)
+  fireEvent.click(screen.getByTestId('catalog-preset-SMA 20'));
+  fireEvent.click(screen.getByTestId('catalog-add-ema'));
+  const ids = [...document.querySelectorAll('[data-testid^="instance-period-"]')].map(e => e.getAttribute('data-testid').slice('instance-period-'.length));
+  fireEvent.change(screen.getByTestId('instance-period-' + ids[0]), { target: { value: '2' } });
+  fireEvent.change(screen.getByTestId('instance-period-' + ids[1]), { target: { value: '3' } });
   await waitFor(() => expect(document.querySelectorAll('[data-testid^="study-line-"]')).toHaveLength(2));
   const polylines = [...document.querySelectorAll('[data-testid^="study-line-"]')];
   const points = polylines.map(p => p.getAttribute('points'));
@@ -163,14 +167,16 @@ test('MOUNTED: two differently configured studies render independently and survi
   unmount();
   render(<PriceNodeHistory ticker="SPY" open />);
   await waitFor(() => expect(document.querySelectorAll('[data-testid^="study-line-"]')).toHaveLength(2));
-  // invalid settings refused with a typed message; no instance is created
+  // invalid period input is CLAMPED by the panel (fallback to the current
+  // value; no silent invalid state, no new line, no instance created)
   fireEvent.click(screen.getByTestId('studies-panel-summary'));
-  fireEvent.change(screen.getByTestId('study-add-period'), { target: { value: '0' } });
-  fireEvent.click(screen.getByTestId('study-add-sma'));
-  expect(screen.getByTestId('studies-refusal')).toBeInTheDocument();
+  fireEvent.click(screen.getByTestId('catalog-add-sma'));
+  const sid = [...document.querySelectorAll('[data-testid^="instance-period-"]')].map(e => e.getAttribute('data-testid').slice('instance-period-'.length))[0];
+  fireEvent.change(screen.getByTestId('instance-period-' + sid), { target: { value: '0' } });
+  expect(screen.getByTestId('instance-period-' + sid)).toHaveValue(2);
   expect(document.querySelectorAll('[data-testid^="study-line-"]').length).toBe(2);
   // the exposure-vwap kind is DECLARED but this pane has no board source: typed refusal
-  fireEvent.click(screen.getByTestId('study-add-exposure-vwap'));
+  fireEvent.click(screen.getByTestId('catalog-add-exposure-vwap'));
   expect(screen.getByTestId('studies-refusal')).toHaveTextContent(/eligible board source/i);
   expect(document.querySelectorAll('[data-testid^="study-line-"]').length).toBe(2);
 });

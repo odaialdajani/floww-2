@@ -8,7 +8,7 @@ const bound=(value,low,high)=>Math.max(low,Math.min(high,value));
 const axisTime=value=>new Date(value).toLocaleString('en-US',{timeZone:'America/New_York',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false});
 const closeDetails=element=>{const details=element.closest('details');if(details){details.open=false;details.querySelector('summary')?.focus();}};
 
-export default function RecordedPriceChart({ticker,frames,revision='',onInteract,metricCoverage={},toolbarControls=null,toolbarActions=null,historyPeriodControls=null,historyControls=null,replayControls=null,dataDetails=null,readingStatus="Data details",emptyContent=null,showAtlas=true,exposureLine=null,darkLevels=null,flowBars=null,alertLines=null,cvdLine=null,contractBars=null,contractSymbol=null,contractStatus=null,fitAllFrames=null,renderDrawingLayer=null,syncSeq=0,syncView=null,syncPrice=null,syncCrosshair=null,onSync=null,studyLines=null,mappedShapes=null,volumeInstanceActive=false}) {
+export default function RecordedPriceChart({ticker,frames,revision='',onInteract,metricCoverage={},toolbarControls=null,toolbarActions=null,historyPeriodControls=null,historyControls=null,replayControls=null,dataDetails=null,readingStatus="Data details",emptyContent=null,showAtlas=true,exposureLine=null,darkLevels=null,flowBars=null,alertLines=null,cvdLine=null,contractBars=null,contractSymbol=null,contractStatus=null,fitAllFrames=null,renderDrawingLayer=null,syncSeq=0,syncView=null,syncPrice=null,syncCrosshair=null,onSync=null,studyLines=null,mappedShapes=null,volumeInstanceActive=false, overlays=null, onOverlaysChange=null}) {
  const data=useMemo(()=>checkedCandles(frames),[frames]);
  const premiumCloses=useMemo(()=>contractClosesForFrames(data,contractBars),[data,contractBars]);
  const surface=useRef(null),pointers=useRef(new Map()),gesture=useRef(null),previousLength=useRef(0);
@@ -32,6 +32,14 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
   adopting.current=false;},[syncSeq]); // eslint-disable-line react-hooks/exhaustive-deps
  const fitLevels=useMemo(()=>fitData?fitData.flatMap(frame=>savedLevels(frame,metrics,allNodes)):[],[fitData,metrics,allNodes]);
   const [exporting,setExporting]=useState(false),[exportError,setExportError]=useState(''),[vwapOn,setVwapOn]=useState(true),[bandsOn,setBandsOn]=useState(false),[profileOn,setProfileOn]=useState(true),[envelopeOn,setEnvelopeOn]=useState(false),[cvdOn,setCvdOn]=useState(true);
+  // Visual-reset: the overlay toggles can be externally controlled (one state
+  // shared with the Indicators panel); standalone use keeps the internal state.
+  const OVL = overlays;
+  const effVwap = OVL ? !!OVL.vwap : vwapOn;
+  const effBands = OVL ? !!OVL.bands : bandsOn;
+  const effProfile = OVL ? !!OVL.profile : profileOn;
+  const effCvd = OVL ? !!OVL.cvd : cvdOn;
+  const setOvl = (key, value) => { if (OVL && onOverlaysChange) onOverlaysChange({ ...OVL, [key]: value }); };
  const id=useId().replace(/[^a-zA-Z0-9_-]/g,'');
  useEffect(()=>{
   const element=surface.current;if(!element)return undefined;
@@ -197,11 +205,11 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
     <div className="recorded-chart-history"><button type="button" aria-label="Earlier candles" disabled={!windowView.start} onClick={()=>shift(-Math.max(1,Math.floor(windowView.count/2)))}>Earlier</button><button type="button" aria-label="Later candles" disabled={windowView.start+windowView.count>=data.length} onClick={()=>shift(Math.max(1,Math.floor(windowView.count/2)))}>Later</button><button type="button" disabled={!data.length} onClick={()=>{notify();setView({start:0,count:data.length});setManualPrice(null);}}>Fit history</button></div>
     <fieldset className="recorded-chart-layers" aria-label="Saved node lines"><legend>Saved lines</legend>{Object.entries(NODE_LABELS).map(([metric,label])=><label key={metric} style={{'--node-color':NODE_COLORS[metric]}}><input type="checkbox" checked={metrics.includes(metric)} disabled={!availableMetrics.includes(metric)} onChange={e=>{setMetrics(old=>e.target.checked?[...old,metric]:old.filter(value=>value!==metric));setManualPrice(null);}}/>{label}{!availableMetrics.includes(metric)&&<span> unavailable</span>}</label>)}<label><input type="checkbox" checked={allNodes} onChange={e=>{setAllNodes(e.target.checked);setManualPrice(null);}}/>All saved levels</label></fieldset>
     <fieldset className="recorded-chart-layers recorded-chart-overlays" aria-label="Chart overlays"><legend>Overlays</legend>
-     <label><input type="checkbox" aria-label="Toggle VWAP" checked={vwapOn} disabled={!data.some(frame=>Number.isFinite(frame.volume))} onChange={e=>setVwapOn(e.target.checked)}/>VWAP{!data.some(frame=>Number.isFinite(frame.volume))&&<span> unavailable</span>}</label>
-     <label><input type="checkbox" aria-label="Toggle profile" checked={profileOn||volumeInstanceActive} disabled={!data.some(frame=>Number.isFinite(frame.volume))} onChange={e=>setProfileOn(e.target.checked)}/>Profile{!data.some(frame=>Number.isFinite(frame.volume))&&<span> unavailable</span>}{volumeInstanceActive&&!profileOn&&<span> · on (volume instance)</span>}</label>
-     <label><input type="checkbox" aria-label="Toggle VWAP bands" checked={bandsOn} disabled={!data.some(frame=>Number.isFinite(frame.volume))} onChange={e=>setBandsOn(e.target.checked)}/>Bands{!data.some(frame=>Number.isFinite(frame.volume))&&<span> unavailable</span>}</label>
+     <label><input type="checkbox" aria-label="Toggle VWAP" checked={effVwap} disabled={!data.some(frame=>Number.isFinite(frame.volume))} onChange={e=>OVL?setOvl('vwap',e.target.checked):setVwapOn(e.target.checked)}/>VWAP{!data.some(frame=>Number.isFinite(frame.volume))&&<span> unavailable</span>}</label>
+     <label><input type="checkbox" aria-label="Toggle profile" checked={effProfile||volumeInstanceActive} disabled={!data.some(frame=>Number.isFinite(frame.volume))} onChange={e=>OVL?setOvl('profile',e.target.checked):setProfileOn(e.target.checked)}/>Profile{!data.some(frame=>Number.isFinite(frame.volume))&&<span> unavailable</span>}{volumeInstanceActive&&!effProfile&&<span> · on (volume instance)</span>}</label>
+     <label><input type="checkbox" aria-label="Toggle VWAP bands" checked={effBands} disabled={!data.some(frame=>Number.isFinite(frame.volume))} onChange={e=>OVL?setOvl('bands',e.target.checked):setBandsOn(e.target.checked)}/>Bands{!data.some(frame=>Number.isFinite(frame.volume))&&<span> unavailable</span>}</label>
       <label><input type="checkbox" aria-label="Toggle exposure envelope" checked={envelopeOn} disabled={!Array.isArray(exposureLine)||!exposureLine.some(p=>typeof p?.centre==='number'&&Number.isFinite(p.centre))} onChange={e=>setEnvelopeOn(e.target.checked)}/>Envelope{(!Array.isArray(exposureLine)||!exposureLine.some(p=>typeof p?.centre==='number'&&Number.isFinite(p.centre)))&&<span> unavailable</span>}</label>
-      <label><input type="checkbox" aria-label="Toggle CVD" checked={cvdOn} disabled={!Array.isArray(cvdLine)||!cvdLine.some(p=>typeof p?.cvd==='number'&&Number.isFinite(p.cvd))} onChange={e=>setCvdOn(e.target.checked)}/>CVD{(!Array.isArray(cvdLine)||!cvdLine.some(p=>typeof p?.cvd==='number'&&Number.isFinite(p.cvd)))&&<span> unavailable</span>}</label>
+      <label><input type="checkbox" aria-label="Toggle CVD" checked={effCvd} disabled={!Array.isArray(cvdLine)||!cvdLine.some(p=>typeof p?.cvd==='number'&&Number.isFinite(p.cvd))} onChange={e=>OVL?setOvl('cvd',e.target.checked):setCvdOn(e.target.checked)}/>CVD{(!Array.isArray(cvdLine)||!cvdLine.some(p=>typeof p?.cvd==='number'&&Number.isFinite(p.cvd)))&&<span> unavailable</span>}</label>
     </fieldset>
      <button type="button" disabled={!data.length||exporting} onClick={downloadChart}>{exporting?'Saving image...':'Download chart image'}</button>{exportError&&<p role="alert">{exportError}</p>}
     {historyControls}<button type="button" onClick={event=>closeDetails(event.currentTarget)}>Close chart tools</button><small id={'chart-help-'+id}>Drag to scroll history. Pinch time and price. Drag an axis to stretch it. Ctrl + scroll zooms time; Shift + scroll zooms price. Normal scrolling moves the page.</small>
@@ -239,12 +247,12 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
       {envelopeLevels().map((lv,li)=><line data-testid="exposure-envelope" key={'envelope:'+li} x1={left} x2={right} y1={y(lv)} y2={y(lv)} stroke="#72d7df" strokeWidth="1" strokeDasharray="2 3" opacity="0.7"><title>Exposure envelope level</title></line>)}
       {showAtlas&&Array.isArray(darkLevels)&&darkLevels.filter(l=>l&&typeof l.price==='number'&&Number.isFinite(l.price)&&l.price>=range.low&&l.price<=range.high).map((l,li)=><line data-testid="dark-pool-level" key={'dark:'+li} x1={left} x2={right} y1={y(l.price)} y2={y(l.price)} stroke="#c9a86a" strokeWidth="1.5" strokeDasharray="6 3"><title>{'Dark pool level '+price(l.price)+(l.venue?' '+l.venue:'')}</title></line>)}
       {Array.isArray(alertLines)&&alertLines.filter(a=>a&&typeof a.price==='number'&&Number.isFinite(a.price)&&a.price>=range.low&&a.price<=range.high).map((a,ai)=><line data-testid="alert-line" data-state={a.state==='stale'?'stale':'armed'} key={'alert:'+(a.id||ai)} x1={left} x2={right} y1={y(a.price)} y2={y(a.price)} stroke={a.state==='stale'?'#6b7684':'#e06c75'} strokeWidth="1.5" strokeDasharray={a.state==='stale'?'2 3':'none'}><title>{'Alert '+(a.id||ai)+' at '+price(a.price)+(a.state==='stale'?' — stale alert refused':'')}</title></line>)}
-      {showAtlas&&vwapOn&&data.some(frame=>Number.isFinite(frame.volume))&&(()=>{
+      {showAtlas&&effVwap&&data.some(frame=>Number.isFinite(frame.volume))&&(()=>{
        const all=sessionVwapValues(data),win=all.slice(windowView.start,windowView.start+windowView.count);
        const pts=win.map((v,i)=>{if(typeof v!=='number'||!Number.isFinite(v))return null;const py=y(v);if(py<top||py>bottom)return null;return {x:left+(i+0.5)*spacing,y:py};});
        const drawn=pts.filter(Boolean);if(drawn.length<2)return null;
        return <polyline data-testid="vwap-line" points={drawn.map(p=>p.x+','+p.y).join(' ')} fill="none" stroke="#e08e45" strokeWidth="2"><title>Session VWAP</title></polyline>;})()}
-      {showAtlas&&bandsOn&&vwapOn&&data.some(frame=>Number.isFinite(frame.volume))&&(()=>{
+      {showAtlas&&effBands&&effVwap&&data.some(frame=>Number.isFinite(frame.volume))&&(()=>{
        const all=sessionVwapBands(data),maxM=3;
        return Array.from({length:maxM},(_,m)=>{const pts=[];
         for(let k=0;k<windowView.count;k+=1){const set=all[windowView.start+k];const band=set?.[m];
@@ -253,7 +261,7 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
          pts.push({x:left+(k+0.5)*spacing,uy,ly});}
         if(pts.length<2)return null;
         return <g key={'vwapband:'+m}><polyline data-testid="vwap-band" points={pts.map(p=>p.x+','+p.uy).join(' ')} fill="none" stroke="#e08e45" strokeWidth="1" strokeDasharray="4 3" opacity="0.8"/><polyline data-testid="vwap-band" points={pts.map(p=>p.x+','+p.ly).join(' ')} fill="none" stroke="#e08e45" strokeWidth="1" strokeDasharray="4 3" opacity="0.8"/></g>;});})()}
-      {showAtlas&&(profileOn||volumeInstanceActive)&&data.some(frame=>Number.isFinite(frame.volume))&&(()=>{
+      {showAtlas&&(effProfile||volumeInstanceActive)&&data.some(frame=>Number.isFinite(frame.volume))&&(()=>{
        const prof=volumeProfile(visible,{rows:Math.min(48,Math.max(8,visible.length))});
        if(prof.status!=='ok')return null;
        const peak=Math.max(...prof.rows.map(r=>r.volume),1),bw=64,bx=Math.max(left,right-bw-4);
@@ -305,7 +313,7 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
       {win.map((frame,index)=>{const v=frame.volume;if(!Number.isFinite(v))return null;const bh=v===0?0:Math.max(1,v/peak*(h-(missing?18:4)));
        return <rect data-testid="volume-bar" key={frame.time} x={left+index*spacing+Math.max(1,spacing*0.15)} y={h-bh} width={Math.max(1,Math.min(spacing*0.7,14))} height={bh} fill={frame.close>=frame.open?'#3f8f7d':'#8f4a52'} opacity="0.85"><title>{chartTime(frame.time,true)+' — '+(Number.isFinite(v)?v.toLocaleString('en-US'):'0')+' shares'}</title></rect>;})}
     </svg>;})()}
-    {!!data.length&&cvdOn&&(()=>{ // CVD pane: BVC-estimated cumulative flow — honest gaps, never zero-filled.
+    {!!data.length&&effCvd&&(()=>{ // CVD pane: BVC-estimated cumulative flow — honest gaps, never zero-filled.
      if(!showAtlas||!Array.isArray(cvdLine))return null;
      const byTime=new Map(cvdLine.filter(p=>p&&typeof p.time==='string').map(p=>[p.time,p]));
      const known=visible.map(frame=>{const entry=byTime.get(frame.time);const v=entry?entry.cvd:undefined;return typeof v==='number'&&Number.isFinite(v)?v:null;});

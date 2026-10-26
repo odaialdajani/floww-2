@@ -7,6 +7,7 @@ import { loadPresets, savePresets, PRESET_STORAGE_VERSION } from "./chart/drawin
 import { defaultPresetFor, createPreset, updatePresetStyle, deletePreset, resetPresetStyleToBuiltIn, toggleStar, setActivePreset, applyPresetToDrawing } from "./chart/drawings/presetManager";
 import { buildPresetRenderSpec } from "./chart/drawings/presetRendering";
 import StockInspector from "./chart/StockInspector";
+import IndicatorsPanel from "./chart/indicators/IndicatorsPanel";
 import { loadDrawings, saveDrawings } from "./chart/drawings/drawingPersistence";
 import { reduceDrawings, createDrawing, geometryFor, magnetPoint, nudgeDrawing, canEdit, suppressesPan, unprojectPoint, viewportFor, TOOLS as REDUCER_TOOLS } from "./chart/drawings/drawingReducer";
 import { barAt, sweepExtrema, visibleSnapshot } from "./chart/replay/replayReducer";
@@ -132,6 +133,7 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
   // stable tabs (Indicators / Data / Review), explicit close, authoritative
   // selection stays with this pane. Open by default on desktop entry so the
   // studies/catalog discovery is never buried under Tools→another disclosure.
+  const [chartOverlays, setChartOverlays] = useState({ vwap: true, bands: false, profile: true, cvd: true });
   const [dockOpen, setDockOpen] = useState(true);
   const [dockTab, setDockTab] = useState("indicators");
   const openDock = tab => { setDockTab(tab); setDockOpen(true); };
@@ -229,13 +231,14 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
     try { saveStudyInstances(ticker, next); setStudyInstances(next); setStudyRefusal(null); }
     catch (error) { setStudyRefusal(error?.message === "study quota exceeded" ? "Study limit reached — remove one first." : "Study settings refused — check period and multiple."); }
   };
-  const addStudy = kind => {
+  const addStudy = (kind, settingsOverride) => {
     // pane source-eligibility first — a pane without the required source
     // refuses creation with the typed reason (contract v2), never a zero render
     const eligible = paneEligibility(kind, frames);
     if (!eligible.ok) { setStudyRefusal(eligible.reason); return; }
-    const settings = kind === "bollinger" ? { period: Number(studyAddPeriod), multiple: Number(studyAddMultiple) }
-      : kind === "vwap" ? { source: "hlc3", bandBasis: "std", multipliers: [1, 2, 3], bands: false }
+    const settings = settingsOverride ? { ...settingsOverride }
+      : kind === "bollinger" ? { period: Number(studyAddPeriod), multiple: Number(studyAddMultiple) }
+      : kind === "vwap" ? { source: "hlc3", bandBasis: "std", multipliers: [1, 2, 3], bands: false, anchor: "session" }
       : kind === "volume" ? {}
       : kind === "exposure-vwap" ? null
       : { period: Number(studyAddPeriod) };
@@ -255,8 +258,17 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
     commitStudies(studyInstances.map(s => (s.instanceId === id ? { ...s, settings } : s)));
   };
   const removeStudy = id => commitStudies(studyInstances.filter(s => s.instanceId !== id));
+  const toggleStudyVisible = id => commitStudies(studyInstances.map(s => s.instanceId === id ? { ...s, visible: s.visible === false } : s));
+  const togglePane = paneKey => {
+    if (paneKey === "volume-pane") {
+      const vol = studyInstances.find(s => s && s.kind === "volume");
+      if (vol) removeStudy(vol.instanceId); else addStudy("volume");
+      return;
+    }
+    setChartOverlays(o => ({ ...o, [paneKey]: !o[paneKey] }));
+  };
   const STUDY_COLORS = ["#e8bd65", "#5ec986", "#72d7df", "#c4a1ef", "#e06c75", "#8fd3e8"];
-  const studyLineSpecs = useMemo(() => studyInstances.flatMap((inst, i) => studySpecs(inst, frames).map(spec => ({ ...spec, color: STUDY_COLORS[i % STUDY_COLORS.length] }))), [studyInstances, frames]);
+  const studyLineSpecs = useMemo(() => studyInstances.filter(inst => inst.visible !== false).flatMap((inst, i) => studySpecs(inst, frames).map(spec => ({ ...spec, color: STUDY_COLORS[i % STUDY_COLORS.length] }))), [studyInstances, frames]);
   // B09 mapped levels (b09_mapped_levels_contract v2): cross-instrument
   // source->target mapping through the contract route — the backend is the ONE
   // ratio authority; this caller never computes a ratio and never substitutes
@@ -576,26 +588,21 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
   // Visual-reset: the studies catalog and mapped-levels panels now live in
   // the right workspace Indicators tab — same testids, no discovery dead end.
   const studiesPanelContent = <>    <details className="price-studies-panel" data-testid="studies-panel">
-      <summary data-testid="studies-panel-summary" role="button" aria-label="Studies">Studies{studyInstances.length ? ` · ${studyInstances.length}` : ""}</summary>
+      <summary data-testid="studies-panel-summary" role="button" aria-label="Indicators">Indicators{studyInstances.length ? ` · ${studyInstances.length}` : ""}</summary>
       <div className="price-studies-content">
-        <p className="price-studies-hint">Chart studies computed from this pane's own candles. Missing data leaves a gap — never filled.</p>
-        {studyInstances.map(inst => <div key={inst.instanceId} className="price-study-instance" data-testid={"study-instance-"+inst.instanceId}>
-          <span className="price-study-name">{inst.kind === "bollinger" ? `Bollinger ${inst.settings.period} · ${inst.settings.multiple}σ` : inst.kind === "vwap" ? `VWAP ${inst.settings.source}` : inst.kind === "volume" ? "Volume · measured" : `${inst.kind.toUpperCase()} ${inst.settings.period}`}</span>
-          {(inst.kind === "sma" || inst.kind === "ema" || inst.kind === "bollinger") && <label>Period<input aria-label={"Study period "+inst.instanceId} type="number" min="1" value={inst.settings.period} onChange={e=>updateStudy(inst.instanceId,{period:Number(e.target.value)})} /></label>}
-          {inst.kind==="bollinger"&&<label>σ<input aria-label={"Study multiple "+inst.instanceId} type="number" min="0.5" step="0.5" value={inst.settings.multiple} onChange={e=>updateStudy(inst.instanceId,{multiple:Number(e.target.value)})} /></label>}
-          <button type="button" aria-label={"Remove study "+inst.instanceId} onClick={()=>removeStudy(inst.instanceId)}>Remove</button>
-        </div>)}
-        {studyRefusal&&<p role="alert" data-testid="studies-refusal">{studyRefusal}</p>}
-        <div className="price-study-add">
-          <label>Period<input data-testid="study-add-period" aria-label="New study period" type="number" min="1" value={studyAddPeriod} onChange={e=>setStudyAddPeriod(e.target.value)} /></label>
-          <label>σ (Bollinger)<input data-testid="study-add-multiple" aria-label="New Bollinger multiple" type="number" min="0.5" step="0.5" value={studyAddMultiple} onChange={e=>setStudyAddMultiple(e.target.value)} /></label>
-          <button type="button" data-testid="study-add-sma" onClick={()=>addStudy("sma")}>Add SMA</button>
-          <button type="button" data-testid="study-add-ema" onClick={()=>addStudy("ema")}>Add EMA</button>
-          <button type="button" data-testid="study-add-bollinger" onClick={()=>addStudy("bollinger")}>Add Bollinger</button>
-          <button type="button" data-testid="study-add-vwap" onClick={()=>addStudy("vwap")}>Add VWAP</button>
-          <button type="button" data-testid="study-add-volume" onClick={()=>addStudy("volume")}>Add Volume</button>
-          <button type="button" data-testid="study-add-exposure-vwap" title="Needs an eligible board source — currently not creatable on the price pane" onClick={()=>addStudy("exposure-vwap")}>Exposure VWAP</button>
-        </div>
+        <IndicatorsPanel
+          instances={studyInstances}
+          frames={frames}
+          builtinVwapOn={chartOverlays.vwap}
+          paneState={{"volume-pane": studyInstances.some(s => s && s.kind === "volume"), cvd: chartOverlays.cvd, profile: chartOverlays.profile}}
+          availability={{cvd: Array.isArray(cvdLine ?? payload?.cvd_line) && (cvdLine ?? payload?.cvd_line).some(p => typeof p?.cvd === "number" && Number.isFinite(p.cvd)), profile: frames.some(f => Number.isFinite(f?.volume))}}
+          onCreate={addStudy}
+          onUpdateSettings={(id, settings) => updateStudy(id, settings)}
+          onRemove={removeStudy}
+          onToggleVisible={toggleStudyVisible}
+          onTogglePane={togglePane}
+        />
+        {studyRefusal && <p role="alert" data-testid="studies-refusal">{studyRefusal}</p>}
       </div>
     </details>
     <details className="price-mapped-levels" data-testid="mapped-levels-panel">
@@ -700,7 +707,7 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
     {!primary&&<button type="button" className="skylit-trade-mode-btn" aria-expanded={open} onClick={()=>{setOpen(!open);setPlaying(false);}}>Price chart + historical nodes</button>}
     {open&&<div className="stock-pane-row" data-testid="stock-pane-row">
     <div className="stock-pane-main">
-    {open&&<RecordedPriceChart renderDrawingLayer={renderDrawingLayer} ticker={ticker} frames={frames.slice(0,position+1)} fitAllFrames={fitMode==="fit-all"?frames:null} revision={ticker+":"+days+":"+minutes+":"+payload?.query_key+":"+reload} onInteract={pauseInteraction} metricCoverage={payload?.metric_line_coverage} toolbarControls={controls} toolbarActions={null} historyPeriodControls={historyPeriodControls} historyControls={null} replayControls={replayControls} dataDetails={details} readingStatus={readingStatus} emptyContent={empty} showAtlas={showAtlas} exposureLine={exposureLine??payload?.exposure_line??null} darkLevels={darkLevels} alertLines={alertLines??null} cvdLine={cvdLine??payload?.cvd_line??null} contractBars={payload?.contract_bars??null} contractSymbol={payload?.contract_symbol??(contract||null)} contractStatus={payload?.contract_status??null} flowBars={Array.isArray(flowBars)&&flowBars.length===frames.length?flowBars.slice(0,position+1):flowBars} syncSeq={sync?.seq||0} syncView={sync?.time||null} syncPrice={sync?.price||null} syncCrosshair={sync?.crosshair!=null?sync.crosshair:null} onSync={onSyncEvent} studyLines={studyLineSpecs} mappedShapes={mapped?.status === 'available' ? mapped.shapes : null} volumeInstanceActive={studyInstances.some(i=>i&&i.kind==="volume")}/>}
+    {open&&<RecordedPriceChart renderDrawingLayer={renderDrawingLayer} ticker={ticker} frames={frames.slice(0,position+1)} fitAllFrames={fitMode==="fit-all"?frames:null} revision={ticker+":"+days+":"+minutes+":"+payload?.query_key+":"+reload} onInteract={pauseInteraction} metricCoverage={payload?.metric_line_coverage} toolbarControls={controls} toolbarActions={null} historyPeriodControls={historyPeriodControls} historyControls={null} replayControls={replayControls} dataDetails={details} readingStatus={readingStatus} emptyContent={empty} showAtlas={showAtlas} exposureLine={exposureLine??payload?.exposure_line??null} darkLevels={darkLevels} alertLines={alertLines??null} cvdLine={cvdLine??payload?.cvd_line??null} contractBars={payload?.contract_bars??null} contractSymbol={payload?.contract_symbol??(contract||null)} contractStatus={payload?.contract_status??null} flowBars={Array.isArray(flowBars)&&flowBars.length===frames.length?flowBars.slice(0,position+1):flowBars} syncSeq={sync?.seq||0} syncView={sync?.time||null} syncPrice={sync?.price||null} syncCrosshair={sync?.crosshair!=null?sync.crosshair:null} onSync={onSyncEvent} studyLines={studyLineSpecs} mappedShapes={mapped?.status === 'available' ? mapped.shapes : null} volumeInstanceActive={studyInstances.some(i=>i&&i.kind==="volume")} overlays={chartOverlays} onOverlaysChange={setChartOverlays}/>}
     {open&&forcedScope!=null&&!followMap&&<p role="note">Saved-view review — these recorded expiry dates are not the current map scope.</p>}
     {/* B10 (C044): interval future whitespace + typed scenario zone. The
         slots are EMPTY CANVAS markers — no forecasts; the zone is recorded
