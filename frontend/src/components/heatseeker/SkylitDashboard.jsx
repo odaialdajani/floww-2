@@ -838,7 +838,11 @@ function SkylitDashboard({
   </>;
   return (
     <div className="skylit-full-dashboard" data-expanded={expanded} data-study={rangeOpen ? "range" : priceHistoryOpen ? "price" : "options"}>
-      {(rangeOpen || !showPriceHistory) && <div className="skylit-study-toolbar" role="toolbar" aria-label="Stock study">{studyActions}</div>}
+      {/* Visual-reset-20261025: the dashboard's own action band renders in
+          EVERY view — the chart row no longer re-hosts studyActions, so the
+          Wall→Contract→AskFlow→Public workflow and pane navigation stay one
+          glance away instead of buried in a dock tab or a chart popover. */}
+      <div className="skylit-study-toolbar" role="toolbar" aria-label="Stock study">{studyActions}</div>
       {rangeOpen && (
         <section className="skylit-range-card" data-testid="analytical-range-card" aria-label="Analytical range research workspace">
           <header className="skylit-range-card-header">

@@ -100,6 +100,7 @@ test("the study/chart toolbar carries a reachable Analytical range toggle at des
   const { container } = render(<App />);
   await act(drain);
   expect(container.firstChild).toBeTruthy();
+  fireEvent.click(screen.getByTestId("stock-inspector-tab-review"));
   const toggle = screen.getByTestId("analytical-range-toggle");
   expect(toggle).toHaveAttribute("aria-pressed", "false");
   expect(screen.queryByTestId("analytical-range-card")).not.toBeInTheDocument();

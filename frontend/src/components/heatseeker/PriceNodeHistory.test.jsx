@@ -44,11 +44,12 @@ test("a ticker change clears the old chart before new data arrives", async () =>
 test("saved node views show their recorded expiry dates instead of anonymous numbers",async()=>{
  const old="SPY:day:None:False|expiries=2026-09-28,2026-09-29|gex.v2|OI";const recent="SPY:4:day:None:False:True:80|expiries=2026-10-07,2026-10-08|gex.v2|OI";
  axios.get.mockResolvedValue({data:{ticker:"SPY",frames,candles_with_recorded_nodes:1,scopes:[old,recent],query_key:old}});render(<PriceNodeHistory ticker="SPY" open/>);
+ fireEvent.click(screen.getByTestId('stock-inspector-tab-data'));
  await waitFor(()=>expect(screen.getByTestId("recorded-price-chart")).toHaveAttribute("data-candles","3"));fireEvent.click(screen.getByRole("button",{name:"Chart tools"}));const picker=await screen.findByRole("combobox",{name:"Saved node view"});expect(picker).toHaveTextContent("2026-09-28");expect(picker).toHaveTextContent("2026-10-07");expect(picker).not.toHaveTextContent("Saved view 1");
 });
 
 test("an old malformed expiry date does not crash stored-view selection",async()=>{
- const bad="SPY:day:None:False|expiries=2026-99-99|gex.v2|OI",good="SPY:day:None:False|expiries=2026-10-07|gex.v2|OI";axios.get.mockResolvedValue({data:{ticker:"SPY",frames,candles_with_recorded_nodes:0,scopes:[bad,good],query_key:good}});render(<PriceNodeHistory ticker="SPY" open/>);await waitFor(()=>expect(screen.getByTestId("recorded-price-chart")).toHaveAttribute("data-candles","3"));fireEvent.click(screen.getByRole("button",{name:"Chart tools"}));const picker=await screen.findByRole("combobox",{name:"Saved node view"});expect(picker).toHaveTextContent("expiry dates unavailable");expect(picker).toHaveTextContent("2026-10-07");
+ const bad="SPY:day:None:False|expiries=2026-99-99|gex.v2|OI",good="SPY:day:None:False|expiries=2026-10-07|gex.v2|OI";axios.get.mockResolvedValue({data:{ticker:"SPY",frames,candles_with_recorded_nodes:0,scopes:[bad,good],query_key:good}});render(<PriceNodeHistory ticker="SPY" open/>);fireEvent.click(screen.getByTestId('stock-inspector-tab-data'));await waitFor(()=>expect(screen.getByTestId("recorded-price-chart")).toHaveAttribute("data-candles","3"));fireEvent.click(screen.getByRole("button",{name:"Chart tools"}));const picker=await screen.findByRole("combobox",{name:"Saved node view"});expect(picker).toHaveTextContent("expiry dates unavailable");expect(picker).toHaveTextContent("2026-10-07");
 });
 
 

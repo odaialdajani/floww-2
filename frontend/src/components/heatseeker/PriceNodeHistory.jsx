@@ -6,6 +6,7 @@ import DrawingRail from "./chart/drawings/DrawingRail";
 import { loadPresets, savePresets, PRESET_STORAGE_VERSION } from "./chart/drawings/presetPersistence";
 import { defaultPresetFor, createPreset, updatePresetStyle, deletePreset, resetPresetStyleToBuiltIn, toggleStar, setActivePreset, applyPresetToDrawing } from "./chart/drawings/presetManager";
 import { buildPresetRenderSpec } from "./chart/drawings/presetRendering";
+import StockInspector from "./chart/StockInspector";
 import { loadDrawings, saveDrawings } from "./chart/drawings/drawingPersistence";
 import { reduceDrawings, createDrawing, geometryFor, magnetPoint, nudgeDrawing, canEdit, suppressesPan, unprojectPoint, viewportFor, TOOLS as REDUCER_TOOLS } from "./chart/drawings/drawingReducer";
 import { barAt, sweepExtrema, visibleSnapshot } from "./chart/replay/replayReducer";
@@ -127,6 +128,13 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
     if (!result || result.ok === false) { setPresetError(result && result.error ? result.error : 'preset operation refused'); return false; }
     return commitPresets(result.list);
   };
+  // Visual-reset-20261025: the contextual right workspace — one dock, three
+  // stable tabs (Indicators / Data / Review), explicit close, authoritative
+  // selection stays with this pane. Open by default on desktop entry so the
+  // studies/catalog discovery is never buried under Tools→another disclosure.
+  const [dockOpen, setDockOpen] = useState(true);
+  const [dockTab, setDockTab] = useState("indicators");
+  const openDock = tab => { setDockTab(tab); setDockOpen(true); };
   const recordNodes = useCallback(async () => {
     if (!onRecordNodes || recording) return;
     setRecording(true); setRecordNote("Recording nodes… (uses market reads)");
@@ -544,7 +552,12 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
   const historySessionLabel = sessions === "all" ? "all sessions" : "regular hours";
   const controls = <><strong className="price-chart-symbol">{ticker}</strong>
     <select aria-label="Candle interval" title="Candle interval" value={minutes} onChange={e=>{setMinutes(Number(e.target.value));onSyncEvent?.({interval:Number(e.target.value)});}}><option value={1}>1 min</option><option value={5}>5 min</option><option value={15}>15 min</option><option value={30}>30 min</option><option value={60}>1 hour</option></select>
-    <span className="price-history-summary" data-testid="price-history-summary" title="Selected history period and session coverage">{historyDayLabel} · {historySessionLabel}</span></>;
+    <span className="price-history-summary" data-testid="price-history-summary" title="Selected history period and session coverage">{historyDayLabel} · {historySessionLabel}</span>
+    <span className="stock-dock-actions" data-testid="stock-dock-actions">
+      <button type="button" className="stock-dock-btn" aria-pressed={dockOpen&&dockTab==="indicators"} data-testid="stock-dock-open-indicators" title="Indicators: studies and measured-pane controls" onClick={()=>dockOpen&&dockTab==="indicators"?setDockOpen(false):openDock("indicators")}>Indicators{studyInstances.length?` · ${studyInstances.length}`:""}</button>
+      <button type="button" className="stock-dock-btn" aria-pressed={dockOpen&&dockTab==="data"} data-testid="stock-dock-open-data" title="Data: saved views, reload, node recording, option contract" onClick={()=>dockOpen&&dockTab==="data"?setDockOpen(false):openDock("data")}>Data</button>
+      <button type="button" className="stock-dock-btn" aria-pressed={dockOpen&&dockTab==="review"} data-testid="stock-dock-open-review" title="Review: the Wall→Contract→AskFlow→Public brief workflow" onClick={()=>dockOpen&&dockTab==="review"?setDockOpen(false):openDock("review")}>Review</button>
+    </span></>;
   const historyPeriodControls = <>
     <label className="price-history-view">History period<select aria-label="History sessions" title="History period" value={days} onChange={e=>setDays(Number(e.target.value))}><option value={1}>1 session</option><option value={5}>1 week</option><option value={20}>1 month</option><option value={60}>3 months</option><option value={260}>1 year</option><option value={2600}>5 years</option></select></label>
     <label className="price-history-view">Session coverage<select aria-label="Session coverage" title="Which trading sessions to load" value={sessions} onChange={e=>{setSessions(e.target.value);onSyncEvent?.({session:e.target.value});}}><option value="regular">Regular hours</option><option value="all">All sessions</option></select></label>
@@ -559,7 +572,10 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
     <label className="price-history-contract">Option contract<input aria-label="Option contract symbol" placeholder="OSI, e.g. SPY261017C00650000" value={contractInput} onChange={e=>setContractInput(e.target.value)} /></label>
     <button type="button" disabled={!contractInput.trim()} onClick={()=>setContract(contractInput.trim().toUpperCase())}>Load contract</button>
     {contract&&<button type="button" onClick={()=>{setContract("");setContractInput("");}}>Clear contract</button>}
-    <details className="price-studies-panel" data-testid="studies-panel">
+  </>;
+  // Visual-reset: the studies catalog and mapped-levels panels now live in
+  // the right workspace Indicators tab — same testids, no discovery dead end.
+  const studiesPanelContent = <>    <details className="price-studies-panel" data-testid="studies-panel">
       <summary data-testid="studies-panel-summary" role="button" aria-label="Studies">Studies{studyInstances.length ? ` · ${studyInstances.length}` : ""}</summary>
       <div className="price-studies-content">
         <p className="price-studies-hint">Chart studies computed from this pane's own candles. Missing data leaves a gap — never filled.</p>
@@ -602,7 +618,7 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
         </> : <p data-testid="mapped-levels-status">No validated mapped-level family for {ticker.toUpperCase()} — futures and other pairs stay refused until a validated mapping exists.</p>}
       </div>
     </details>
-  </>;
+</>;
   // Replay affordances stay visible while Chart tools is closed: pause state
   // and candle time must remain readable during an active replay.
   const replayControls = !!frames.length&&<div className="price-history-replay"><button type="button" onClick={()=>{if(!playing&&position>=frames.length-1)setPosition(0);setPlaying(value=>!value);}}>{playing?"Pause replay":"Play replay"}</button><input aria-label="Replay position" type="range" min={0} max={frames.length-1} value={position} onChange={e=>{setPosition(Number(e.target.value));setPlaying(false);}}/><span>{chartTime(frames[position]?.time,true)} New York</span><button type="button" onClick={()=>{setPosition(frames.length-1);setPlaying(false);}}>Latest candle</button></div>;
@@ -682,7 +698,9 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
   };
   return <section className="panel price-node-history" data-open={open} data-read-badge={readBadge} style={{margin:"12px 0",padding:12}} data-testid="price-node-history">
     {!primary&&<button type="button" className="skylit-trade-mode-btn" aria-expanded={open} onClick={()=>{setOpen(!open);setPlaying(false);}}>Price chart + historical nodes</button>}
-    {open&&<RecordedPriceChart renderDrawingLayer={renderDrawingLayer} ticker={ticker} frames={frames.slice(0,position+1)} fitAllFrames={fitMode==="fit-all"?frames:null} revision={ticker+":"+days+":"+minutes+":"+payload?.query_key+":"+reload} onInteract={pauseInteraction} metricCoverage={payload?.metric_line_coverage} toolbarControls={controls} toolbarActions={toolbarActions} historyPeriodControls={historyPeriodControls} historyControls={historyControls} replayControls={replayControls} dataDetails={details} readingStatus={readingStatus} emptyContent={empty} showAtlas={showAtlas} exposureLine={exposureLine??payload?.exposure_line??null} darkLevels={darkLevels} alertLines={alertLines??null} cvdLine={cvdLine??payload?.cvd_line??null} contractBars={payload?.contract_bars??null} contractSymbol={payload?.contract_symbol??(contract||null)} contractStatus={payload?.contract_status??null} flowBars={Array.isArray(flowBars)&&flowBars.length===frames.length?flowBars.slice(0,position+1):flowBars} syncSeq={sync?.seq||0} syncView={sync?.time||null} syncPrice={sync?.price||null} syncCrosshair={sync?.crosshair!=null?sync.crosshair:null} onSync={onSyncEvent} studyLines={studyLineSpecs} mappedShapes={mapped?.status === 'available' ? mapped.shapes : null}/>}
+    {open&&<div className="stock-pane-row" data-testid="stock-pane-row">
+    <div className="stock-pane-main">
+    {open&&<RecordedPriceChart renderDrawingLayer={renderDrawingLayer} ticker={ticker} frames={frames.slice(0,position+1)} fitAllFrames={fitMode==="fit-all"?frames:null} revision={ticker+":"+days+":"+minutes+":"+payload?.query_key+":"+reload} onInteract={pauseInteraction} metricCoverage={payload?.metric_line_coverage} toolbarControls={controls} toolbarActions={null} historyPeriodControls={historyPeriodControls} historyControls={null} replayControls={replayControls} dataDetails={details} readingStatus={readingStatus} emptyContent={empty} showAtlas={showAtlas} exposureLine={exposureLine??payload?.exposure_line??null} darkLevels={darkLevels} alertLines={alertLines??null} cvdLine={cvdLine??payload?.cvd_line??null} contractBars={payload?.contract_bars??null} contractSymbol={payload?.contract_symbol??(contract||null)} contractStatus={payload?.contract_status??null} flowBars={Array.isArray(flowBars)&&flowBars.length===frames.length?flowBars.slice(0,position+1):flowBars} syncSeq={sync?.seq||0} syncView={sync?.time||null} syncPrice={sync?.price||null} syncCrosshair={sync?.crosshair!=null?sync.crosshair:null} onSync={onSyncEvent} studyLines={studyLineSpecs} mappedShapes={mapped?.status === 'available' ? mapped.shapes : null} volumeInstanceActive={studyInstances.some(i=>i&&i.kind==="volume")}/>}
     {open&&forcedScope!=null&&!followMap&&<p role="note">Saved-view review — these recorded expiry dates are not the current map scope.</p>}
     {/* B10 (C044): interval future whitespace + typed scenario zone. The
         slots are EMPTY CANVAS markers — no forecasts; the zone is recorded
@@ -743,5 +761,26 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
           return <li key={row.strike} data-testid="velocity-row">strike {row.strike}: {rate} ({growth})</li>;})}</ul>
       </div>)}
 
+    </div>
+    <StockInspector open={dockOpen} activeTab={dockTab} onTabChange={setDockTab} onClose={()=>setDockOpen(false)}
+      counts={{indicators:studyInstances.length||null,data:null,review:null}}
+      indicators={studiesPanelContent}
+      data={historyControls}
+      review={<div className="stock-review-tab" data-testid="stock-review-context">
+        <strong className="stock-review-head">Current selection</strong>
+        {(() => { const sel = drawings.find(d => d && d.id === selectedDrawing);
+          if (!sel) return <p className="stock-review-empty">No drawing selected — pick one in the Drawings list below the chart.</p>;
+          const linked = presetList.find(p => p && p.id === sel.presetId);
+          return <p className="stock-review-selection" data-testid="stock-review-selection">
+            {sel.tool} drawing{sel.style?.color ? ` · ${sel.style.color}` : ""}{sel.style?.width ? ` · w${sel.style.width}` : ""}{sel.locked ? " · locked" : ""}{sel.visible === false ? " · hidden" : ""}
+            {linked ? ` · preset ${linked.name}${linked.kind === "built-in" ? " (built-in)" : linked.starred ? " · starred" : linked.active ? " · active" : ""}` : " · unlinked"}
+          </p>; })()}
+        {(() => { const inst = studyInstances[0];
+          return <p className="stock-review-note" data-testid="stock-review-study">{studyInstances.length
+            ? `${studyInstances.length} active stud${studyInstances.length === 1 ? "y" : "ies"} — first: ${inst.kind}${inst.settings?.period ? " " + inst.settings.period : ""}`
+            : "No active studies — add one in the Indicators tab."}</p>; })()}
+        <p className="stock-review-families" data-testid="stock-review-families">Analytics families — levels, patterns, income, history, moves, structure, exposure, briefing — live on the options desk; the Wall→Contract→AskFlow→Public brief workflow stays in the action band above the chart.</p>
+      </div>} />
+    </div>}
   </section>;
 }

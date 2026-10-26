@@ -85,7 +85,8 @@ test('B11 mounted: the pane manager renders real panes, real layouts and real fo
   await act(async () => { screen.getByTestId('layout-three').click(); });
   expect(screen.getAllByTestId('price-node-history')).toHaveLength(3);
   expect(screen.getByTestId('pane-layout')).toHaveAttribute('data-layout', 'three');
-  // Each real pane keeps its own controls — three charts, three Reload buttons.
+  // Each real pane keeps its own controls — three charts, three Data tabs, three Reload buttons.
+  await act(async () => { document.querySelectorAll("[data-testid='stock-inspector-tab-data']").forEach(b => b.click()); });
   expect(screen.getAllByRole('button', { name: 'Reload history' })).toHaveLength(3);
   expect(screen.getByTestId('pane-count').textContent).toContain('3 panes');
   // Focus moves between real panes.

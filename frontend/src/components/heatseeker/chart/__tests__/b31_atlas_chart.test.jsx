@@ -154,6 +154,7 @@ test('record button calls parent recorder then reloads only on landed success', 
   const view = render(<PriceNodeHistory ticker="SPY" open onRecordNodes={onRecordNodes} />);
   await waitFor(() => expect(screen.getByTestId('recorded-price-chart')).toHaveAttribute('data-candles', '2'));
   const callsBefore = axios.get.mock.calls.length;
+  fireEvent.click(screen.getByTestId('stock-inspector-tab-data'));
   fireEvent.click(screen.getByRole('button', { name: 'Record nodes' }));
   await waitFor(() => expect(onRecordNodes).toHaveBeenCalledTimes(1));
   await waitFor(() => expect(axios.get.mock.calls.length).toBeGreaterThan(callsBefore));
@@ -164,6 +165,7 @@ test('record failure shows explicit note and never claims nodes', async () => {
   axios.get.mockResolvedValue({ data: { ticker: 'SPY', frames, candles_with_recorded_nodes: 0 } });
   render(<PriceNodeHistory ticker="SPY" open onRecordNodes={jest.fn().mockResolvedValue({ recorded: false })} />);
   await waitFor(() => expect(screen.getByTestId('recorded-price-chart')).toBeInTheDocument());
+  fireEvent.click(screen.getByTestId('stock-inspector-tab-data'));
   fireEvent.click(screen.getByRole('button', { name: 'Record nodes' }));
   await waitFor(() => expect(screen.getByText(/recording did not land/i)).toBeInTheDocument());
 });

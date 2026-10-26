@@ -4872,3 +4872,39 @@ input[class*="bg-slate-800"], select[class*="bg-slate-800"], textarea[class*="bg
 @media(min-width:900px) {
  .heatseeker-layout:has(.skylit-full-dashboard[data-study="price"]) .heatseeker-sidebar-left { width:220px; min-width:220px; max-width:220px; flex:0 0 220px; }
 }
+
+/* ── Visual-reset-20261025: Stock contextual right workspace ────────────
+   One dock beside the chart; the chart keeps the dominant width. Below
+   ~1180px the dock becomes a controlled overlay so narrow desktop never
+   starves the candles. */
+.stock-pane-row { display: flex; flex-direction: row; gap: 10px; align-items: stretch; min-width: 0; }
+.stock-pane-main { flex: 1 1 auto; min-width: 0; }
+.stock-inspector { flex: 0 0 300px; max-width: 300px; display: flex; flex-direction: column;
+  border: 1px solid #2c3440; border-radius: 8px; background: #151a21; padding: 10px 12px;
+  max-height: 780px; overflow: hidden; }
+.stock-inspector-head { display: flex; flex-direction: column; gap: 6px; border-bottom: 1px solid #2c3440; padding-bottom: 8px; }
+.stock-inspector-title { font-size: 13px; color: #dce8f2; letter-spacing: 0.02em; }
+.stock-inspector-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+.stock-inspector-tab { background: transparent; border: 1px solid #2c3440; border-radius: 6px; color: #9fb0c0;
+  padding: 4px 10px; font-size: 12px; cursor: pointer; }
+.stock-inspector-tab.is-active { color: #e3c16a; border-color: #6b5a2a; background: #1d2330; }
+.stock-inspector-close { margin-left: auto; align-self: flex-end; background: none; border: none; color: #9fb0c0;
+  font-size: 16px; line-height: 1; cursor: pointer; padding: 2px 6px; border-radius: 4px; }
+.stock-inspector-close:hover { color: #e3c16a; background: #1d2330; }
+.stock-inspector-body { overflow: auto; padding-top: 8px; font-size: 13px; color: #c9d6e2; flex: 1 1 auto; }
+.stock-inspector-body label { font-size: 12px; color: #9fb0c0; }
+.stock-inspector-closed { color: #7d8ea0; font-size: 12px; padding: 8px 0; }
+.stock-inspector-empty { color: #7d8ea0; font-size: 12px; }
+.stock-review-tab { display: flex; flex-direction: column; gap: 8px; }
+.stock-review-families { color: #7d8ea0; font-size: 12px; border-top: 1px solid #2c3440; padding-top: 8px; }
+.stock-dock-actions { display: inline-flex; gap: 6px; margin-left: auto; }
+.stock-dock-btn { background: #1d2330; border: 1px solid #2c3440; border-radius: 6px; color: #c9d6e2;
+  font-size: 12px; padding: 3px 10px; cursor: pointer; }
+.stock-dock-btn[aria-pressed="true"] { color: #e3c16a; border-color: #6b5a2a; }
+@media (max-width: 1180px) {
+  .stock-pane-row { flex-direction: column; }
+  .stock-inspector { flex: 1 1 auto; max-width: none; }
+  .stock-inspector[data-open="false"] { display: none; }
+  .stock-inspector[data-open="true"] { position: fixed; right: 14px; top: 76px; width: 320px; max-width: 320px;
+    z-index: 220; box-shadow: 0 12px 32px rgba(0,0,0,0.5); max-height: 70vh; }
+}

@@ -33,6 +33,7 @@ test('an explicit saved-view choice is reachable even while the map owns the def
   render(<PriceNodeHistory ticker="SPY" open forcedScope="request"/>);
   await waitFor(()=>expect(screen.getByTestId('recorded-price-chart')).toHaveAttribute('data-candles','1'));
   fireEvent.click(screen.getByRole('button',{name:'Chart tools'}));
+  fireEvent.click(screen.getByTestId('stock-inspector-tab-data'));
   fireEvent.click(screen.getByRole('checkbox',{name:'Follow map scope'}));
   const picker=await screen.findByRole('combobox',{name:'Saved node view'});
   fireEvent.change(picker,{target:{value:older}});
@@ -44,6 +45,7 @@ test('a ticker switch never sends the previous ticker saved scope',async()=>{
   const {rerender}=render(<PriceNodeHistory ticker="SPY" open forcedScope="request"/>);
   await waitFor(()=>expect(screen.getByTestId('recorded-price-chart')).toHaveAttribute('data-candles','1'));
   fireEvent.click(screen.getByRole('button',{name:'Chart tools'}));
+  fireEvent.click(screen.getByTestId('stock-inspector-tab-data'));
   fireEvent.click(screen.getByRole('checkbox',{name:'Follow map scope'}));
   fireEvent.change(await screen.findByRole('combobox',{name:'Saved node view'}),{target:{value:older}});
   await waitFor(()=>expect(requests().at(-1)[1].params.query_key).toBe(older));
