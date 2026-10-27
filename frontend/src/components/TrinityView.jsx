@@ -661,22 +661,35 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
       <div className="triad-workspace-tabs" data-testid="triad-workspace-tabs" role="tablist" aria-label="Market workspace">
         {[["walls", "Walls"], ["landmarks", "Landmarks"], ["replay", "Replay"], ["profile", "Profile"], ["review", "Review"]].map(([id, label]) => (
           <button key={id} type="button" role="tab" data-testid={`triad-tab-${id}`}
+            id={`triad-ws-${id}-tab`} aria-controls={`triad-ws-${id}-panel`}
             aria-selected={workspaceTab === id}
             onClick={() => setWorkspaceTab((cur) => (cur === id ? null : id))}>{label}</button>
         ))}
       </div>
       {workspaceTab === "walls" && (
-        <WallBar walls={walls} wallId={selectedWall?.wall_id || null} onSelect={selectWall} />
+        <div role="tabpanel" id="triad-ws-walls-panel" aria-labelledby="triad-ws-walls-tab">
+          <WallBar walls={walls} wallId={selectedWall?.wall_id || null} onSelect={selectWall} />
+        </div>
       )}
-      {workspaceTab === "landmarks" && <HeatmapLandmarks data={payload} />}
+      {workspaceTab === "landmarks" && (
+        <div role="tabpanel" id="triad-ws-landmarks-panel" aria-labelledby="triad-ws-landmarks-tab">
+          <HeatmapLandmarks data={payload} />
+        </div>
+      )}
       {/* UI-M03 (M1 2026-10-24): stored-session replay is supporting context,
           so the strip follows the maps. Every control is preserved. */}
-      {workspaceTab === "replay" && replayControls}
+      {workspaceTab === "replay" && (
+        <div role="tabpanel" id="triad-ws-replay-panel" aria-labelledby="triad-ws-replay-tab">
+          {replayControls}
+        </div>
+      )}
       {workspaceTab === "profile" && (
+        <div role="tabpanel" id="triad-ws-profile-panel" aria-labelledby="triad-ws-profile-tab">
         <details className="triad-profile-disclosure" data-testid="triad-profile-disclosure">
           <summary>Signed exposure profile · raw and adjusted</summary>
         <StrikeExposureProfile data={payload} basis={basis} wall={selectedWall} onSelect={onGridCell} />
         </details>
+        </div>
       )}
 
       {spxMissing && (
@@ -684,7 +697,11 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
           SPX unavailable in this session (entitlement/coverage unknown). No substitution made.
         </div>
       )}
-      {workspaceTab === "review" && <ReviewSection journal={journal} ticker={ticker} snapshotId={payload?.snapshotId} />}
+      {workspaceTab === "review" && (
+        <div role="tabpanel" id="triad-ws-review-panel" aria-labelledby="triad-ws-review-tab">
+          <ReviewSection journal={journal} ticker={ticker} snapshotId={payload?.snapshotId} />
+        </div>
+      )}
       </div>
       </main>
       <MarketInspectorDock

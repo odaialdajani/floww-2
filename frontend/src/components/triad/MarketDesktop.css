@@ -89,7 +89,6 @@
 .trinity-desktop .triad-walls .triad-wall-chip {
   min-height: 26px; font-size: 12.5px; padding: 2px 10px;
 }
-.tdk-secondary { display: flex; flex-direction: column; gap: 6px; }
 
 /* Scope admission + empty desk keep their honest blocks, calmly styled. */
 .trinity-desktop .triad-scope-notice { margin: 0; }
