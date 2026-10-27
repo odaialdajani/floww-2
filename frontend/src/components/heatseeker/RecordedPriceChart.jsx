@@ -405,8 +405,10 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
             {refused&&<text x={left} y={Math.round(h/2)} fill="#d65656" fontSize="10" data-testid="momentum-refused-note">series refused — a non-finite close is in the loaded window; nothing drawn</text>}
           </svg>
           <div className="recorded-momentum-label" data-testid={'momentum-label-'+name}>
-            <strong>{name.toUpperCase()}</strong>
-            <span>{specs.map(sp=>sp.label).filter((v,i,a)=>a.indexOf(v)===i).join(' · ')}</span>
+            <strong>{name.toUpperCase()}{' '}</strong>
+            {/* the span carries the instance parameters ONLY — the name lives in
+                the strong; the flex gaps separate them (root's glue finding) */}
+            <span>{specs.map(sp=>String(sp.label||'').replace(new RegExp('^'+name.toUpperCase()+'\\s*','i'),'')).filter((v,i,a)=>v&&a.indexOf(v)===i).join(' · ')}{' '}</span>
             {!refused&&<small>{name==='rsi'?'0–100 fixed scale':name==='macd'?'price delta · zero-anchored':'own price scale'}</small>}
           </div>
         </div>);
