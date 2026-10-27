@@ -327,9 +327,16 @@ class PaperTradingEngine:
             # Simplified: mark-to-cost for paper (assume current price = avg_cost).
             total_value += avg_cost * net_qty
 
+        # Root correction (2026-10-27): this figure carries positions at
+        # HISTORICAL COST — it is a cost-basis carrying value, NOT observed
+        # marked equity. It stays (legacy consumers read it) but is now
+        # labeled honestly and duplicated under cost_basis_value; nothing here
+        # may be promoted to observed equity, and no mark is ever invented.
         return {
             "cash": round(self.cash, 2),
             "total_value": round(total_value, 2),
+            "cost_basis_value": round(total_value, 2),
+            "valuation_basis": "historical_cost",
             "total_pnl": round(total_value - self.initial_capital, 2),
             "total_pnl_pct": round((total_value - self.initial_capital) / self.initial_capital * 100, 2) if self.initial_capital else 0.0,
             "open_positions": len(positions_summary),
@@ -395,6 +402,7 @@ class PaperTradingEngine:
         symbols = []
         total_realized = 0.0
         total_unrealized = 0.0
+        unmarked_symbols: list[str] = []
         for sym, a in sorted(by_symbol.items()):
             net = a["buy_qty"] - a["sell_qty"]
             if net > 0:
@@ -407,6 +415,8 @@ class PaperTradingEngine:
                 unrealized = (prices[sym] - avg) * net
             else:
                 unrealized = None  # no live mark: unknown, never mark-to-model
+            if net != 0 and unrealized is None:
+                unmarked_symbols.append(sym)
             if unrealized is not None:
                 total_unrealized += unrealized
             total_realized += a["realized_pnl"]
@@ -418,10 +428,17 @@ class PaperTradingEngine:
                 "unrealized_pnl": round(unrealized, 2) if unrealized is not None else None,
                 "commissions": round(a["commissions"], 2),
             })
+        # Root correction (2026-10-27): a full-book aggregate may not silently
+        # sum only the marked subset. With ANY held symbol unmarked, the
+        # aggregate is None; the explicitly-partial known_marked_subtotal and
+        # the unmarked symbol list stay visible. Flat/fully-marked books keep
+        # numeric totals.
         return {
             "symbols": symbols,
             "total_realized_pnl": round(total_realized, 2),
-            "total_unrealized_pnl": round(total_unrealized, 2),
+            "total_unrealized_pnl": None if unmarked_symbols else round(total_unrealized, 2),
+            "known_marked_subtotal": round(total_unrealized, 2),
+            "unmarked_symbols": unmarked_symbols,
             "data_source": "paper_trading",
         }
 

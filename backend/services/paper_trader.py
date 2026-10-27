@@ -489,51 +489,106 @@ class PaperTrader:
     # ------------------------------------------------------------------
 
     def get_portfolio_summary(self, current_prices: dict[str, float] | None = None) -> dict[str, Any]:
-        """Get current portfolio summary.
+        """Get current portfolio summary under the corrected equity contract.
+
+        This ledger DEBITS long buys and CREDITS short sells, so complete
+        marked equity is cash + Σ signed_quantity × observed_mark — never
+        cash + unrealized (root correction, 2026-10-27). Marks come ONLY from
+        ``current_prices``; an entry price is NOT a mark. An observed mark of
+        0 is real data (worthless position → signed market value 0); a
+        missing, non-numeric, non-finite or negative supplied mark is UNKNOWN.
+
+        If ANY open position lacks an eligible mark, the full aggregates
+        (total_value, total_pnl, total_pnl_pct, unrealized_pnl) are None —
+        never a fabricated subset sum — while the explicitly-partial
+        ``known_marked_subtotal`` stays numeric. A FLAT book knows its
+        equity: cash, unrealized 0. Realized PnL and cash are always known.
 
         Parameters
         ----------
         current_prices : dict[str, float], optional
-            Current market prices for open position symbols.
+            Observed marks for open position symbols.
         """
         current_prices = current_prices or {}
         open_positions = []
-        total_unrealized = 0.0
+        signed_market_value = 0.0
+        marked_unrealized_subtotal = 0.0
+        unknown_positions = 0
 
         for _key, pos in self.positions.items():
             if pos.status != "open":
                 continue
-            current_price = current_prices.get(pos.symbol, pos.entry_price)
+            mark = current_prices.get(pos.symbol)
+            if isinstance(mark, bool) or not isinstance(mark, (int, float)) \
+                    or not math.isfinite(mark) or mark < 0:
+                unknown_positions += 1
+                open_positions.append({
+                    "symbol": pos.symbol,
+                    "side": pos.side,
+                    "quantity": pos.quantity,
+                    "entry_price": pos.entry_price,
+                    "current_price": None,
+                    "unrealized_pnl": None,
+                    "mark_status": "unknown",
+                })
+                continue
+            mark = float(mark)
             if pos.side == "LONG":
-                unrealized = (current_price - pos.entry_price) * pos.quantity
+                unrealized = (mark - pos.entry_price) * pos.quantity
+                signed_market_value += mark * pos.quantity
             else:
-                unrealized = (pos.entry_price - current_price) * pos.quantity
-            total_unrealized += unrealized
+                unrealized = (pos.entry_price - mark) * pos.quantity
+                signed_market_value -= mark * pos.quantity
+            marked_unrealized_subtotal += unrealized
             open_positions.append({
                 "symbol": pos.symbol,
                 "side": pos.side,
                 "quantity": pos.quantity,
                 "entry_price": pos.entry_price,
-                "current_price": current_price,
+                "current_price": mark,
                 "unrealized_pnl": round(unrealized, 2),
+                "mark_status": "observed",
             })
 
         total_realized = sum(t.realized_pnl for t in self.trade_history)
-        total_value = self.cash + total_unrealized
+        if open_positions and unknown_positions:
+            # Unknown marks block the aggregate; the partial subtotal stays
+            # visible under its own explicitly-partial name.
+            basis = "unknown_missing_marks"
+            total_value = None
+            total_unrealized_out = None
+            total_pnl = None
+            total_pnl_pct = None
+        elif not open_positions:
+            basis = "flat_cash"
+            total_value = self.cash
+            total_unrealized_out = 0.0
+            total_pnl = self.cash - self.initial_capital
+            total_pnl_pct = (total_pnl / self.initial_capital * 100
+                              if self.initial_capital else 0.0)
+        else:
+            basis = "observed_marks"
+            total_value = self.cash + signed_market_value
+            total_unrealized_out = marked_unrealized_subtotal
+            total_pnl = total_value - self.initial_capital
+            total_pnl_pct = (total_pnl / self.initial_capital * 100
+                             if self.initial_capital else 0.0)
 
         return {
             "cash": round(self.cash, 2),
-            "total_value": round(total_value, 2),
-            "total_pnl": round(total_value - self.initial_capital, 2),
-            "total_pnl_pct": round(
-                (total_value - self.initial_capital) / self.initial_capital * 100, 2
-            ),
+            "total_value": None if total_value is None else round(total_value, 2),
+            "total_pnl": None if total_pnl is None else round(total_pnl, 2),
+            "total_pnl_pct": None if total_pnl_pct is None else round(total_pnl_pct, 2),
             "realized_pnl": round(total_realized, 2),
-            "unrealized_pnl": round(total_unrealized, 2),
+            "unrealized_pnl": None if total_unrealized_out is None
+                              else round(total_unrealized_out, 2),
             "open_positions": len(open_positions),
             "positions": open_positions,
             "total_trades": len(self.trade_history),
             "total_orders": len(self.order_log),
+            "unknown_positions": unknown_positions,
+            "known_marked_subtotal": round(marked_unrealized_subtotal, 2),
+            "valuation_basis": basis,
         }
 
     def get_state(self) -> dict[str, Any]:

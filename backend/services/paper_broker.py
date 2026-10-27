@@ -9,6 +9,7 @@ and position tracking. Inspired by swarmSPX's paper.py.
 from __future__ import annotations
 
 import logging
+import math
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -226,21 +227,57 @@ class PaperBroker:
         """Get all open positions."""
         return [p for p in self.positions.values() if p.quantity != 0]
 
-    def get_pnl(self) -> dict:
-        """Get PnL summary."""
-        unrealized = 0.0
-        for pos in self.positions.values():
-            if pos.quantity != 0:
-                # Unrealized PnL (would need current market price for accuracy)
-                unrealized += pos.unrealized_pnl
+    def get_pnl(self, marks: dict[str, float] | None = None) -> dict:
+        """PnL and equity summary under the corrected equity contract.
 
+        Positions carry SIGNED quantities (long positive, short negative) and
+        this ledger debits buys / credits sells, so complete marked equity is
+        cash + Σ mark × signed_quantity — never cash + unrealized. Marks come
+        only from ``marks``; an observed 0 is real data, while a missing,
+        non-numeric, non-finite or negative supplied mark is UNKNOWN. With ANY
+        open position unmarked, equity/unrealized_pnl/total_pnl are None
+        (never fabricated) and ``known_marked_subtotal`` stays numeric and
+        explicitly partial. A flat book knows: equity = cash, unrealized 0.
+        Realized PnL, daily PnL and cash are always known.
+        """
+        marks = marks or {}
+        signed_market_value = 0.0
+        partial_unrealized = 0.0
+        unknown = 0
+        open_count = 0
+        for pos in self.positions.values():
+            if pos.quantity == 0:
+                continue
+            open_count += 1
+            mark = marks.get(pos.symbol)
+            if isinstance(mark, bool) or not isinstance(mark, (int, float)) \
+                    or not math.isfinite(mark) or mark < 0:
+                unknown += 1
+                continue
+            mark = float(mark)
+            signed_market_value += mark * pos.quantity
+            partial_unrealized += (mark - pos.avg_cost) * pos.quantity
+
+        realized = round(self.total_realized_pnl, 2)
+        if open_count and unknown:
+            equity = unrealized = total = None
+        elif not open_count:
+            equity = round(self.cash, 2)
+            unrealized = 0.0
+            total = realized
+        else:
+            equity = round(self.cash + signed_market_value, 2)
+            unrealized = round(partial_unrealized, 2)
+            total = round(self.total_realized_pnl + partial_unrealized, 2)
         return {
-            "realized_pnl": round(self.total_realized_pnl, 2),
-            "unrealized_pnl": round(unrealized, 2),
+            "realized_pnl": realized,
+            "unrealized_pnl": unrealized,
             "daily_pnl": round(self.daily_pnl, 2),
-            "total_pnl": round(self.total_realized_pnl + unrealized, 2),
+            "total_pnl": total,
             "cash": round(self.cash, 2),
-            "equity": round(self.cash + unrealized, 2),
+            "equity": equity,
+            "unknown_positions": unknown,
+            "known_marked_subtotal": round(partial_unrealized, 2),
         }
 
     def close_position(self, symbol: str, market_price: float) -> Fill | None:
