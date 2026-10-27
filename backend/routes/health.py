@@ -15,6 +15,7 @@ from datetime import UTC, datetime
 
 import httpx  # noqa: F401 — re-exported for tests that patch routes.health.httpx
 from fastapi import APIRouter
+from starlette.concurrency import run_in_threadpool
 
 from services.alpha_vantage_client import circuit as av_circuit
 from services.duckdb_engine import db as duckdb_engine
@@ -42,10 +43,24 @@ def _git_sha() -> str:
         return "unknown"
 
 
+_STARTED_SHA = _git_sha()
+
+
 @router.get("/api/version")
 async def version():
     """Build-vs-backend freshness stamp for the UI stale banner."""
-    return {"sha": _git_sha(), "started_at": _STARTED_AT}
+    return {"sha": _STARTED_SHA, "started_at": _STARTED_AT}
+
+
+def _health_row(statement: str) -> tuple[bool, tuple | None]:
+    """A probe may decline a busy writer, but must never bypass serialization."""
+    lock = duckdb_engine._conn_lock
+    if not lock.acquire(blocking=False):
+        return False, None
+    try:
+        return True, duckdb_engine._conn.execute(statement).fetchone()
+    finally:
+        lock.release()
 
 
 def _institutional_section(feed_status: str) -> dict:
@@ -72,11 +87,12 @@ def _institutional_section(feed_status: str) -> dict:
         sweep = {"age_s": None, "note": f"sweep watch unreadable: {e}"}
 
     try:
-        with duckdb_engine._conn_lock:
-            row = duckdb_engine._conn.execute(
-                "SELECT COUNT(*) FROM flow_alerts_daily"
-            ).fetchone()
-        alerts: dict = {"stored": int(row[0]) if row else 0}
+        available, row = _health_row("SELECT COUNT(*) FROM flow_alerts_daily")
+        alerts: dict = (
+            {"stored": int(row[0]) if row else 0}
+            if available else
+            {"stored": None, "status": "busy", "note": "alert store busy"}
+        )
     except Exception as e:
         alerts = {"stored": None, "note": f"alert store unreadable: {e}"}
 
@@ -105,8 +121,7 @@ def _institutional_section(feed_status: str) -> dict:
     }
 
 
-@router.get("/api/health")
-async def health_check():
+def _collect_health() -> dict:
     """Check status of all dependencies.
 
     Returns:
@@ -125,12 +140,12 @@ async def health_check():
 
     # DuckDB check
     try:
-        # Take the conn lock — touching _conn directly races the ingestion
-        # writer thread (duckdb connections are not thread-safe) and can
-        # deadlock the event loop.
-        with duckdb_engine._conn_lock:
-            duckdb_engine._conn.execute("SELECT 1").fetchone()
-        checks["duckdb"] = {"status": "healthy"}
+        available, _ = _health_row("SELECT 1")
+        checks["duckdb"] = (
+            {"status": "healthy"}
+            if available else
+            {"status": "unhealthy", "error": "database busy"}
+        )
     except Exception as e:
         logger.warning(f"Health check: DuckDB unhealthy: {e}")
         checks["duckdb"] = {"status": "unhealthy", "error": str(e)}
@@ -183,15 +198,24 @@ async def health_check():
         if all(c.get("status") == "healthy" for c in live_checks.values())
         else "degraded"
     )
+    institutional = _institutional_section(
+        str(checks.get("public_api", {}).get("status"))
+    )
+    if institutional.get("alerts", {}).get("status") == "busy":
+        overall = "degraded"
 
     return {
         "status": overall,
         "timestamp": datetime.now(UTC).isoformat(),
         "checks": checks,
-        "institutional": _institutional_section(
-            str(checks.get("public_api", {}).get("status"))
-        ),
+        "institutional": institutional,
     }
+
+
+@router.get("/api/health")
+async def health_check():
+    """Collect dependency diagnostics without blocking the async request loop."""
+    return await run_in_threadpool(_collect_health)
 
 
 @router.get("/health")
