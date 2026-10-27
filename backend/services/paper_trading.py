@@ -127,10 +127,21 @@ class PaperTradingEngine:
         order_id: str,
         market: MarketState,
     ) -> ExecutionResult:
-        """Execute a paper trade with simulated market impact."""
+        """Execute a paper trade with simulated market impact.
+
+        Idempotency guard (paper-recovery B1): an order executes exactly
+        once. Replaying ``execute_order`` on a terminal order (lost reply /
+        operator retry) is refused with ValueError — the same refusal class
+        as the missing-order path — instead of moving cash, positions and
+        trade_history a second time.
+        """
         order = self.orders.get(order_id)
         if not order:
             raise ValueError(f"Order {order_id} not found")
+        if order.status != "pending":
+            raise ValueError(
+                f"Order {order_id} is already {order.status}; duplicate execution refused"
+            )
 
         start_time = time.monotonic()
 
