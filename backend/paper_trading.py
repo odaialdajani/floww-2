@@ -438,7 +438,14 @@ async def _latest_feature_row(ticker: str, feature_names: list[str]) -> dict[str
 
 
 def _build_feature_vector(row: dict[str, Any], feature_names: list[str]):
-    """Project a Mongo feature doc into the model's expected feature order."""
+    """Project a Mongo feature doc into the model's expected feature order.
+
+    A DECLARED feature that is missing from the row or stored as null is
+    UNKNOWN data: it is refused with ValueError — never silently substituted
+    with 0.0 (repo data rule: unknown is never zero). Observed 0.0 values are
+    real data and are kept. Non-numeric values are refused the same way so
+    the caller can skip honestly instead of crashing.
+    """
     import numpy as np
 
     if not feature_names:
@@ -448,7 +455,13 @@ def _build_feature_vector(row: dict[str, Any], feature_names: list[str]):
             k for k, v in row.items()
             if k not in ignore and not k.startswith("target_") and isinstance(v, (int, float))
         )
-    values = [float(row.get(name, 0.0) or 0.0) for name in feature_names]
+    missing = [name for name in feature_names if name not in row or row[name] is None]
+    if missing:
+        raise ValueError(f"missing or null declared features: {sorted(missing)}")
+    try:
+        values = [float(row[name]) for name in feature_names]
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"non-numeric declared feature value: {exc}") from None
     return np.array([values], dtype=float), feature_names
 
 
@@ -504,7 +517,14 @@ async def daily_paper_trade_dry_run(ticker: str = "SPY") -> dict[str, Any]:
         return result
 
     feature_date = row.get("date")
-    X_raw, used_names = _build_feature_vector(row, feature_names)
+    try:
+        X_raw, used_names = _build_feature_vector(row, feature_names)
+    except ValueError as exc:
+        # Unknown (missing/null/non-numeric) declared features: skip honestly,
+        # never predict on substituted zeros (paper-recovery B12).
+        result.update({"action": "skip", "reason": f"incomplete_feature_row: {exc}"})
+        logger.warning(result["reason"])
+        return result
     try:
         X = scaler.transform(X_raw)
     except Exception as exc:  # noqa: BLE001 — scaler shape mismatch etc.
