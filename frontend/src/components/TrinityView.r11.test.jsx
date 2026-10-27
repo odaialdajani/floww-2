@@ -25,10 +25,13 @@ beforeEach(() => {
 });
 const mount = async () => { await act(async () => render(<><TrinityView /><Context /></>)); };
 
+const openWSTab = (tab) => { fireEvent.click(screen.getByTestId(`triad-tab-${tab}`)); };
+
 test("Triad follows the shared symbol and clears a wall on a header symbol change",async()=>{
  let view;
  await act(async()=>{view=render(<><TrinityView ticker="QQQ"/><Context/></>);});
  expect(JSON.parse(screen.getByTestId("r11-context").textContent).ticker).toBe("QQQ");
+ openWSTab('walls');
  fireEvent.click(screen.getByTestId("triad-wall-wall"));
  await act(async()=>view.rerender(<><TrinityView ticker="SPY"/><Context/></>));
  expect(JSON.parse(screen.getByTestId("r11-context").textContent)).toMatchObject({ticker:"SPY",selectedWall:null,selectedContract:null});
@@ -166,6 +169,7 @@ test("Triad timeline restores the stored pair without fetching live Greeks and r
   return ordinary(url,opts);
  });
  await mount();
+ openWSTab('replay');
  await act(async()=>fireEvent.click(screen.getByTestId("solstice-replay-load")));
  const liveReads=axios.get.mock.calls.filter(([url])=>String(url).includes("/heatmap/")).length;
  await act(async()=>fireEvent.click(screen.getByTestId("solstice-replay-play")));
@@ -209,8 +213,10 @@ test("recorded Next listed scope restores without a second fetch or a live subst
 test("raw-wall-first desk exposes top profile, one adjustment selector, and honest readiness", async () => {
   await mount();
   fireEvent.change(screen.getByLabelText("Adjusted context"), { target: { value: "delta" } });
+  openWSTab('profile');
   expect(screen.getByTestId("triad-signed-profile")).toBeInTheDocument();
   expect(screen.getByLabelText("Adjusted context")).toBeInTheDocument();
+  openWSTab('walls');
   await act(async () => { fireEvent.click(screen.getByTestId("triad-wall-wall")); });
   expect(screen.getByTestId("triad-readiness")).toHaveTextContent("Wait");
   expect(screen.getByTestId("triad-readiness")).toHaveTextContent("Bounce watch");
@@ -224,6 +230,7 @@ test("resolved contract becomes the canonical Triad selection and basis changes 
  const ordinary=axios.get.getMockImplementation();
  axios.get.mockImplementation(async(url,opts)=>String(url).includes("/contract")?{data:{status:"ok",ticker:"SPY",snapshot_id:"SPY-snap",matched_identity:{...contract,strike:String(contract.strike)}}}:ordinary(url,opts));
  await mount();
+ openWSTab('walls');
  fireEvent.click(screen.getByTestId("triad-wall-wall"));
  fireEvent.click(screen.getByTestId("triad-contracts-btn"));
  fireEvent.click(screen.getByRole("button",{name:`Review ${contract.osi}`}));
@@ -235,6 +242,7 @@ test("resolved contract becomes the canonical Triad selection and basis changes 
 
 test("contract review requires choosing listed identity, not midpoint or first expiry", async () => {
   await mount();
+  openWSTab('walls');
   await act(async () => { fireEvent.click(screen.getByTestId("triad-wall-wall")); });
   fireEvent.click(screen.getByTestId("triad-contracts-btn"));
   expect(axios.get.mock.calls.some(([url]) => String(url).includes("/contract"))).toBe(false);
@@ -250,6 +258,7 @@ test("changing symbol releases wall and exact-contract response ownership, inclu
   const defaultMock = axios.get.getMockImplementation();
   axios.get.mockImplementation((url, opts) => String(url).includes("/solstice/SPY/contract") ? new Promise((resolve, reject) => { rejectOld = reject; }) : defaultMock(url, opts));
   await mount();
+  openWSTab('walls');
   await act(async () => { fireEvent.click(screen.getByTestId("triad-wall-wall")); });
   fireEvent.click(screen.getByTestId("triad-contracts-btn"));
   fireEvent.click(screen.getByRole("button", { name: `Review ${contract.osi}` }));

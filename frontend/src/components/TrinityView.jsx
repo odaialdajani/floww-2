@@ -157,6 +157,21 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
   // selected. A REAL selection (cell click, strike click, wall pick) or the
   // header toggle opens it; close/reopen/tabs are all retained.
   const [inspectorOpen, setInspectorOpen] = useState(false);
+  // Owner 20:51 declutter: the secondary chrome (walls/landmarks/replay/
+  // profile/review) renders as ONE deliberate workspace tab at a time —
+  // quiet by default so the comparison leads. Nothing is deleted; every
+  // block keeps its testids and honest strings.
+  const [workspaceTab, setWorkspaceTab] = useState(null);
+  // Owner 20:51: reversible Focus working-canvas — the maps fill the
+  // viewport, obvious Exit/Esc, selection/scope state untouched (a layout
+  // class only; never a CSS zoom, never a scale change).
+  const [focusMode, setFocusMode] = useState(false);
+  useEffect(() => {
+    if (!focusMode) return undefined;
+    const onKey = (ev) => { if (ev.key === "Escape") setFocusMode(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [focusMode]);
   // O5: same focus ownership as the Solstice inspector drawer.
   const drawerCloseRef = useRef(null);
   const drawerPrevFocusRef = useRef(null);
@@ -395,6 +410,36 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
     setInspectorOpen(true); // a REAL selection opens the inspector (owner 13:40)
   }, [walls, selectWall]);
 
+  // Owner 20:51: ONE synchronized Center for the PAIR. The per-map button
+  // semantics (scroll the container so the spot is centered; never a scale
+  // change) applied to BOTH maps at once. Selection and scroll anchors are
+  // untouched; if a map has no rendered spot row it stays where it is.
+  const centerPair = useCallback(() => {
+    for (const ref of [rawMapRef, adjustedMapRef]) {
+      const el = ref && ref.current;
+      if (!el || typeof el.scrollTo !== "function") continue;
+      const spot = el.querySelector(".trin-spot-rail") || el.querySelector('[data-testid="skylit-spot-chip"]');
+      if (!spot) continue;
+      const box = el.getBoundingClientRect();
+      const sr = spot.getBoundingClientRect();
+      el.scrollTo({ top: el.scrollTop + (sr.top - box.top) - box.height / 2 + sr.height / 2 });
+    }
+  }, []);
+  // Root 21:3x: the per-map "Show selected level" row is hidden in Market
+  // mode (it duplicated Center AND selected-level on both maps); ONE pair
+  // action scrolls BOTH maps to the selected strike instead. Scroll-only —
+  // the selection itself never changes.
+  const centerSelected = useCallback(() => {
+    for (const ref of [rawMapRef, adjustedMapRef]) {
+      const el = ref && ref.current;
+      if (!el || typeof el.scrollTo !== "function") continue;
+      const sel = el.querySelector("td.trin-selected") || el.querySelector("tr.trin-row-selected");
+      if (!sel) continue;
+      const box = el.getBoundingClientRect();
+      const sr = sel.getBoundingClientRect();
+      el.scrollTo({ top: el.scrollTop + (sr.top - box.top) - box.height / 2 + sr.height / 2 });
+    }
+  }, []);
   const openContracts = useCallback(() => setDrawerOpen(true), []);
 
   const journal = useReviewJournal(ticker, isReplay ? null : payload?.snapshotId,
@@ -433,13 +478,13 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
   }
 
   return (
-    <div className={`trinity-layout trinity-desktop ${inspectorOpen || drawerOpen ? "tdk-dock-open" : "tdk-dock-closed"}`} data-testid="triad-view">
+    <div className={`trinity-layout trinity-desktop ${inspectorOpen || drawerOpen ? "tdk-dock-open" : "tdk-dock-closed"}${focusMode ? " tdk-focus-mode" : ""}`} data-testid="triad-view">
       {/* Desktop composition (market-desktop-20261025): ONE calm grouped
           command header — focus, scope, basis, assistant, context — then the
           raw/adjusted comparison immediately, and the selected-object
           inspector docked beside it. Every control, testid, honest refusal
           string and data path is preserved; only the composition moves. */}
-      <header className="tdk-head" data-testid="triad-control-band">
+      <header className="tdk-head tdk-command-bar" data-testid="triad-command-bar">
         <div className="tdk-head-row">
           {!sharedStockChoice ? (
             <div className="tdk-head-group">
@@ -489,6 +534,21 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
             </details>
           </div>
           <div className="tdk-head-group">
+            <button type="button" className="tdk-head-toggle" data-testid="triad-pair-center"
+              onClick={centerPair} title="Center both maps on the current price (synchronized)">
+              Center
+            </button>
+            {cell && (
+              <button type="button" className="tdk-head-toggle" data-testid="triad-pair-selected"
+                onClick={centerSelected} title="Scroll both maps to the selected strike (the per-map selected-level action, synchronized)">
+                Selected
+              </button>
+            )}
+            <button type="button" className="tdk-head-toggle" data-testid="triad-focus-toggle"
+              aria-pressed={focusMode} onClick={() => setFocusMode(value => !value)}
+              title="Focus the comparison — maps fill the screen; Esc or Exit returns exactly here (no zoom)">
+              {focusMode ? "Exit focus" : "Focus"}
+            </button>
             <button type="button" className="tdk-head-toggle" data-testid="triad-inspector-toggle"
               aria-pressed={inspectorOpen} onClick={() => setInspectorOpen(value => !value)}
               title="Show or hide the selected-object inspector">
@@ -496,6 +556,11 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
             </button>
             {replayId && !replayDisplay && <button type="button" onClick={() => onReplayDisplay(null)}>Leave recorded observation · Live</button>}
           </div>
+          {!inspectorOpen && !cell && !selectedWall && (
+            <span className="triad-selection-cue" data-testid="triad-selection-cue" role="status">
+              Select a strike or wall to open its inspector
+            </span>
+          )}
           <div className="triad-mobile-switch"><button onClick={() => setMobilePane("raw")}>Raw</button><button onClick={() => setMobilePane("adjusted")}>Adjusted</button></div>
         </div>
         <div className="tdk-head-sub">
@@ -547,13 +612,11 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
       )}
       <div className="tdk-body">
       <main className="tdk-main">
-      {/* Owner 13:40: ONE concise selection cue while the dock is closed and
-          nothing is selected — the comparison keeps the full width; selecting
-          a strike/wall (or the header toggle) opens the inspector. */}
-      {!inspectorOpen && !cell && !selectedWall && (
-        <div className="triad-selection-cue" data-testid="triad-selection-cue">
-          Select a strike or wall to open its inspector — the comparison stays full width until then.
-        </div>
+      {focusMode && (
+        <button type="button" className="triad-focus-exit" data-testid="triad-focus-exit"
+          onClick={() => setFocusMode(false)} title="Leave focus and return exactly here (Esc)">
+          Exit focus · Esc
+        </button>
       )}
       <div className="triad-pair" data-testid="triad-raw-adjusted" data-mobile-pane={mobilePane}>
         <div className="triad-pane" data-testid="triad-pane-raw">
@@ -583,24 +646,46 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
         </div>
       </div>
 
-      {/* Wall chips stay beside the maps as the quick selection affordance;
-          the selected wall's full card lives in the right inspector. */}
-      <WallBar walls={walls} wallId={selectedWall?.wall_id || null} onSelect={selectWall} />
-      <HeatmapLandmarks data={payload} />
+      {/* Owner 20:51 declutter: the secondary workspace renders as ONE
+          deliberate tab at a time — quiet by default so the comparison
+          leads. Every block below is the EXISTING component with its
+          testids and honest strings unchanged; only its placement moves.
+          Root 21:3x: in Focus the whole section does not RENDER — an open
+          tab body never crowds the focused canvas — and because the tab
+          VALUE is untouched, Exit restores the prior view exactly. */}
+      {/* Review 10:xx: the supporting workspace stays MOUNTED in Focus —
+          only hidden via CSS — so native state (the Profile disclosure's
+          open attribute, replay inputs, review drafts) survives the
+          roundtrip exactly; the tab ID alone never had to reconstruct it. */}
+      <div className="triad-workspace">
+      <div className="triad-workspace-tabs" data-testid="triad-workspace-tabs" role="tablist" aria-label="Market workspace">
+        {[["walls", "Walls"], ["landmarks", "Landmarks"], ["replay", "Replay"], ["profile", "Profile"], ["review", "Review"]].map(([id, label]) => (
+          <button key={id} type="button" role="tab" data-testid={`triad-tab-${id}`}
+            aria-selected={workspaceTab === id}
+            onClick={() => setWorkspaceTab((cur) => (cur === id ? null : id))}>{label}</button>
+        ))}
+      </div>
+      {workspaceTab === "walls" && (
+        <WallBar walls={walls} wallId={selectedWall?.wall_id || null} onSelect={selectWall} />
+      )}
+      {workspaceTab === "landmarks" && <HeatmapLandmarks data={payload} />}
       {/* UI-M03 (M1 2026-10-24): stored-session replay is supporting context,
           so the strip follows the maps. Every control is preserved. */}
-      {replayControls}
-      <details className="triad-profile-disclosure" data-testid="triad-profile-disclosure">
-        <summary>Signed exposure profile · raw and adjusted</summary>
-      <StrikeExposureProfile data={payload} basis={basis} wall={selectedWall} onSelect={onGridCell} />
-      </details>
+      {workspaceTab === "replay" && replayControls}
+      {workspaceTab === "profile" && (
+        <details className="triad-profile-disclosure" data-testid="triad-profile-disclosure">
+          <summary>Signed exposure profile · raw and adjusted</summary>
+        <StrikeExposureProfile data={payload} basis={basis} wall={selectedWall} onSelect={onGridCell} />
+        </details>
+      )}
 
       {spxMissing && (
         <div className="triad-capability" data-testid="triad-spx-capability">
           SPX unavailable in this session (entitlement/coverage unknown). No substitution made.
         </div>
       )}
-      <ReviewSection journal={journal} ticker={ticker} snapshotId={payload?.snapshotId} />
+      {workspaceTab === "review" && <ReviewSection journal={journal} ticker={ticker} snapshotId={payload?.snapshotId} />}
+      </div>
       </main>
       <MarketInspectorDock
         ticker={ticker}

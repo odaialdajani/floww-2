@@ -11,7 +11,7 @@
   gap: 0 12px;
   align-items: start;
   font-size: 13px;
-  color: #d7e6e8;
+  color: var(--text, #d5dde5);
   padding: 0 2px 14px;
 }
 .trinity-desktop.tdk-dock-closed { grid-template-columns: minmax(0, 1fr) 0; }
@@ -41,43 +41,43 @@
   gap: 4px;
   margin: 0 0 8px;
   padding: 7px 10px 8px;
-  background: #0b1117;
-  border: 1px solid #263044;
+  background: var(--floww-raised, var(--panel-2, #191919));
+  border: 1px solid var(--floww-line, var(--border-2, #454545));
   border-radius: 8px;
 }
 .tdk-head-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
-.tdk-head-group { display: inline-flex; align-items: center; gap: 6px; padding-right: 10px; border-right: 1px solid #1d2740; }
+.tdk-head-group { display: inline-flex; align-items: center; gap: 6px; padding-right: 10px; border-right: 1px solid var(--border, #282828); }
 .tdk-head-group:last-child { border-right: none; }
 .tdk-head-label {
-  font-size: 12px; color: #8fa8b5; letter-spacing: 0.02em; white-space: nowrap;
+  font-size: 12px; color: var(--text-dim, #8e9aa7); letter-spacing: 0.02em; white-space: nowrap;
 }
 .trinity-desktop .tdk-head input {
-  background: #101625; border: 1px solid #34405b; border-radius: 5px;
-  color: #e6eef2; font-size: 13px; min-height: 28px; padding: 3px 8px; width: 88px;
+  background: var(--floww-control, var(--surface-3, #222222)); border: 1px solid var(--floww-line, var(--border-2, #454545)); border-radius: 5px;
+  color: var(--text, #d5dde5); font-size: 13px; min-height: 28px; padding: 3px 8px; width: 88px;
   font-variant-numeric: tabular-nums;
 }
 .trinity-desktop .tdk-head select {
-  background: #101625; border: 1px solid #34405b; border-radius: 5px;
-  color: #cbd5e1; font-size: 12.5px; min-height: 28px; padding: 3px 6px; max-width: 210px;
+  background: var(--floww-control, var(--surface-3, #222222)); border: 1px solid var(--floww-line, var(--border-2, #454545)); border-radius: 5px;
+  color: var(--text, #d5dde5); font-size: 12.5px; min-height: 28px; padding: 3px 6px; max-width: 210px;
 }
 .tdk-head .triad-mobile-switch { display: none; }
 .tdk-head-toggle {
-  background: transparent; border: 1px solid #34405b; border-radius: 5px; color: #cbd5e1;
+  background: transparent; border: 1px solid var(--floww-line, var(--border-2, #454545)); border-radius: 5px; color: var(--text, #d5dde5);
   font-size: 12px; min-height: 28px; padding: 3px 10px; cursor: pointer; white-space: nowrap;
 }
-.tdk-head-toggle[aria-pressed="true"] { color: #e3c16a; border-color: #6b5a2a; }
-.tdk-head-toggle:hover { background: #16202e; }
+.tdk-head-toggle[aria-pressed="true"] { color: #e3c16a; border-color: var(--floww-line, var(--border-2, #454545)); }
+.tdk-head-toggle:hover { background: var(--floww-control, var(--surface-3, #222222)); }
 
 /* Subordinate identity row: one quiet line, not competing panels. */
 .tdk-head-sub {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-  font-size: 12px; color: #8fa8b5; font-variant-numeric: tabular-nums; min-width: 0;
+  font-size: 12px; color: var(--text-dim, #8e9aa7); font-variant-numeric: tabular-nums; min-width: 0;
 }
-.tdk-head-sub .triad-loaded-dates { display: inline; margin: 0; font-size: 12px; color: #8fa8b5; overflow-wrap: anywhere; }
-.tdk-head-sub .triad-source { margin: 0; font-size: 12px; color: #9bb0bd; overflow-wrap: anywhere; }
+.tdk-head-sub .triad-loaded-dates { display: inline; margin: 0; font-size: 12px; color: var(--text-dim, #8e9aa7); overflow-wrap: anywhere; }
+.tdk-head-sub .triad-source { margin: 0; font-size: 12px; color: var(--text-dim, #8e9aa7); overflow-wrap: anywhere; }
 .tdk-chip {
-  display: inline-flex; align-items: center; gap: 5px; border: 1px solid #223047;
-  border-radius: 10px; padding: 1px 9px; background: #0d1520; color: #b7c9d4;
+  display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border, #282828);
+  border-radius: 10px; padding: 1px 9px; background: var(--floww-control, var(--surface-3, #222222)); color: var(--text-dim, #8e9aa7);
   font-size: 12px; white-space: nowrap;
 }
 .tdk-chip b { color: #e3c16a; font-weight: 600; }
@@ -105,33 +105,33 @@
   max-height: calc(100vh - 26px);
   display: flex; flex-direction: column;
   min-width: 0; min-height: 0;
-  background: #0d1117;
-  border: 1px solid #263044;
+  background: var(--floww-surface, var(--panel, #111111));
+  border: 1px solid var(--floww-line, var(--border-2, #454545));
   border-radius: 8px;
   overflow: hidden;
 }
 .tdk-dock[hidden] { display: none; }
 .tdk-dock-head {
   display: flex; align-items: center; gap: 8px; flex: none;
-  padding: 8px 10px; border-bottom: 1px solid #263044; background: #0b0f14;
+  padding: 8px 10px; border-bottom: 1px solid var(--floww-line, var(--border-2, #454545)); background: var(--floww-surface, var(--panel, #111111));
 }
-.tdk-dock-title { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: #8fa8b5; }
-.tdk-dock-id { font-size: 13px; color: #e8f2f6; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tdk-dock-title { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim, #8e9aa7); }
+.tdk-dock-id { font-size: 13px; color: var(--text, #d5dde5); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tdk-dock-close {
-  margin-left: auto; background: transparent; border: 1px solid #34405b; border-radius: 5px;
-  color: #cbd5e1; font-size: 12px; min-width: 26px; min-height: 24px; cursor: pointer;
+  margin-left: auto; background: transparent; border: 1px solid var(--floww-line, var(--border-2, #454545)); border-radius: 5px;
+  color: var(--text, #d5dde5); font-size: 12px; min-width: 26px; min-height: 24px; cursor: pointer;
 }
-.tdk-dock-close:hover { background: #1b2330; }
+.tdk-dock-close:hover { background: var(--floww-control, var(--surface-3, #222222)); }
 /* Stable tab strip directly beneath identity/close — the body alone scrolls. */
 .tdk-dock-tabs {
   flex: none; display: flex; gap: 2px;
-  padding: 0 6px; background: #0b0f14; border-bottom: 1px solid #263044;
+  padding: 0 6px; background: var(--floww-surface, var(--panel, #111111)); border-bottom: 1px solid var(--floww-line, var(--border-2, #454545));
 }
 .tdk-dock-tabs button {
   background: transparent; border: none; border-bottom: 2px solid transparent;
-  color: #9bb0bd; font-size: 12.5px; padding: 6px 9px 5px; cursor: pointer; white-space: nowrap;
+  color: var(--text-dim, #8e9aa7); font-size: 12.5px; padding: 6px 9px 5px; cursor: pointer; white-space: nowrap;
 }
-.tdk-dock-tabs button:hover { color: #c6d7df; }
+.tdk-dock-tabs button:hover { color: var(--text, #d5dde5); }
 .tdk-dock-tabs button[aria-selected="true"] { color: #e3c16a; border-bottom-color: #e3c16a; }
 .tdk-dock-tabs button:focus-visible { outline: 2px solid #e3c16a; outline-offset: -2px; }
 .tdk-dock-body {
@@ -140,69 +140,69 @@
 }
 .tdk-dock-panel { display: flex; flex-direction: column; gap: 8px; }
 .tdk-dock-panel[hidden] { display: none; }
-.tdk-dock-panel h3 { font-size: 13px; margin: 0; color: #d7e6e8; }
+.tdk-dock-panel h3 { font-size: 13px; margin: 0; color: var(--text, #d5dde5); }
 
 /* Empty state: one concise, concrete selection prompt. */
 .tdk-empty {
   display: flex; flex-direction: column; gap: 6px; padding: 12px 8px;
-  border: 1px dashed #223047; border-radius: 7px; background: #0b0f14;
-  font-size: 13px; color: #b7c9d4; text-align: left;
+  border: 1px dashed var(--border, #282828); border-radius: 7px; background: var(--floww-surface, var(--panel, #111111));
+  font-size: 13px; color: var(--text-dim, #8e9aa7); text-align: left;
 }
 .tdk-empty strong { color: #e3c16a; font-size: 13px; font-weight: 600; }
-.tdk-empty small { color: #8fa8b5; font-size: 12px; line-height: 1.5; }
+.tdk-empty small { color: var(--text-dim, #8e9aa7); font-size: 12px; line-height: 1.5; }
 
 /* Selected readings: compact human scale, exact values in titles. */
 .tdk-values { display: flex; gap: 8px; flex-wrap: wrap; }
 .tdk-value {
   display: flex; flex-direction: column; min-width: 86px;
-  background: #10161f; border: 1px solid #223047; border-radius: 6px; padding: 5px 8px;
+  background: var(--floww-surface, var(--panel, #111111)); border: 1px solid var(--border, #282828); border-radius: 6px; padding: 5px 8px;
 }
-.tdk-value-label { font-size: 12px; color: #8fa8b5; }
-.tdk-value-num { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; color: #e8f2f6; }
+.tdk-value-label { font-size: 12px; color: var(--text-dim, #8e9aa7); }
+.tdk-value-num { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text, #d5dde5); }
 .tdk-value-num.pos { color: #19d27c; }
 .tdk-value-num.neg { color: #ff4d5e; }
 
 /* The selected-wall card is the Wall panel body: identity first, then
  * readings, confirmation conditions and the deliberate review action. */
 .tdk-dock .triad-scenario {
-  margin: 0; background: #10161f; border: 1px solid #263044; border-radius: 7px; padding: 8px 10px;
+  margin: 0; background: var(--floww-surface, var(--panel, #111111)); border: 1px solid var(--floww-line, var(--border-2, #454545)); border-radius: 7px; padding: 8px 10px;
   display: flex; flex-direction: column; gap: 6px;
 }
-.tdk-dock .triad-scenario-zone { font-size: 13px; font-weight: 600; color: #e8f2f6; }
+.tdk-dock .triad-scenario-zone { font-size: 13px; font-weight: 600; color: var(--text, #d5dde5); }
 .tdk-dock .triad-readiness { font-size: 12.5px; padding: 0; }
 .tdk-dock .triad-readiness strong { color: #e3c16a; font-size: 13px; }
 .tdk-dock .triad-readiness small { font-size: 12px; }
 .tdk-dock .triad-scenario-side { font-size: 12px; display: flex; flex-direction: column; gap: 2px; }
 .tdk-dock .triad-contracts-btn {
   min-height: 30px; font-size: 13px; border-radius: 5px;
-  background: #1a2433; border: 1px solid #3b5a68; color: #e8f2f6; cursor: pointer; font-weight: 600;
+  background: var(--floww-raised, var(--panel-2, #191919)); border: 1px solid var(--floww-line, var(--border-2, #454545)); color: var(--text, #d5dde5); cursor: pointer; font-weight: 600;
 }
-.tdk-dock .triad-contracts-btn:hover { background: #223145; }
-.tdk-dock .triad-price { background: #0b0f14; border: 1px solid #1d2740; border-radius: 6px; padding: 6px 8px; }
-.tdk-dock .triad-price-caption { font-size: 12px; color: #8fa8b5; }
+.tdk-dock .triad-contracts-btn:hover { background: var(--floww-raised, var(--panel-2, #191919)); }
+.tdk-dock .triad-price { background: var(--floww-surface, var(--panel, #111111)); border: 1px solid var(--border, #282828); border-radius: 6px; padding: 6px 8px; }
+.tdk-dock .triad-price-caption { font-size: 12px; color: var(--text-dim, #8e9aa7); }
 
 /* One readable LIVE/age/quality line; the exact snapshot/UUID/formula
  * strings fold into the closed provenance details (root 22:40). */
 .tdk-provenance {
   display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
-  font-size: 12px; color: #9bb0bd; font-variant-numeric: tabular-nums;
-  border-top: 1px solid #1d2740; padding-top: 6px;
+  font-size: 12px; color: var(--text-dim, #8e9aa7); font-variant-numeric: tabular-nums;
+  border-top: 1px solid var(--border, #282828); padding-top: 6px;
 }
-.tdk-provenance-live { color: #b7c9d4; white-space: nowrap; }
+.tdk-provenance-live { color: var(--text-dim, #8e9aa7); white-space: nowrap; }
 .tdk-provenance-details summary {
-  cursor: pointer; list-style: none; color: #8fa8b5; font-size: 12px; white-space: nowrap;
-  border: 1px solid #223047; border-radius: 10px; padding: 1px 9px; background: #0b0f14;
+  cursor: pointer; list-style: none; color: var(--text-dim, #8e9aa7); font-size: 12px; white-space: nowrap;
+  border: 1px solid var(--border, #282828); border-radius: 10px; padding: 1px 9px; background: var(--floww-surface, var(--panel, #111111));
 }
 .tdk-provenance-details summary::-webkit-details-marker { display: none; }
 .tdk-provenance-details[open] > summary::before { content: "▾ "; }
 .tdk-provenance-details:not([open]) > summary::before { content: "▸ "; }
 .tdk-provenance-details dl { margin: 6px 0 0; display: grid; grid-template-columns: max-content 1fr; gap: 2px 10px; }
-.tdk-provenance-details dt { font-size: 12px; color: #8fa8b5; }
-.tdk-provenance-details dd { margin: 0; font-size: 12px; color: #cbd5e1; overflow-wrap: anywhere; }
+.tdk-provenance-details dt { font-size: 12px; color: var(--text-dim, #8e9aa7); }
+.tdk-provenance-details dd { margin: 0; font-size: 12px; color: var(--text, #d5dde5); overflow-wrap: anywhere; }
 
 .tdk-hint {
-  padding: 10px 8px; border: 1px dashed #223047; border-radius: 6px;
-  font-size: 12.5px; color: #9bb0bd; background: #0b0f14;
+  padding: 10px 8px; border: 1px dashed var(--border, #282828); border-radius: 6px;
+  font-size: 12.5px; color: var(--text-dim, #8e9aa7); background: var(--floww-surface, var(--panel, #111111));
 }
 
 /* Deliberate secondary disclosures below the maps stay calm. */
@@ -211,13 +211,13 @@
   display: inline-flex; border: none; background: transparent; border-radius: 5px;
 }
 .tdk-head .triad-context-disclosure > summary {
-  border: 1px solid #34405b; border-radius: 5px; background: #101625;
+  border: 1px solid var(--floww-line, var(--border-2, #454545)); border-radius: 5px; background: var(--floww-control, var(--surface-3, #222222));
   padding: 3px 10px; min-height: 28px; display: inline-flex; align-items: center;
 }
 .tdk-head .triad-context-disclosure[open] { position: relative; }
 .tdk-head .triad-context-disclosure .triad-context-body {
   position: absolute; top: calc(100% + 6px); left: 0; z-index: 30; min-width: 380px; max-width: 560px;
-  background: #0d1117; border: 1px solid #263044; border-radius: 7px;
+  background: var(--floww-surface, var(--panel, #111111)); border: 1px solid var(--floww-line, var(--border-2, #454545)); border-radius: 7px;
   padding: 8px 10px; box-shadow: 0 10px 28px rgba(0,0,0,.45);
 }
 .tdk-head .triad-context-disclosure .triad-context { flex-wrap: wrap; }
@@ -252,30 +252,30 @@
    snapshot id, full UTC clock, source and formula inside the NAMED CLOSED
    Provenance detail. Charcoal tokens only; no new visual brand. */
 .tdk-head-sub .tdk-observation { margin: 0; display: inline-flex; align-items: baseline; gap: 10px; min-width: 0; }
-.tdk-head-sub .tdk-observation-line { font-size: 12px; color: #9bb0bd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tdk-head-sub .tdk-observation-line { font-size: 12px; color: var(--text-dim, #8e9aa7); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tdk-observation .tdk-provenance-details { display: inline-block; }
 .tdk-observation .tdk-provenance-details > summary {
-  cursor: pointer; font-size: 12px; color: #7d94a6; list-style: none;
-  border: 1px solid #263041; border-radius: 6px; padding: 1px 8px; white-space: nowrap;
+  cursor: pointer; font-size: 12px; color: var(--text-dim, #8e9aa7); list-style: none;
+  border: 1px solid var(--floww-line, var(--border-2, #454545)); border-radius: 6px; padding: 1px 8px; white-space: nowrap;
 }
 .tdk-observation .tdk-provenance-details > summary::-webkit-details-marker { display: none; }
-.tdk-observation .tdk-provenance-details[open] > summary { color: #dce8f2; border-color: #3a4a63; }
+.tdk-observation .tdk-provenance-details[open] > summary { color: var(--text, #d5dde5); border-color: var(--floww-line, var(--border-2, #454545)); }
 .tdk-observation .tdk-provenance-details dl {
   position: relative; z-index: 5; margin: 6px 0 0; padding: 8px 10px;
-  background: #0d1117; border: 1px solid #263041; border-radius: 8px;
-  font-size: 12px; color: #9bb0bd; max-width: 420px;
+  background: var(--floww-surface, var(--panel, #111111)); border: 1px solid var(--floww-line, var(--border-2, #454545)); border-radius: 8px;
+  font-size: 12px; color: var(--text-dim, #8e9aa7); max-width: 420px;
   display: grid; grid-template-columns: auto 1fr; gap: 2px 10px;
   box-shadow: 0 8px 32px rgba(0,0,0,0.4);
 }
-.tdk-observation .tdk-provenance-details dt { color: #7d94a6; }
-.tdk-observation .tdk-provenance-details dd { margin: 0; overflow-wrap: anywhere; color: #dce8f2; }
+.tdk-observation .tdk-provenance-details dt { color: var(--text-dim, #8e9aa7); }
+.tdk-observation .tdk-provenance-details dd { margin: 0; overflow-wrap: anywhere; color: var(--text, #d5dde5); }
 
 /* Owner 13:40 desktop composition: the ONE concise selection cue shown while
    the dock is closed and nothing is selected — the comparison keeps full
    width until a real selection (or the header toggle) opens the inspector. */
 .triad-selection-cue {
-  font-size: 12px; color: #8fa6ba; padding: 2px 0 6px; margin: 0;
-  border-bottom: 1px solid #1f2733;
+  font-size: 12px; color: var(--text-dim, #8e9aa7); padding: 2px 0 6px; margin: 0;
+  border-bottom: 1px solid var(--border, #282828);
 }
 .triad-selection-cue::before { content: "◎ "; color: #e3c16a; }
 
@@ -288,3 +288,129 @@
    .skh-market ONLY: the Stock grid keeps its exact default. */
 .skylit-heatmap-wrapper.skh-market .trin-grid-table .trin-cell { min-width: 78px; padding: 0 5px; }
 .skylit-heatmap-wrapper.skh-market .trin-grid-table .trin-strike-cell { min-width: 60px; padding: 0 6px 0 4px; }
+
+/* ============================================================
+   Owner 20:51 — the quiet Market comparison (Hallmark app-scope:
+   the tool disappears into the task; tokens, focus and states bind).
+   Measured before: 245px of chrome above 418px of maps at 1470x950,
+   189px of simultaneous rows below, two 28px teal pane headers with
+   duplicated units/Center, and a full-width cue row.
+   ============================================================ */
+
+/* ONE compact command bar: a single calm strip, one hairline, no boxes.
+   Owner Oct27 color contract: raised control surface, contract tokens
+   with fallbacks until the shared tokens compose. */
+.trinity-desktop .tdk-head.tdk-command-bar {
+  padding: 5px 10px 6px;
+  gap: 2px;
+  border: 1px solid var(--floww-line, var(--border-2, #454545));
+  border-radius: 6px;
+  background: var(--floww-control, var(--surface-3, #222222));
+}
+.trinity-desktop .tdk-head-row { min-height: 30px; }
+.trinity-desktop .tdk-head-group { border-right-color: var(--floww-line, var(--border-2, #454545)); }
+.trinity-desktop .tdk-head-sub {
+  display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+  font-size: 12px; color: var(--text-dim, #8e9aa7); padding: 0 2px;
+}
+
+/* The inline cue: ONE concise instruction inside the bar, never a row.
+   The muted gold selection/focus accent is preserved. */
+.trinity-desktop .triad-selection-cue {
+  margin-left: auto; font-size: 12px; color: var(--gold, #e3c16a);
+  border: 0; border-bottom: 0; padding: 1px 8px; white-space: nowrap;
+}
+.trinity-desktop .triad-selection-cue::before { content: ""; }
+
+/* The maps take the REMAINING height — the working canvas grows */
+.trinity-desktop .triad-pair {
+  height: auto; flex: 1 1 auto; min-height: 340px;
+}
+.trinity-desktop .triad-pane { display: flex; flex-direction: column; min-height: 0; }
+.trinity-desktop .triad-pane .skylit-heatmap-wrapper,
+.trinity-desktop .triad-pane .skylit-heatmap-container { flex: 1 1 auto; min-height: 0; }
+
+/* The pane headers: slim, contract charcoal (the teal rgb(16,38,46) is
+   retired) — panel surface, hairline border. */
+.trinity-desktop .triad-pane-header {
+  background: var(--floww-surface, var(--panel, #111111));
+  border-bottom: 1px solid var(--floww-line, var(--border-2, #454545));
+  padding: 2px 8px; min-height: 22px; font-size: 12px;
+}
+.trinity-desktop .triad-pane-title { font-size: 12px; color: var(--text, #d5dde5); }
+
+/* Landmarks inside the workspace tab: the teal tint retired here too */
+.trinity-desktop .heatmap-landmarks {
+  background: var(--floww-surface, var(--panel, #111111));
+  border-color: var(--border, #282828);
+}
+
+/* ONE synchronized Center: the per-map control row is hidden in Market
+   mode ONLY (the Stock default keeps its own controls byte-untouched). */
+.skylit-heatmap-wrapper.skh-market .heatmap-view-controls { display: none; }
+
+/* The workspace tab strip: the deliberate secondary surface */
+.trinity-desktop .triad-workspace-tabs {
+  display: flex; gap: 2px; align-items: center;
+  border-bottom: 1px solid var(--border, #282828); padding: 0 2px;
+}
+.trinity-desktop .triad-workspace-tabs button {
+  background: transparent; border: 0; border-bottom: 2px solid transparent;
+  color: var(--text-dim, #8e9aa7); font-size: 12px; padding: 4px 10px 5px; cursor: pointer;
+}
+.trinity-desktop .triad-workspace-tabs button:hover {
+  color: var(--text, #d5dde5);
+  background: var(--floww-control, var(--surface-3, #222222));
+}
+.trinity-desktop .triad-workspace-tabs button[aria-selected="true"] {
+  color: var(--text, #d5dde5); border-bottom-color: var(--gold, #e3c16a);
+}
+.trinity-desktop .triad-workspace-tabs button:focus-visible,
+.trinity-desktop .tdk-head button:focus-visible,
+.trinity-desktop .triad-workspace-tabs button:focus-visible {
+  outline: 2px solid #e3c16a; outline-offset: -2px;
+}
+
+/* Reversible Focus working-canvas: the comparison fills the viewport, the
+   command bar, the supporting workspace AND any open inspector/backdrop
+   step aside (Review 10:xx: mounted-but-hidden — every state survives;
+   the z60 inspector never covers the z40 focused canvas at <=1280; Exit
+   restores the usable current context). New selections in Focus update the
+   selection without covering the canvas. */
+.trinity-desktop.tdk-focus-mode .tdk-head,
+.trinity-desktop.tdk-focus-mode .triad-workspace,
+.trinity-desktop.tdk-focus-mode .tdk-dock,
+.trinity-desktop.tdk-focus-mode .tdk-backdrop { display: none; }
+.trinity-desktop.tdk-focus-mode main.tdk-main {
+  position: fixed; inset: 6px; z-index: 40;
+  background: var(--floww-surface, var(--panel, #111111));
+  padding: 4px; border-radius: 6px;
+}
+.trinity-desktop.tdk-focus-mode .triad-pair { min-height: calc(100vh - 90px); }
+.trinity-desktop .triad-focus-exit {
+  position: fixed; top: 12px; right: 14px; z-index: 60;
+  background: var(--floww-raised, var(--panel-2, #191919));
+  border: 1px solid var(--border, #282828); border-radius: 5px;
+  color: var(--text, #d5dde5); font-size: 12px; padding: 5px 12px; cursor: pointer;
+}
+.trinity-desktop .triad-focus-exit:hover { background: var(--floww-control, var(--surface-3, #222222)); }
+.trinity-desktop .triad-focus-exit:focus-visible { outline: 2px solid #e3c16a; outline-offset: 1px; }
+
+/* Owner Oct27: native controls inside the Market command bar render in the
+   contract palette (never browser gray/white). Scoped to this page only. */
+.trinity-desktop .tdk-head select,
+.trinity-desktop .tdk-head input,
+.trinity-desktop .tdk-head details summary {
+  background: var(--floww-control, var(--surface-3, #222222));
+  color: var(--text, #d5dde5);
+  border: 1px solid var(--floww-line, var(--border-2, #454545));
+  border-radius: 4px;
+}
+.trinity-desktop .tdk-head select:focus-visible,
+.trinity-desktop .tdk-head input:focus-visible {
+  outline: 2px solid var(--gold, #e3c16a); outline-offset: -1px;
+}
+.trinity-desktop .tdk-head option {
+  background: var(--floww-raised, var(--panel-2, #191919));
+  color: var(--text, #d5dde5);
+}
