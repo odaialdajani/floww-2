@@ -102,8 +102,6 @@ class SingleLeg(BaseModel):
 
 Strategy = IronCondor | Straddle | Strangle | VerticalSpread | CalendarSpread | SingleLeg
 
-Strategy = IronCondor | Straddle | Strangle | VerticalSpread | CalendarSpread | SingleLeg
-
 
 def generate_client_order_id(intent: dict[str, Any], session_salt: str = "") -> str:
     """Generate deterministic client order ID. Same intent + salt = same ID."""
@@ -469,7 +467,7 @@ def _nearest_weekly_expiry(today: datetime | None = None) -> str:
     """Return ISO date of the next Friday (or today if Friday). Weekly options proxy."""
     now = today or datetime.now(UTC)
     days_to_friday = (4 - now.weekday()) % 7  # Mon=0 ... Fri=4
-    target = now.date() if days_to_friday == 0 else now.date()
+    target = now.date()
     if days_to_friday > 0:
         from datetime import timedelta
         target = (now + timedelta(days=days_to_friday)).date()
