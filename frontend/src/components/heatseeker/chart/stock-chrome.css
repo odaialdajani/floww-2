@@ -26,6 +26,11 @@ Imported by RecordedPriceChart (Stock-local); shared files untouched. */
 .stock-inspector { border-radius: 8px; border-color: var(--border, #282828);
   background: var(--floww-surface, var(--panel, #111111)); }
 .stock-inspector-tab { font-size: 11px; padding: 3px 8px; }
+/* The inspector's legacy hairlines follow the same token contract (the
+   App.css literals stay untouched — this override wins the later cascade). */
+.stock-inspector-head { border-color: var(--border, #282828); }
+.stock-inspector-tab { border-color: var(--border, #282828); }
+.stock-inspector-close { border-color: var(--border, #282828); }
 .stock-inspector-title { font-size: 12px; color: var(--text-dim); }
 .stock-inspector-body .price-history-drawings { border: none; padding: 0; margin: 0; }
 .stock-inspector-body details.price-studies-panel { border: none; }
