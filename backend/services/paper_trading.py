@@ -17,6 +17,7 @@ References:
 """
 from __future__ import annotations
 
+import hashlib
 import logging
 import time
 from datetime import UTC, datetime
@@ -149,8 +150,15 @@ class PaperTradingEngine:
         kyle_impact = self.kyle_lambda.estimate_impact(order.quantity)
         fill_price = market.ask + kyle_impact if order.side == "buy" else market.bid - kyle_impact
 
-        # Add some random slippage (normal distribution, 1 bps std)
-        slippage = fill_price * 0.0001 * (hash(order_id) % 100 - 50) / 50
+        # Deterministic replay slippage (paper-recovery B2): the
+        # pseudo-random component must be process-independent so the same
+        # order history replays to the same fills in every process. It is
+        # derived from a stable sha256 digest with the SAME bounded
+        # arithmetic as before — (n % 100 - 50) / 50 over n in 0..99, a
+        # uniform factor in [-1.0, 0.98], i.e. at most 1 bp of the fill.
+        # (The previous hash(order_id) form was PYTHONHASHSEED-salted.)
+        _slip_n = int.from_bytes(hashlib.sha256(order_id.encode()).digest()[:8], "big")
+        slippage = fill_price * 0.0001 * (_slip_n % 100 - 50) / 50
         fill_price += slippage
 
         # Commission
