@@ -580,3 +580,26 @@ test("review 10:xx: an OPEN inspector + selection survives Focus hidden (never c
   expect(screen.getByTestId("triad-view").className).not.toMatch(/tdk-focus-mode/);
   expect(screen.getByTestId("triad-view").className).toMatch(/tdk-dock-open/);
 });
+
+test("workspace tabs follow the inspector's own ARIA wiring (tab id + aria-controls + tabpanel)", async () => {
+  await act(async () => { render(<TrinityView />); });
+  await waitFor(() => expect(screen.getByTestId("triad-raw-adjusted")).toBeInTheDocument());
+  await openTab("walls");
+  const tab = screen.getByTestId("triad-tab-walls");
+  expect(tab).toHaveAttribute("id", "triad-ws-walls-tab");
+  expect(tab).toHaveAttribute("aria-controls", "triad-ws-walls-panel");
+  expect(tab).toHaveAttribute("aria-selected", "true");
+  const panel = document.getElementById("triad-ws-walls-panel");
+  expect(panel).not.toBeNull();
+  expect(panel.getAttribute("role")).toBe("tabpanel");
+  expect(panel.getAttribute("aria-labelledby")).toBe("triad-ws-walls-tab");
+  // the walls tab is still open from the pre-loop assertions — toggle it
+  // closed so the loop's openTab is a fresh OPEN, not a toggle-off
+  await openTab("walls");
+  // each of the five tabs wires its own panel
+  for (const [id] of [["walls"], ["landmarks"], ["replay"], ["profile"], ["review"]]) {
+    await openTab(id);
+    expect(screen.getByTestId(`triad-tab-${id}`).getAttribute("aria-controls")).toBe(`triad-ws-${id}-panel`);
+    expect(document.getElementById(`triad-ws-${id}-panel`)).not.toBeNull();
+  }
+});
