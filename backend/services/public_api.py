@@ -589,7 +589,11 @@ class PublicBroker:
             exp_str = f"20{y:02d}-{mth:02d}-{d:02d}"
 
         od = quote_data.get("optionDetails", {})
-        greeks = od.get("greeks", {}) if od else {}
+        greeks = od.get("greeks") if od else None
+        # The optional object may be explicitly null on a usable quote.
+        # Preserve missing Greeks as unknown, independently of quote fields.
+        if greeks is None:
+            greeks = {}
         try:
             bid_size = int(quote_data["bidSize"]) if quote_data.get("bidSize") is not None else None
         except (TypeError, ValueError):
