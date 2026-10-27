@@ -17,6 +17,7 @@ References:
 """
 from __future__ import annotations
 
+import hashlib
 import logging
 import time
 from datetime import UTC, datetime
@@ -127,10 +128,21 @@ class PaperTradingEngine:
         order_id: str,
         market: MarketState,
     ) -> ExecutionResult:
-        """Execute a paper trade with simulated market impact."""
+        """Execute a paper trade with simulated market impact.
+
+        Idempotency guard (paper-recovery B1): an order executes exactly
+        once. Replaying ``execute_order`` on a terminal order (lost reply /
+        operator retry) is refused with ValueError — the same refusal class
+        as the missing-order path — instead of moving cash, positions and
+        trade_history a second time.
+        """
         order = self.orders.get(order_id)
         if not order:
             raise ValueError(f"Order {order_id} not found")
+        if order.status != "pending":
+            raise ValueError(
+                f"Order {order_id} is already {order.status}; duplicate execution refused"
+            )
 
         start_time = time.monotonic()
 
@@ -138,8 +150,15 @@ class PaperTradingEngine:
         kyle_impact = self.kyle_lambda.estimate_impact(order.quantity)
         fill_price = market.ask + kyle_impact if order.side == "buy" else market.bid - kyle_impact
 
-        # Add some random slippage (normal distribution, 1 bps std)
-        slippage = fill_price * 0.0001 * (hash(order_id) % 100 - 50) / 50
+        # Deterministic replay slippage (paper-recovery B2): the
+        # pseudo-random component must be process-independent so the same
+        # order history replays to the same fills in every process. It is
+        # derived from a stable sha256 digest with the SAME bounded
+        # arithmetic as before — (n % 100 - 50) / 50 over n in 0..99, a
+        # uniform factor in [-1.0, 0.98], i.e. at most 1 bp of the fill.
+        # (The previous hash(order_id) form was PYTHONHASHSEED-salted.)
+        _slip_n = int.from_bytes(hashlib.sha256(order_id.encode()).digest()[:8], "big")
+        slippage = fill_price * 0.0001 * (_slip_n % 100 - 50) / 50
         fill_price += slippage
 
         # Commission
@@ -156,12 +175,16 @@ class PaperTradingEngine:
         self._update_position(order, fill_price)
 
         # Record trade
+        # NOTE (paper-recovery B14): fill_price is recorded UNROUNDED so the
+        # journal can reconstruct the cash book exactly; display rounding
+        # stays in ExecutionResult.avg_price. A 4dp-truncated journal price
+        # drifted from cash by up to 5e-5 * qty per fill.
         trade = {
             "order_id": order_id,
             "symbol": order.symbol,
             "side": order.side,
             "quantity": order.quantity,
-            "fill_price": round(fill_price, 4),
+            "fill_price": fill_price,
             "commission": commission,
             "total_cost": round(total_cost, 2),
             "kyle_impact": round(kyle_impact, 6),

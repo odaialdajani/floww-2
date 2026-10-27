@@ -24,6 +24,7 @@ References:
 from __future__ import annotations
 
 import logging
+import math
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -35,6 +36,22 @@ logger = logging.getLogger(__name__)
 
 
 _pt_log = logging.getLogger("paper_trader")
+
+
+def _invalid_price(price: Any) -> str | None:
+    """Return the reason a price cannot size a position, or None if valid.
+
+    Sizing divides by price, so zero/negative/NaN/infinite prices must be
+    refused before any cash or position mutation (paper-recovery B4).
+    """
+    if isinstance(price, bool) or not isinstance(price, (int, float)):
+        return "invalid price: must be a number"
+    if not math.isfinite(price):
+        return "invalid price: must be finite"
+    if price <= 0:
+        return "invalid price: must be positive"
+    return None
+
 
 async def _log_failed_insert(coro, kind: str):
     """Wrap a fire-and-forget DB insert so failures are logged, not silent."""
@@ -101,6 +118,11 @@ class PaperTradeRecord:
     exit_time: str
     realized_pnl: float
     signal_data: dict[str, Any] = field(default_factory=dict)
+    # Close-side commission actually charged to cash (paper-recovery B15):
+    # _close_position charges qty * commission_per_share on every cover, but
+    # the journal never recorded it, so order_log alone could NOT reconcile
+    # the cash book (the close's cash effect is exit_value ∓ commission).
+    commission: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -113,6 +135,7 @@ class PaperTradeRecord:
             "entry_time": self.entry_time,
             "exit_time": self.exit_time,
             "realized_pnl": round(self.realized_pnl, 2),
+            "commission": round(self.commission, 2),
             "signal_data": self.signal_data,
         }
 
@@ -217,11 +240,23 @@ class PaperTrader:
             return {"status": "no_action", "reason": "HOLD signal"}
 
         if signal == Signal.BUY:
-            return self._execute_buy(symbol, current_price, signal_data)
+            action = "BUY"
         elif signal == Signal.SELL:
-            return self._execute_sell(symbol, current_price, signal_data)
+            action = "SELL"
+        else:
+            return {"status": "error", "reason": f"Unknown signal: {signal}"}
 
-        return {"status": "error", "reason": f"Unknown signal: {signal}"}
+        # Price guard (paper-recovery B4): sizing divides by price
+        # (int(position_value / price)), so a zero, negative, NaN or
+        # infinite price must be refused — never crash, never corrupt sizing.
+        price_error = _invalid_price(current_price)
+        if price_error is not None:
+            return {"action": action, "symbol": symbol,
+                    "status": "rejected", "reason": price_error}
+
+        if signal == Signal.BUY:
+            return self._execute_buy(symbol, current_price, signal_data)
+        return self._execute_sell(symbol, current_price, signal_data)
 
     def _execute_buy(
         self,
@@ -393,6 +428,7 @@ class PaperTrader:
             entry_time=pos.entry_time,
             exit_time=pos.exit_time,
             realized_pnl=pnl,
+            commission=self.commission_per_share * pos.quantity,
         )
         self.trade_history.append(trade)
         self._persist_trade(trade)
