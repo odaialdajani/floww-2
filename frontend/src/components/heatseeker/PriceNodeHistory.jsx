@@ -34,7 +34,7 @@ function savedViewLabel(scope,index){
  return mode+" | "+sorted.length+" "+(sorted.length===1?"expiry":"expiries")+" | "+sorted[0]+(sorted.length>1?" to "+sorted.at(-1):"");
 }
 
-export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen, onOpenChange, primary = false, toolbarActions = null, exposureLine = null, darkLevels = null, flowBars = null, alertLines = null, showAtlas = true, forcedScope = null, onRecordNodes = null, cvdLine = null, onQuality = null, onEnvelopes = null, fitMode = "fit-visible", onReplayState = null, onReplayController = null, replaySourceId = null, replayEpoch = null, sync = null, onSyncEvent = null }) {
+export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen, onOpenChange, primary = false, toolbarActions = null, exposureLine = null, darkLevels = null, flowBars = null, alertLines = null, showAtlas = true, forcedScope = null, onRecordNodes = null, cvdLine = null, onQuality = null, onEnvelopes = null, fitMode = "fit-visible", onReplayState = null, onReplayController = null, replaySourceId = null, replayEpoch = null, sync = null, onSyncEvent = null, chartFocus = false, onChartFocusChange = null }) {
   const [localOpen, setLocalOpen] = useState(false);
   const open = controlledOpen ?? (primary || localOpen);
   const setOpen = value => { setLocalOpen(value); onOpenChange?.(value); };
@@ -171,7 +171,9 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
   // controlled entry — the Data-tab toggle and the kill switch drive it.
   const [workspaceOn, setWorkspaceOn] = useState(() => { setChartV1(true); return isNewChartEnabled(); });
   const [fallbackNote, setFallbackNote] = useState(null);
-  const [dockOpen, setDockOpen] = useState(true);
+  // Root 20:51: the dock defaults CLOSED — the first screen is full-width
+  // candles; Studies/Drawings/Workspace open it deliberately.
+  const [dockOpen, setDockOpen] = useState(false);
   const [dockTab, setDockTab] = useState("indicators");
   const openDock = tab => { setDockTab(tab); setDockOpen(true); };
   const recordNodes = useCallback(async () => {
@@ -608,10 +610,10 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
     <span className="price-history-summary" data-testid="price-history-summary" title="Selected history period and session coverage">{historyDayLabel} · {historySessionLabel}</span>
     <span className="stock-dock-actions" data-testid="stock-dock-actions">{!workspaceOn&&<button type="button" className="stock-dock-btn" data-testid="workspace-reentry" title="Open the docked workspace" onClick={()=>{setChartV1(true); setWorkspaceOn(true); setDockOpen(true);}}>Docked workspace</button>}
       {!workspaceOn&&fallbackNote&&<span className="pane-study-approx" data-testid="workspace-fallback-note" role="note">{fallbackNote}</span>}
-      {workspaceOn&&<button type="button" className="stock-dock-btn" aria-pressed={dockOpen&&dockTab==="indicators"} data-testid="stock-dock-open-indicators" title="Indicators: studies and measured-pane controls" onClick={()=>openDock("indicators")}>Indicators{studyInstances.length?` · ${studyInstances.length}`:""}</button>}
-      {workspaceOn&&<button type="button" className="stock-dock-btn" aria-pressed={dockOpen&&dockTab==="drawings"} data-testid="stock-dock-open-drawings" title="Drawings: tools, presets, selection" onClick={()=>openDock("drawings")}>Drawings{drawings.length?` · ${drawings.length}`:""}</button>}
-      {workspaceOn&&<button type="button" className="stock-dock-btn" aria-pressed={dockOpen&&dockTab==="data"} data-testid="stock-dock-open-data" title="Data: saved views, reload, node recording, option contract" onClick={()=>openDock("data")}>Data</button>}
-      {workspaceOn&&<button type="button" className="stock-dock-btn" aria-pressed={dockOpen&&dockTab==="review"} data-testid="stock-dock-open-review" title="Review: the Wall→Contract→AskFlow→Public brief workflow" onClick={()=>openDock("review")}>Review</button>}
+      {workspaceOn&&!dockOpen&&<button type="button" className="stock-dock-btn" aria-pressed={dockOpen&&dockTab==="indicators"} data-testid="stock-dock-open-indicators" title="Indicators: studies and measured-pane controls" onClick={()=>openDock("indicators")}>Indicators{studyInstances.length?` · ${studyInstances.length}`:""}</button>}
+      {workspaceOn&&!dockOpen&&<button type="button" className="stock-dock-btn" aria-pressed={dockOpen&&dockTab==="drawings"} data-testid="stock-dock-open-drawings" title="Drawings: tools, presets, selection" onClick={()=>openDock("drawings")}>Drawings{drawings.length?` · ${drawings.length}`:""}</button>}
+      {workspaceOn&&!dockOpen&&<button type="button" className="stock-dock-btn" aria-pressed={dockOpen} data-testid="stock-dock-open-data" title="Workspace: Data and Review tabs" onClick={()=>openDock("data")}>Workspace</button>}
+      {onChartFocusChange&&<button type="button" className="stock-dock-btn" aria-pressed={chartFocus} data-testid="chart-focus-toggle" title={chartFocus?"Exit chart focus (Esc) — restore the desk sections":"Chart focus — hide the page-local secondary chrome; candles get the viewport"} onClick={()=>onChartFocusChange(!chartFocus)}>{chartFocus?"Exit focus":"Chart focus"}</button>}
     </span></>;
   const historyPeriodControls = <>
     <label className="price-history-view">History period<select aria-label="History sessions" title="History period" value={days} onChange={e=>setDays(Number(e.target.value))}><option value={1}>1 session</option><option value={5}>1 week</option><option value={20}>1 month</option><option value={60}>3 months</option><option value={260}>1 year</option><option value={2600}>5 years</option></select></label>
@@ -727,6 +729,13 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
 </>;
   // Replay affordances stay visible while Chart tools is closed: pause state
   // and candle time must remain readable during an active replay.
+  // Esc exits chart focus — the same reversible action as the row button.
+  useEffect(() => {
+    if (!chartFocus || !onChartFocusChange) return;
+    const onKey = e => { if (e.key === "Escape") onChartFocusChange(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [chartFocus, onChartFocusChange]);
   const replayControls = !!frames.length&&<div className="price-history-replay"><button type="button" onClick={()=>{if(!playing&&position>=frames.length-1)setPosition(0);setPlaying(value=>!value);}}>{playing?"Pause replay":"Play replay"}</button><input aria-label="Replay position" type="range" min={0} max={frames.length-1} value={position} onChange={e=>{setPosition(Number(e.target.value));setPlaying(false);}}/><span>{chartTime(frames[position]?.time,true)} New York</span><button type="button" onClick={()=>{setPosition(frames.length-1);setPlaying(false);}}>Latest candle</button></div>;
   const missingMapScope=usingMapScope&&payload?.node_status!=="unavailable"&&Array.isArray(payload?.scopes)&&!payload.scopes.includes(forcedScope);
   const details = <div className="price-history-details">
@@ -802,7 +811,7 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
           return pt?<circle key={"draft-"+i} data-testid="draft-anchor" cx={pt.x} cy={pt.y} r="4" fill="#e3c16a" />:null;})}
       </g>;
   };
-  return <section className="panel price-node-history" data-open={open} data-read-badge={readBadge} style={{margin:"12px 0",padding:12}} data-testid="price-node-history">
+  return <section className={"panel price-node-history"+(chartFocus?" price-node-focused":"")} data-open={open} data-read-badge={readBadge} style={{margin:chartFocus?"4px 0":undefined,padding:chartFocus?6:12}} data-testid="price-node-history">
     {!primary&&<button type="button" className="skylit-trade-mode-btn" aria-expanded={open} onClick={()=>{setOpen(!open);setPlaying(false);}}>Price chart + historical nodes</button>}
     {open&&<div className="stock-pane-row" data-testid="stock-pane-row">
     <div className="stock-pane-main">

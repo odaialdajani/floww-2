@@ -109,13 +109,13 @@ test('the rail offers the risk tool and picking it arms a three-anchor draft', a
   window.localStorage.clear();
   render(<PriceNodeHistory ticker="SPY" open />);
   await waitFor(() => expect(screen.getByTestId('recorded-price-chart')).toHaveAttribute('data-candles', '3'));
-  if (document.querySelector('[data-testid="stock-dock-open-drawings"]')) fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
+  if (document.querySelector('[data-testid="stock-dock-open-drawings"]')) fireEvent.click(document.querySelector('[data-testid="stock-dock-open-drawings"]') || screen.getByTestId('stock-inspector-tab-drawings'));
   fireEvent.click(screen.getByTestId('rail-tool-risk'));
-  if (document.querySelector('[data-testid="stock-dock-open-drawings"]')) fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
+  if (document.querySelector('[data-testid="stock-dock-open-drawings"]')) fireEvent.click(document.querySelector('[data-testid="stock-dock-open-drawings"]') || screen.getByTestId('stock-inspector-tab-drawings'));
   expect(screen.getByTestId('rail-tool-risk')).toHaveAttribute('aria-pressed', 'true');
   // the draft needs three anchors (CHART-C090 entry/stop/target) before it commits
   expect(anchorsFor('risk')).toBe(3);
-  if (document.querySelector('[data-testid="stock-dock-open-drawings"]')) fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
+  if (document.querySelector('[data-testid="stock-dock-open-drawings"]')) fireEvent.click(document.querySelector('[data-testid="stock-dock-open-drawings"]') || screen.getByTestId('stock-inspector-tab-drawings'));
   expect(screen.getByTestId('rail-cancel')).toBeInTheDocument();
 });
 

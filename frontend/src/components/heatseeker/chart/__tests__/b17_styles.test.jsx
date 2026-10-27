@@ -52,23 +52,23 @@ test('the rail styles the SELECTED drawing and the chart renders it; unstyled st
   let shape = document.querySelector('[data-testid="drawing-shape"]');
   expect(shape.getAttribute('stroke')).toBe('#7fa6c0'); // incumbent unselected default
   // select the drawing, then style it through the rail controls
-  fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
+  fireEvent.click(document.querySelector('[data-testid="stock-dock-open-drawings"]') || screen.getByTestId('stock-inspector-tab-drawings'));
   fireEvent.click(screen.getByTestId('rail-select-' + d.id));
   expect(document.querySelector('[data-testid="drawing-shape"]').getAttribute('data-selected')).toBe('true');
   const color = screen.getByTestId('rail-style-color');
   fireEvent.change(color, { target: { value: '#5ec986' } });
   await waitFor(() => expect(document.querySelector('[data-testid="drawing-shape"]').getAttribute('stroke')).toBe('#5ec986'));
-  fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
+  fireEvent.click(document.querySelector('[data-testid="stock-dock-open-drawings"]') || screen.getByTestId('stock-inspector-tab-drawings'));
   fireEvent.click(screen.getByTestId('rail-style-dash'));
   await waitFor(() => expect(document.querySelector('[data-testid="drawing-shape"]').getAttribute('stroke-dasharray')).toBe('6 3'));
   // width rides the style model too
-  fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
+  fireEvent.click(document.querySelector('[data-testid="stock-dock-open-drawings"]') || screen.getByTestId('stock-inspector-tab-drawings'));
   fireEvent.change(screen.getByTestId('rail-style-width'), { target: { value: '3' } });
   await waitFor(() => expect(document.querySelector('[data-testid="drawing-shape"]').getAttribute('stroke-width')).toBe('3'));
   // persisted with the style
   const persisted = JSON.parse(window.localStorage.getItem('floww.drawings.SPY'));
   expect(persisted[0].style).toEqual({ color: '#5ec986', dash: true, width: 3 });
   // selection still draws gold only when unstyled
-  fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
+  fireEvent.click(document.querySelector('[data-testid="stock-dock-open-drawings"]') || screen.getByTestId('stock-inspector-tab-drawings'));
   expect(screen.getByTestId('rail-style-color')).toBeInTheDocument();
 });

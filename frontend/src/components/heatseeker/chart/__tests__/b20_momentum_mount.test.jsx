@@ -22,6 +22,11 @@ const mountPane = async (frames = FRAMES) => {
   axios.get.mockImplementation(async () => ({ data: { ticker: 'SPY', frames, candles_with_recorded_nodes: frames.length, scopes: [] } }));
   const r = render(<PriceNodeHistory ticker="SPY" open />);
   await waitFor(() => {
+    const n0 = Number(screen.getByTestId('recorded-price-chart').getAttribute('data-candles'));
+    expect(n0).toBeGreaterThan(0);
+  }, { timeout: 5000 });
+  fireEvent.click(screen.getByTestId('stock-dock-open-indicators'));
+  await waitFor(() => {
     const n = Number(screen.getByTestId('recorded-price-chart').getAttribute('data-candles'));
     expect(n).toBeGreaterThan(0);
   }, { timeout: 5000 });

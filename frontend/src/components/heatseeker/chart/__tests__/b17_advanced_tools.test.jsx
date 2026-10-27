@@ -75,7 +75,7 @@ test('B17 MOUNTED: the rail offers every registry tool including brush and fib',
   const rail = document.querySelector("[aria-label='Drawing tools']");
   expect(rail).not.toBeNull();
   for (const id of ['brush', 'fib', 'horizontal-ray', 'text', 'trend']) {
-    if (document.querySelector('[data-testid="stock-dock-open-drawings"]')) fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
+    if (document.querySelector('[data-testid="stock-dock-open-drawings"]')) fireEvent.click(document.querySelector('[data-testid="stock-dock-open-drawings"]') || screen.getByTestId('stock-inspector-tab-drawings'));
     expect(screen.getByTestId('rail-tool-' + id)).toBeInTheDocument();
   }
 });
@@ -109,7 +109,7 @@ test('B17 pointer path: brush anchors stay raw (off-OHLC); trend at the same pix
   window.localStorage.clear();
   render(<PriceNodeHistory ticker="SPY" open />);
   await waitFor(() => expect(screen.getByTestId('drawing-layer')).toBeInTheDocument());
-  await act(async () => { fireEvent.click(screen.getByTestId('stock-dock-open-drawings')); });
+  await act(async () => { fireEvent.click(document.querySelector('[data-testid="stock-dock-open-drawings"]') || screen.getByTestId('stock-inspector-tab-drawings')); });
   const layer = screen.getByTestId('drawing-layer');
   const OHLC = new Set([99, 100, 101, 102, 104, 105, 103, 101, 100]);
   const place = async (tool, x1, y1, x2, y2) => {

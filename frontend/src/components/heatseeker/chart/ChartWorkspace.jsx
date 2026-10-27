@@ -53,7 +53,7 @@ export function isChartWorkspaceEnabled() {
 const WORKSPACE_LAYOUT_KEY = 'workspace-current';
 
 export default function ChartWorkspace({
-  ticker, useNew = false, open = true, primary = false, toolbarActions = null,
+  ticker, useNew = false, open = true, primary = false, toolbarActions = null, chartFocus = false, onChartFocusChange = null,
   forcedScope = null, onRecordNodes = null, showAtlas = true, exposureLine = null,
   darkLevels = null, flowBars = null, cvdLine = null,
   notice = null, onRetry = null, frames = null, nodes = [], bars = [], flow = null, atlasDarkLevels = [],
@@ -198,7 +198,7 @@ export default function ChartWorkspace({
     onChartContext({ descriptor: chartDescriptor, current: chartCurrent });
     return undefined;
   }, [chartDescriptor, chartCurrent, onChartContext]); // eslint-disable-line react-hooks/exhaustive-deps
-  const history = { ticker, open, primary, toolbarActions, forcedScope, onRecordNodes, showAtlas, exposureLine, darkLevels, flowBars, cvdLine, fitMode };
+  const history = { ticker, open, primary, toolbarActions, forcedScope, onRecordNodes, showAtlas, exposureLine, darkLevels, flowBars, cvdLine, fitMode, chartFocus, onChartFocusChange };
 
   // R21-03/04 supply wiring: the focused pane's own price-history fetch
   // publishes its recorded admission envelopes through onEnvelopes. An
@@ -468,7 +468,7 @@ export default function ChartWorkspace({
                   onQuality={setQuality} onEnvelopes={setEnvelopes} onReplayController={handleReplayController} onReplayState={handlePaneReplayState} replaySourceId={pane.id}
                   replayEpoch={layoutId + ':' + pane.generation}
                   sync={syncByPane[pane.id] || null} onSyncEvent={patch => emitSync(pane.id, patch)} />
-              : <PriceNodeHistory ticker={pane.symbol} open={open} primary={false} showAtlas={showAtlas} fitMode={fitMode} sync={syncByPane[pane.id] || null} onSyncEvent={patch => emitSync(pane.id, patch)} />)}
+              : <PriceNodeHistory ticker={pane.symbol} open={open} primary={false} showAtlas={showAtlas} fitMode={fitMode} sync={syncByPane[pane.id] || null} onSyncEvent={patch => emitSync(pane.id, patch)} chartFocus={chartFocus} onChartFocusChange={onChartFocusChange} />)}
           />
         </div>
         <details className="workspace-evidence" data-testid="workspace-evidence">
@@ -522,7 +522,7 @@ export default function ChartWorkspace({
           const zones = sessionZones(bars, { cursor: liveReport.cursor });
           const fmt = n => (Number.isFinite(n) ? `${Math.round(n * 100) / 100}` : 'unknown');
           return (
-            <div className="profiles-panel" data-testid="profiles-panel"
+            <div className="profiles-panel profiles-panel-flow" data-testid="profiles-panel"
               data-ib-status={ibServer ? ibServer.status : ib.status}
               data-ib-periods={(ibServer ? ibServer.status === 'available' : ib.status === 'ok') ? String(ibServer ? ibServer.coverage.expected_total : ib.periods) : '0'}
               data-va-status={va.status} data-cvd-status={cvd.status} data-dark-count={String(dark.length)}>

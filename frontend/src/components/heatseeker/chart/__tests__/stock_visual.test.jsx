@@ -25,24 +25,40 @@ const mountPane = async (props = {}) => {
   return r;
 };
 
-test('the dock renders open with all three tabs; studies reachable without any Tools disclosure', async () => {
+test('the dock opens deliberately with four tabs; studies reachable without any Tools disclosure', async () => {
   await mountPane();
+  // Root 20:51: the dock defaults CLOSED — the first screen is full-width
+  // candles; the closed workspace shows its honest single-line entry state
+  const closed = screen.getByTestId('stock-inspector');
+  expect(closed).toHaveAttribute('data-open', 'false');
+  expect(screen.getByTestId('stock-inspector-closed')).toBeInTheDocument();
+  fireEvent.click(document.querySelector('[data-testid="stock-dock-open-indicators"]') || screen.getByTestId('stock-inspector-tab-indicators'));
   const dock = screen.getByTestId('stock-inspector');
-  expect(dock).toHaveAttribute('data-open', 'true');
+  await waitFor(() => expect(dock).toHaveAttribute('data-open', 'true'));
   expect(dock).toHaveAttribute('data-active-tab', 'indicators');
+  // FOUR tabs: Indicators, Drawings, Data, Review — secondary content lives
+  // in the dock, not as duplicate row buttons
+  expect(screen.getByTestId('stock-inspector-tab-drawings')).toBeInTheDocument();
+  expect(screen.getByTestId('stock-inspector-tab-data')).toBeInTheDocument();
+  expect(screen.getByTestId('stock-inspector-tab-review')).toBeInTheDocument();
   // the catalog paints IN the Indicators tab — no nested summary, no Tools disclosure
   expect(screen.queryByTestId('studies-panel-summary')).not.toBeInTheDocument();
   expect(screen.getByTestId('indicators-search')).toBeInTheDocument();
-  expect(screen.queryAllByTestId(/^catalog-add-/).length + document.querySelectorAll('[data-testid^="catalog-add-"]').length).toBeGreaterThan(0);
+  expect(document.querySelectorAll('[data-testid^="catalog-add-"]').length).toBeGreaterThan(0);
   expect(document.querySelector('[data-testid="indicators-panel"]').closest('details')).toBeNull();
-  // the three dock buttons are visible in the chart row
-  expect(screen.getByTestId('stock-dock-open-indicators')).toBeInTheDocument();
-  expect(screen.getByTestId('stock-dock-open-data')).toBeInTheDocument();
-  expect(screen.getByTestId('stock-dock-open-review')).toBeInTheDocument();
+  // the dedup truth: with the dock OPEN the row openers hide — the dock's
+  // header tabs own navigation; the row keeps only the Focus action
+  expect(screen.queryByTestId('stock-dock-open-indicators')).toBeNull();
+  expect(screen.queryByTestId('stock-dock-open-drawings')).toBeNull();
+  expect(screen.getByTestId('stock-inspector-tab-indicators')).toBeInTheDocument();
+  expect(screen.getByTestId('stock-inspector-tab-drawings')).toBeInTheDocument();
+  expect(screen.getByTestId('stock-inspector-tab-data')).toBeInTheDocument();
+  expect(screen.getByTestId('stock-inspector-tab-review')).toBeInTheDocument();
 });
 
 test('tabs switch with real content; close and reopen are stable', async () => {
   await mountPane();
+  fireEvent.click(document.querySelector('[data-testid="stock-dock-open-indicators"]') || screen.getByTestId('stock-inspector-tab-indicators'));
   fireEvent.click(screen.getByTestId('stock-inspector-tab-data'));
   await waitFor(() => expect(screen.getByTestId('stock-inspector')).toHaveAttribute('data-active-tab', 'data'));
   // the Data tab carries the pane data actions (reload lives here now)
@@ -54,7 +70,7 @@ test('tabs switch with real content; close and reopen are stable', async () => {
   // close -> closed state; reopen from the chart row
   fireEvent.click(screen.getByTestId('stock-inspector-close'));
   await waitFor(() => expect(screen.getByTestId('stock-inspector')).toHaveAttribute('data-open', 'false'));
-  fireEvent.click(screen.getByTestId('stock-dock-open-indicators'));
+  fireEvent.click(document.querySelector('[data-testid="stock-dock-open-indicators"]') || screen.getByTestId('stock-inspector-tab-indicators'));
   await waitFor(() => expect(screen.getByTestId('stock-inspector')).toHaveAttribute('data-open', 'true'));
   // reopening the Indicators tab re-exposes the catalog directly — no summary
   expect(screen.getByTestId('indicators-search')).toBeInTheDocument();
@@ -62,8 +78,10 @@ test('tabs switch with real content; close and reopen are stable', async () => {
 });
 
 test('the Volume pane row drives the REAL measured-volume bars pane — both ways', async () => {
+  // the dock defaults closed: the Volume toggle lives in the Indicators tab
   await mountPane();
   // default: the measured volume bars pane renders (real rects under the candles)
+  fireEvent.click(document.querySelector('[data-testid="stock-dock-open-indicators"]') || screen.getByTestId('stock-inspector-tab-indicators'));
   const bars = () => document.querySelectorAll('[data-testid="volume-bar"]').length;
   expect(bars()).toBeGreaterThan(0);
   // the pane row turns the REAL bars pane OFF — not the profile, not a saved row
@@ -83,6 +101,7 @@ test('the Volume pane row drives the REAL measured-volume bars pane — both way
 
 test('the review tab shows the real current selection and families context', async () => {
   await mountPane();
+  fireEvent.click(document.querySelector('[data-testid="stock-dock-open-indicators"]') || screen.getByTestId('stock-inspector-tab-indicators'));
   fireEvent.click(screen.getByTestId('stock-inspector-tab-review'));
   // no drawing selected -> the honest empty teaching state
   expect(screen.getByTestId('stock-review-context')).toHaveTextContent(/no drawing selected/i);
@@ -90,7 +109,7 @@ test('the review tab shows the real current selection and families context', asy
   // the families note names all eight honestly and points to the workflow band
   expect(screen.getByTestId('stock-review-families')).toHaveTextContent(/levels, patterns, income, history, moves, structure, exposure, briefing/);
   // a placed drawing reflects in the Review tab (real selected-object context)
-  fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
+  fireEvent.click(document.querySelector('[data-testid="stock-dock-open-drawings"]') || screen.getByTestId('stock-inspector-tab-drawings'));
   fireEvent.click(screen.getByTestId('rail-tool-trend'));
   const layer = screen.getByTestId('drawing-layer');
   const event = new window.MouseEvent('pointerdown', { bubbles: true, cancelable: true, clientX: 150, clientY: 100 });
@@ -98,7 +117,7 @@ test('the review tab shows the real current selection and families context', asy
   const event2 = new window.MouseEvent('pointerdown', { bubbles: true, cancelable: true, clientX: 450, clientY: 240 });
   event2.pointerType = 'mouse'; act(() => { layer.dispatchEvent(event2); });
   const id = [...document.querySelectorAll('[data-testid^="rail-select-"]')].map(b => b.getAttribute('data-testid').slice('rail-select-'.length))[0];
-  fireEvent.click(screen.getByTestId('stock-dock-open-drawings'));
+  fireEvent.click(document.querySelector('[data-testid="stock-dock-open-drawings"]') || screen.getByTestId('stock-inspector-tab-drawings'));
   fireEvent.click(screen.getByTestId('rail-select-' + id));
   fireEvent.click(screen.getByTestId('stock-inspector-tab-review'));
   await waitFor(() => expect(screen.getByTestId('stock-review-selection')).toHaveTextContent(/trend drawing/));
