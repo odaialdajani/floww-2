@@ -47,10 +47,18 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
  const id=useId().replace(/[^a-zA-Z0-9_-]/g,'');
  useEffect(()=>{
   const element=surface.current;if(!element)return undefined;
-  const measure=()=>{const r=element.getBoundingClientRect();if(r.width>0&&r.height>0)setSize({width:r.width,height:r.height});};
+  // Same-object guard: an unchanged box returns the SAME state object, so a
+  // re-measure never re-renders by itself (no rAF loop). Layout changes from
+  // OUTSIDE the window — the dock toggle releasing/reserving its 300px, the
+  // focus fold — update this box with NO window event, so the per-render rAF
+  // below catches them the next frame (root-caused live: the surface read 865
+  // while the candles stayed drawn at 1175 until a resize event).
+  const measure=()=>{const r=element.getBoundingClientRect();if(r.width>0&&r.height>0)setSize(prev=>(Math.abs(prev.width-r.width)<0.5&&Math.abs(prev.height-r.height)<0.5)?prev:{width:r.width,height:r.height});};
   measure();const observer=typeof ResizeObserver==='function'?new ResizeObserver(measure):null;observer?.observe(element);
-  window.addEventListener('resize',measure);return()=>{observer?.disconnect();window.removeEventListener('resize',measure);};
- },[Boolean(data.length)]);
+  window.addEventListener('resize',measure);
+  const raf=requestAnimationFrame(measure);
+  return()=>{cancelAnimationFrame(raf);observer?.disconnect();window.removeEventListener('resize',measure);};
+ });
  useEffect(()=>{setView({start:Math.max(0,data.length-80),count:80});setManualPrice(null);setHover(null);pointers.current.clear();gesture.current=null;},[revision]); // scope owns the view
  useEffect(()=>{const old=previousLength.current;setView(current=>{const count=current.count||80;const next=clampWindow(!old||current.start+Math.min(count,old)>=old?{start:Math.max(0,data.length-count),count}:current,data.length);return {...next,count};});previousLength.current=data.length;setHover(null);},[data.length]);
  const windowView=clampWindow(view,data.length),visible=data.slice(windowView.start,windowView.start+windowView.count);
@@ -397,8 +405,10 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
             {refused&&<text x={left} y={Math.round(h/2)} fill="#d65656" fontSize="10" data-testid="momentum-refused-note">series refused — a non-finite close is in the loaded window; nothing drawn</text>}
           </svg>
           <div className="recorded-momentum-label" data-testid={'momentum-label-'+name}>
-            <strong>{name.toUpperCase()}</strong>
-            <span>{specs.map(sp=>sp.label).filter((v,i,a)=>a.indexOf(v)===i).join(' · ')}</span>
+            <strong>{name.toUpperCase()}{' '}</strong>
+            {/* the span carries the instance parameters ONLY — the name lives in
+                the strong; the flex gaps separate them (root's glue finding) */}
+            <span>{specs.map(sp=>String(sp.label||'').replace(new RegExp('^'+name.toUpperCase()+'\\s*','i'),'')).filter((v,i,a)=>v&&a.indexOf(v)===i).join(' · ')}{' '}</span>
             {!refused&&<small>{name==='rsi'?'0–100 fixed scale':name==='macd'?'price delta · zero-anchored':'own price scale'}</small>}
           </div>
         </div>);
