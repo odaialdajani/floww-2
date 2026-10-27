@@ -1172,7 +1172,7 @@ function SkylitDashboard({
         {/* Metrics Sidebar — structural readout only (O2). The selected-wall
             inspector + review journal live in the drawer below, opened by
             selection; the sidebar never grows with review state. */}
-        <div className="skylit-sidebar-area">
+        <div className="skylit-sidebar-area" hidden={chartFocus} aria-hidden={chartFocus ? "true" : undefined}>
           <SkylitMetricsSidebar
             data={displayData}
             spot={displaySpot}

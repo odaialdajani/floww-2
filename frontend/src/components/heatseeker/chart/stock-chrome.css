@@ -135,3 +135,15 @@ Imported by RecordedPriceChart (Stock-local); shared files untouched. */
   .recorded-chart-tools.recorded-chart-tools { flex-wrap: wrap; white-space: normal; row-gap: 4px; }
   .recorded-chart-tools.recorded-chart-tools > * { white-space: normal; }
 }
+
+/* Root's actual-46 geometry finding: the closed inspector still carried
+   App.css's display:flex / flex:0 0 300px at desktop widths (the display:none
+   existed only under 1180px), so a CLOSED dock kept reserving ~300px beside the
+   candles. This Stock-local rule closes it at ALL widths — the component stays
+   MOUNTED (state, studies, presets, replay untouched); only the layout slot is
+   released. The open inspector is untouched. */
+.stock-inspector[data-open="false"] { display: none; }
+/* Chart focus: the inspector is product chrome in focus mode — it folds away
+   with the band + desk and returns exactly on Exit/Esc (the same reversible
+   state machine; nothing unmounts or wipes). */
+.price-node-focused .stock-inspector { display: none; }
