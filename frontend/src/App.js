@@ -683,8 +683,10 @@ export default function App() {
         {/* Alert Overlay - Real-time signal toasts */}
         <AlertOverlay onSignalClick={handleSignalClick} maxVisible={3} />
 
-        {/* PWA Install Banner */}
-        <PWAInstallBanner />
+        {/* PWA Install Banner — the marketing prompt must not overlay the
+            Stock/Market research routes (root's global-overlay lease); it
+            remains available on every other page. */}
+        {!["heatseeker", "trinity"].includes(page) && <PWAInstallBanner />}
 
         {/* AlphaPod-style Header */}
         <ApHeader

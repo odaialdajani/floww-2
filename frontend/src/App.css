@@ -4661,6 +4661,28 @@ input[class*="bg-slate-800"], select[class*="bg-slate-800"], textarea[class*="bg
   border-color: rgba(255,255,255,0.09) !important;
 }
 
+/* Research routes (Stock/Market): raw native controls adopt the EXISTING
+   dark tokens so no browser-gray/white natives surface on those pages.
+   Route-scoped by the page roots; component-scoped styles (H1/H2 lanes)
+   keep winning with their own selectors. Existing tokens + fallbacks only —
+   no second theme layer (root's color-cascade correction). */
+.heatseeker-layout select,
+.heatseeker-layout input,
+.heatseeker-layout textarea,
+.legacy-theme select,
+.legacy-theme input,
+.legacy-theme textarea {
+  background: var(--floww-surface, var(--panel, #111111));
+  color: var(--text, #d5dde5);
+  border: 1px solid var(--floww-line, var(--border-2, #454545));
+}
+.heatseeker-layout select:disabled,
+.heatseeker-layout input:disabled,
+.legacy-theme select:disabled,
+.legacy-theme input:disabled {
+  color: var(--text-dim, #8e9aa7);
+}
+
 .lodestar-open { position:fixed;right:18px;bottom:18px;z-index:1100;background:#22262d;color:#d2d6dd;border:1px solid #495160;border-radius:8px;padding:10px 16px;box-shadow:0 4px 20px #0005; }
 @media (max-width: 768px) { .lodestar-open { bottom:calc(64px + env(safe-area-inset-bottom)); } }
 .lodestar-open small {display:block;font-size:10px;color:#98a3b4;}
