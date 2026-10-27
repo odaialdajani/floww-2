@@ -8,6 +8,7 @@
 // renderer specs from REAL frames using the priceStudies primitives — the
 // ONE indicator engine. The registry NEVER re-implements math.
 import { sma, ema, bollinger, sessionVwapValues, sessionVwapBands } from './priceStudies';
+import { rsi, macd, atr } from './momentumStudies';
 import { anchoredVwapValues, anchoredVwapBands } from './anchorStudies';
 
 // Legacy fixed-import declarations stay byte-compatible for existing callers.
@@ -22,6 +23,15 @@ export const STUDIES = {
   // byte-compatible with the existing engine behavior.
   vwap: { inputs: ['source', 'bands', 'anchor'], version: 'vwap.v2', source: 'bars', unit: 'price', approximation: 'bar-vwap', replay: true },
   'exposure-vwap': { inputs: ['scope', 'nodes', 'band', 'envelope'], version: 'gexvwap.v1', source: 'board', unit: 'price', approximation: 'board-weighted', replay: 'cursor-eligible-only' },
+  // Owner 13:40 slice 2 — the momentum kinds: conventional named methods
+  // (Wilder 1978 for RSI/ATR; MACD = EMA(fast)-EMA(slow) with EMA(signal)),
+  // computed through the ONE engine (priceStudies.ema + momentumStudies).
+  // RSI renders in its OWN 0..100 percent pane; MACD's line/signal/histogram
+  // in one price-delta pane; ATR in its own price pane. Complete-sample
+  // semantics (C047): any non-finite input refuses the series.
+  rsi: { inputs: ['period'], version: 'rsi.v1', source: 'ohlc', unit: 'percent', approximation: 'none', replay: true, pane: 'rsi' },
+  macd: { inputs: ['fast', 'slow', 'signal'], version: 'macd.v1', source: 'ohlc', unit: 'price', approximation: 'none', replay: true, pane: 'macd' },
+  atr: { inputs: ['period'], version: 'atr.v1', source: 'ohlc', unit: 'price', approximation: 'none', replay: true, pane: 'atr' },
 };
 // Legacy declaration name kept as an ALIAS for the pre-contract import path
 // (RecordedPriceChart/AtlasChart lookups); the contract kind is
@@ -65,6 +75,12 @@ export function validateStudySettings(name, settings) {
     return true;
   }
   if (name === 'exposure-vwap') return false; // not creatable on the price pane (no board source)
+  if (name === 'rsi') return intBetween(settings.period, 2, 500);
+  if (name === 'atr') return intBetween(settings.period, 1, 500);
+  if (name === 'macd') {
+    return intBetween(settings.fast, 1, 500) && intBetween(settings.slow, 2, 500)
+      && intBetween(settings.signal, 1, 500) && settings.fast < settings.slow;
+  }
   return false;
 }
 
@@ -76,6 +92,9 @@ export const STUDY_PRESETS = {
   'SMA 20': { kind: 'sma', settings: { period: 20 } },
   'Bollinger 20 · 2σ': { kind: 'bollinger', settings: { period: 20, multiple: 2 } },
   'VWAP · session': { kind: 'vwap', settings: { source: 'hlc3', bandBasis: 'std', multipliers: [1, 2, 3], bands: false, anchor: 'session' } },
+  'RSI 14': { kind: 'rsi', settings: { period: 14 } },
+  'MACD 12·26·9': { kind: 'macd', settings: { fast: 12, slow: 26, signal: 9 } },
+  'ATR 14': { kind: 'atr', settings: { period: 14 } },
 };
 
 // Volume is a REAL pane control, not a dead record: the measured volume pane
@@ -123,7 +142,8 @@ function closeOf(frame) {
 export function paneEligibility(kind, frames) {
   const list = Array.isArray(frames) ? frames : [];
   if (!getStudy(kind)) return { ok: false, reason: 'unsupported study kind' };
-  if (kind === 'sma' || kind === 'ema' || kind === 'bollinger') {
+  if (kind === 'sma' || kind === 'ema' || kind === 'bollinger'
+    || kind === 'rsi' || kind === 'macd' || kind === 'atr') {
     const hasClose = list.some(f => typeof f?.close === 'number' && Number.isFinite(f.close));
     return hasClose ? { ok: true, reason: null } : { ok: false, reason: 'no finite close on this pane' };
   }
@@ -198,5 +218,31 @@ export function studySpecs(instance, frames) {
     return specs;
   }
   if (instance.kind === 'volume') return [];
+  // Owner 13:40 slice 2 — the momentum bridges. Each spec carries its PANE
+  // (additive field): rsi -> the 0..100 percent pane, macd -> the three-spec
+  // line/signal/histogram pane, atr -> its own price pane. H1's caller reads
+  // `pane` to route; the existing price-pane kinds carry NO pane field (their
+  // bytes and behavior are unchanged). Warmup points stay null — H1 breaks
+  // lines at nulls honestly.
+  if (instance.kind === 'rsi') {
+    const values = rsi(closes, instance.settings.period);
+    const label = `RSI ${instance.settings.period}`;
+    return [{ ...base, id: instance.instanceId, band: null, label, pane: 'rsi', points: pointsOf(values) }];
+  }
+  if (instance.kind === 'macd') {
+    const rows = macd(closes, instance.settings);
+    const label = `MACD ${instance.settings.fast}·${instance.settings.slow}·${instance.settings.signal}`;
+    const at = (pick) => rows.map((r, i) => ({ time: times[i], value: r ? pick(r) : null }));
+    return [
+      { ...base, id: `${instance.instanceId}-line`, band: 'line', label, pane: 'macd', points: at((r) => r.line) },
+      { ...base, id: `${instance.instanceId}-signal`, band: 'signal', label, pane: 'macd', points: at((r) => r.signal) },
+      { ...base, id: `${instance.instanceId}-histogram`, band: 'histogram', label, pane: 'macd', points: at((r) => r.histogram) },
+    ];
+  }
+  if (instance.kind === 'atr') {
+    const values = atr(list, instance.settings.period);
+    const label = `ATR ${instance.settings.period}`;
+    return [{ ...base, id: instance.instanceId, band: null, label, pane: 'atr', points: pointsOf(values) }];
+  }
   return [];
 }

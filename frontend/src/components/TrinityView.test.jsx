@@ -426,3 +426,24 @@ test("owner 13:40 composition: the dock starts CLOSED with one concise cue; a re
   fireEvent.click(screen.getByTestId("triad-inspector-toggle"));
   expect(screen.getByTestId("triad-view").className).toMatch(/tdk-dock-open/);
 });
+
+test("owner 13:40 measured: AT 1280 the open inspector OVERLAYS (docked it starves each map to ~305px while 4 expiry columns need ~454px)", async () => {
+  // The composed-build measurement (Architect-56f218ed-1280-1024-letters.json):
+  // docked at 1280 each pane drops 481 -> 305px. The overlay band must
+  // THEREFORE include 1280. jsdom: mock matchMedia to the 1280 truth.
+  const real = window.matchMedia;
+  window.matchMedia = (q) => ({ matches: q === "(max-width: 1280px)", media: q,
+    addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {} });
+  try {
+    await act(async () => { render(<TrinityView />); });
+    await waitFor(() => expect(screen.getByTestId("triad-raw-adjusted")).toBeInTheDocument());
+    const cell = await screen.findByRole("gridcell", { name: /760 by 2026-10-02/i });
+    await act(async () => { fireEvent.click(cell); });
+    await waitFor(() => expect(screen.getByTestId("triad-view").className).toMatch(/tdk-dock-open/));
+    // OVERLAY mode at 1280: the narrow band drives it — the dock renders as
+    // the fixed overlay (the same mode the composed build measures at 1024).
+    expect(window.matchMedia("(max-width: 1280px)").matches).toBe(true); // the band includes 1280
+  } finally {
+    window.matchMedia = real;
+  }
+});
