@@ -255,43 +255,23 @@ async def execute_paper_trade(
     order: dict[str, Any],
     qty: int = 1,
 ) -> dict[str, Any]:
-    """Execute a paper trade via Alpaca."""
+    """Refuse option-strategy dispatch explicitly (fail-closed).
+
+    Historical note (paper-recovery B20): this function used to dispatch to
+    AlpacaClient.get_options_chain / place_iron_condor / place_call_spread /
+    place_put_spread — methods that DO NOT EXIST on this repo's AlpacaClient —
+    so every auto_trade run failed and the broad except reported a confusing
+    AttributeError message instead of an explicit refusal. No venue path is
+    added here: multi-leg option strategy execution stays explicitly
+    unimplemented until a reviewed implementation is approved.
+    """
     client = get_alpaca_client()
     if not client:
         return {"status": "error", "message": "Alpaca client not available"}
-
-    try:
-        strategy = order.get("strategy", "")
-        ticker = order.get("ticker", "")
-
-        # Get options chain for the ticker
-        chain = await client.get_options_chain(ticker)
-        if not chain:
-            return {"status": "error", "message": f"No options chain for {ticker}"}
-
-        # Build the order based on strategy
-        if strategy == "iron_condor":
-            result = await client.place_iron_condor(ticker, chain, qty)
-        elif strategy == "call_spread":
-            result = await client.place_call_spread(ticker, chain, qty)
-        elif strategy == "put_spread":
-            result = await client.place_put_spread(ticker, chain, qty)
-        else:
-            return {"status": "error", "message": f"Unknown strategy: {strategy}"}
-
-        logger.info(f"Paper trade executed: {strategy} {ticker} x{qty}")
-        return {
-            "status": "executed",
-            "strategy": strategy,
-            "ticker": ticker,
-            "qty": qty,
-            "result": result,
-            "timestamp": datetime.now(UTC).isoformat(),
-        }
-
-    except Exception as e:
-        logger.error(f"Paper trade failed: {e}")
-        return {"status": "error", "message": str(e)}
+    return {
+        "status": "error",
+        "message": "option-strategy execution is not implemented in this client; no order was sent",
+    }
 
 
 async def process_signals_for_ticker(

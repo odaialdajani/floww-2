@@ -443,10 +443,17 @@ class PaperTradingEngine:
         }
 
     def get_state(self) -> dict[str, Any]:
+        # Net the per-side legs per symbol (the same convention as
+        # get_portfolio_summary): a closed round-trip must report ZERO open
+        # positions on /api/paper-trading/status, not two closed legs.
+        net_by_symbol: dict[str, float] = {}
+        for pos in self.positions.values():
+            net_by_symbol[pos["symbol"]] = net_by_symbol.get(pos["symbol"], 0.0) + (
+                pos["quantity"] if pos["side"] == "buy" else -pos["quantity"])
         return {
             "cash": round(self.cash, 2),
             "initial_capital": self.initial_capital,
-            "open_positions": len([p for p in self.positions.values() if p["quantity"] > 0]),
+            "open_positions": sum(1 for net in net_by_symbol.values() if abs(net) > 1e-9),
             "total_orders": len(self.orders),
             "total_trades": len(self.trade_history),
             "execution_engine": self.execution_engine.get_state(),
