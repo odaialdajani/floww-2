@@ -38,6 +38,18 @@ async def _fetch_chain_cvserver(ticker: str, max_expiries: int) -> list[dict[str
     return (data or {}).get("contracts", [])
 
 
+@router.get("/data-quality/history")
+async def data_quality_history(limit: int = Query(50, ge=1, le=500)) -> dict[str, Any]:
+    """Recent cross-source consistency checks (per-process).
+
+    Registered BEFORE /data-quality/{ticker}: FastAPI matches routes in
+    registration order, so the literal path must be declared first or the
+    word "history" is captured as a ticker (root-reproduced 2026-10-26).
+    """
+    return {"history": _checker.get_history(limit=limit),
+            "metrics": _checker.get_metrics()}
+
+
 @router.get("/data-quality/{ticker}")
 async def data_quality(
     ticker: str,
@@ -77,9 +89,3 @@ async def data_quality(
         log.error(f"data-quality check failed for {t}: {e}", exc_info=True)
         return {"ticker": t, "status": "ERROR", "error": str(e)}
 
-
-@router.get("/data-quality/history")
-async def data_quality_history(limit: int = Query(50, ge=1, le=500)) -> dict[str, Any]:
-    """Recent cross-source consistency checks (per-process)."""
-    return {"history": _checker.get_history(limit=limit),
-            "metrics": _checker.get_metrics()}
