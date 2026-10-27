@@ -175,12 +175,16 @@ class PaperTradingEngine:
         self._update_position(order, fill_price)
 
         # Record trade
+        # NOTE (paper-recovery B14): fill_price is recorded UNROUNDED so the
+        # journal can reconstruct the cash book exactly; display rounding
+        # stays in ExecutionResult.avg_price. A 4dp-truncated journal price
+        # drifted from cash by up to 5e-5 * qty per fill.
         trade = {
             "order_id": order_id,
             "symbol": order.symbol,
             "side": order.side,
             "quantity": order.quantity,
-            "fill_price": round(fill_price, 4),
+            "fill_price": fill_price,
             "commission": commission,
             "total_cost": round(total_cost, 2),
             "kyle_impact": round(kyle_impact, 6),

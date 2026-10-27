@@ -118,6 +118,11 @@ class PaperTradeRecord:
     exit_time: str
     realized_pnl: float
     signal_data: dict[str, Any] = field(default_factory=dict)
+    # Close-side commission actually charged to cash (paper-recovery B15):
+    # _close_position charges qty * commission_per_share on every cover, but
+    # the journal never recorded it, so order_log alone could NOT reconcile
+    # the cash book (the close's cash effect is exit_value ∓ commission).
+    commission: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -130,6 +135,7 @@ class PaperTradeRecord:
             "entry_time": self.entry_time,
             "exit_time": self.exit_time,
             "realized_pnl": round(self.realized_pnl, 2),
+            "commission": round(self.commission, 2),
             "signal_data": self.signal_data,
         }
 
@@ -422,6 +428,7 @@ class PaperTrader:
             entry_time=pos.entry_time,
             exit_time=pos.exit_time,
             realized_pnl=pnl,
+            commission=self.commission_per_share * pos.quantity,
         )
         self.trade_history.append(trade)
         self._persist_trade(trade)
