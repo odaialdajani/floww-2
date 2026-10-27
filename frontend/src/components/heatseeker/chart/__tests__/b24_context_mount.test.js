@@ -157,6 +157,7 @@ test('R21-06 joint-freeze: a null emission (unrecorded cursor) revokes the bindi
     // emits null — the workspace must revoke, and the gate sees a refusal.
     axios.get.mockImplementation(async () => ({ data: { ticker: 'SPY', frames: [], candles_with_recorded_nodes: 0, scopes: [], query_key: 'SPY:4:day:None:False' } }));
     await act(async () => { screen.getByTestId('stock-inspector-tab-data').click(); });
+    await act(async () => { (document.querySelector('[data-testid="stock-dock-open-indicators"]') || screen.getByTestId('stock-inspector-tab-indicators')).click(); }); await act(async () => { screen.getByTestId('stock-inspector-tab-data').click(); });
     await act(async () => { screen.getByRole('button', { name: 'Reload history' }).click(); });
     await act(async () => { await new Promise(r => setTimeout(r, 400)); });
     const strip = screen.getByTestId('chart-context');

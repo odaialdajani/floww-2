@@ -491,6 +491,19 @@ function SkylitDashboard({
   const visibleData = expanded ? overlayData : displayData;
   const [studyChoice, setStudyChoice] = useState(initialView.studyChoice);
   const [priceHistoryOpen, setPriceHistoryOpen] = useState(() => stockStudyOpen(initialView, defaultStudy));
+  // Root 20:51 ownership fix: the options desk renders only as a DELIBERATE
+  // destination on the Stock study (default hidden; the band button opens it;
+  // the options-first study keeps today's behavior). State preserved by the
+  // same hidden-attribute convention the range mode uses — nothing unmounted.
+  const [deskOpen, setDeskOpen] = useState(defaultStudy === "options");
+  // Chart focus (Root 20:51): hides the page-local secondary chrome and gives
+  // the candles the remaining viewport. Reversible (button/Esc); no device
+  // zoom is changed and no fake pixels are claimed.
+  const [chartFocus, setChartFocus] = useState(false);
+  // The ONE shared options-destination opener: Saved readings, Range-return and
+  // the Options-desk intent all arrive at a VISIBLE desk (exits chart focus,
+  // opens the desk). Deliberate hiding stays the band toggle's own action.
+  const openOptionsDesk = () => { setChartFocus(false); setDeskOpen(true); };
   const showPriceHistory = defaultStudy !== "options" || priceHistoryOpen;
   const priceStudyRef = useRef(null), optionsStudyRef = useRef(null);
   const [scrollStudy, setScrollStudy] = useState(null);
@@ -818,22 +831,28 @@ function SkylitDashboard({
           if (rangeOpen) {
             if (onAnalyticalRangeChange) onAnalyticalRangeChange(false);
             else setLocalRangeOpen(false);
+            openOptionsDesk(); // the desk destination must be VISIBLE on return
             focusStudy("options"); setScrollStudy("options");
           } else {
             const nextStudy = priceHistoryOpen ? "options" : "price";
             focusStudy(nextStudy); setScrollStudy(nextStudy);
           }
           setExpanded(false); setDrawerOpen(false);
-        }}>{rangeOpen ? "Return to options desk" : !priceHistoryOpen ? "Price chart" : "Options desk"}</button>
+          // The desk toggle is its OWN state machine (the helper's regression):
+          // a functional update reads the CURRENT desk state — immune to the
+          // same-click priceHistoryOpen flip that froze the old branch.
+          if (defaultStudy !== "options") { setDeskOpen(prev => !prev); if (!deskOpen) setChartFocus(false); }
+        }}>{rangeOpen ? "Return to options desk" : !priceHistoryOpen ? "Price chart" : deskOpen ? "Hide options desk" : "Options desk"}</button>
         {showPriceHistory && !rangeOpen && <button type="button" className="skylit-trade-mode-btn"
           aria-pressed={workspaceEnabled} onClick={()=>{setFocusedChartContext(null);setWorkspaceEnabled(value=>!value);}}>Chart layouts</button>}
         <SavedChartReadings key={replayOpenRequest?.nonce || "saved"} ticker={ticker} disabled={rangeOpen} onOpen={id => {
+          openOptionsDesk(); // the saved reading's desk destination is VISIBLE
           focusStudy("options"); setScrollStudy("options");
           setExpanded(false); setDrawerOpen(false);
           setReplayPanelOpen(true);
           setReplayOpenRequest({id, nonce: Date.now()});
         }} />
-        {priceHistoryOpen && !rangeOpen && <AskFlow subject={ticker} overlayMetric={activeMetric} displayMode="price-history" compact chartContext={focusedChartContext} />}
+        {priceHistoryOpen && !rangeOpen && <details className="skylit-askflow-trigger" data-testid="askflow-trigger"><summary role="button" aria-label="Ask the desk (AskFlow) — opens on click, never automatic">Ask the desk</summary><AskFlow subject={ticker} overlayMetric={activeMetric} displayMode="price-history" compact chartContext={focusedChartContext} /></details>}
 
   </>;
   return (
@@ -842,7 +861,7 @@ function SkylitDashboard({
           EVERY view — the chart row no longer re-hosts studyActions, so the
           Wall→Contract→AskFlow→Public workflow and pane navigation stay one
           glance away instead of buried in a dock tab or a chart popover. */}
-      <div className="skylit-study-toolbar" role="toolbar" aria-label="Stock study">{studyActions}</div>
+      {!chartFocus&&<div className="skylit-study-toolbar" role="toolbar" aria-label="Stock study">{studyActions}</div>}
       {rangeOpen && (
         <section className="skylit-range-card" data-testid="analytical-range-card" aria-label="Analytical range research workspace">
           <header className="skylit-range-card-header">
@@ -859,7 +878,7 @@ function SkylitDashboard({
             workspace. Flag off (default) renders the exact incumbent
             PriceNodeHistory with every prop below passed through; flag on
             adds the pane wrapper + data-quality strip. No control removed. */}
-        <ChartWorkspace useNew={workspaceEnabled} ticker={ticker} primary={showPriceHistory} open={!rangeOpen && showPriceHistory} toolbarActions={showPriceHistory ? studyActions : null} forcedScope={chartScopeFor(visibleData, isReplay)}
+        <ChartWorkspace useNew={workspaceEnabled} ticker={ticker} primary={showPriceHistory} open={!rangeOpen && showPriceHistory} chartFocus={chartFocus} onChartFocusChange={setChartFocus} toolbarActions={showPriceHistory ? studyActions : null} forcedScope={chartScopeFor(visibleData, isReplay)}
         /* B14 recovery carry: the dock REUSES this dashboard's existing map
            state (entry = live visibleData, stale during replay — no parallel
            fetch), rendering the existing raw/adjusted map pair lazily. No second dashboard or leaderboard request. */
@@ -888,7 +907,7 @@ function SkylitDashboard({
           <p className="chart-map-level-note">Displayed map levels — not historical candle-time levels. Missing saved chart nodes remain gaps.</p>
         </section>
       </div>
-      <div className="skylit-options-study" ref={optionsStudyRef} role="region" aria-label={ticker + " options desk"} tabIndex={-1} hidden={rangeOpen}
+      <div className="skylit-options-study" ref={optionsStudyRef} role="region" aria-label={ticker + " options desk"} tabIndex={-1} hidden={rangeOpen || !deskOpen || chartFocus}
         onPointerDownCapture={() => focusStudy("options")} onClickCapture={() => focusStudy("options")} onChangeCapture={() => focusStudy("options")} onFocusCapture={() => focusStudy("options")} >
       <button type="button" className="range-mode-toggle" aria-pressed={rangeOpen} onClick={() => {
         if (onAnalyticalRangeChange) onAnalyticalRangeChange(true);

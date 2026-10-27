@@ -28,7 +28,8 @@ const setSelect = (tid, val) => {
 test('B07 wired: the exposure settings surface renders with the honest mismatch disclosure', async () => {
   const { unmount } = render(<PriceNodeHistory ticker="SPY" open />);
   await waitFor(() => expect(screen.getByTestId('recorded-price-chart')).toHaveAttribute('data-candles', '3'));
-  fireEvent.click(screen.getByTestId('stock-dock-open-data'));
+  fireEvent.click(screen.getByTestId('stock-dock-open-indicators'));
+  fireEvent.click(screen.getByTestId('stock-inspector-tab-data'));
   // the surface is in the Data tab with all four frozen-module inputs
   expect(screen.getByTestId('exposure-settings')).toBeInTheDocument();
   expect(screen.getByLabelText('ORB exposure scope')).toBeInTheDocument();
@@ -52,11 +53,12 @@ test('B07 wired: the exposure settings surface renders with the honest mismatch 
 test('B29 wired: the workspace toggle is the controlled entry; the kill switch reverts with no data loss', async () => {
   const { unmount } = render(<PriceNodeHistory ticker="SPY" open />);
   await waitFor(() => expect(screen.getByTestId('recorded-price-chart')).toHaveAttribute('data-candles', '3'));
-  // the gate ships ON: the docked workspace is the accepted default
+  // the gate ships ON (accepted default); the dock itself now opens deliberately
+  fireEvent.click(screen.getByTestId('stock-dock-open-data'));
+  fireEvent.click(screen.getByTestId('stock-inspector-tab-data'));
   expect(screen.getByTestId('workspace-v1-toggle')).toBeChecked();
   expect(screen.getByTestId('stock-inspector')).toHaveAttribute('data-open', 'true');
   // the kill switch: chart-only, the openers hide, the re-entry shows, honest note
-  fireEvent.click(screen.getByTestId('stock-dock-open-data'));
   fireEvent.click(screen.getByTestId('workspace-kill-switch'));
   await waitFor(() => expect(screen.queryByTestId('stock-inspector')).toBeNull());
   expect(screen.queryByTestId('stock-dock-open-indicators')).toBeNull();
@@ -66,7 +68,9 @@ test('B29 wired: the workspace toggle is the controlled entry; the kill switch r
   // re-entry is the discoverable controlled way back
   fireEvent.click(screen.getByTestId('workspace-reentry'));
   await waitFor(() => expect(screen.getByTestId('stock-inspector')).toHaveAttribute('data-open', 'true'));
-  expect(screen.getByTestId('stock-dock-open-indicators')).toBeInTheDocument();
+  // with the dock OPEN the row openers hide (the dock tabs own navigation)
+  expect(screen.queryByTestId('stock-dock-open-indicators')).toBeNull();
+  expect(screen.getByTestId('stock-inspector-tab-indicators')).toBeInTheDocument();
   // nothing the user saved was touched by the round trip
   expect(JSON.parse(window.localStorage.getItem('floww.drawing.presets.SPY') || 'null')).toBeNull();
   unmount();

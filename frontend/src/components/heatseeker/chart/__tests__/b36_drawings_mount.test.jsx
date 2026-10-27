@@ -20,6 +20,7 @@ test("rendered chart page shows the drawings rail with persisted drawings", asyn
   ]));
   render(<PriceNodeHistory ticker="SPY" open />);
   await waitFor(() => expect(screen.getByTestId("recorded-price-chart")).toBeInTheDocument());
+  fireEvent.click(document.querySelector('[data-testid="stock-dock-open-drawings"]') || screen.getByTestId('stock-inspector-tab-drawings'));
   const rail = screen.getByTestId("drawing-rail");
   expect(rail).toBeInTheDocument();
   expect(screen.getByTestId("rail-drawing")).toHaveTextContent("trend");
@@ -30,6 +31,7 @@ test("rail delete removes a persisted drawing and persists the removal", async (
     { id: "d1", tool: "horizontal", anchors: 1, visible: true, locked: false },
   ]));
   render(<PriceNodeHistory ticker="SPY" open />);
+  fireEvent.click(document.querySelector('[data-testid="stock-dock-open-drawings"]') || screen.getByTestId('stock-inspector-tab-drawings'));
   await waitFor(() => expect(screen.getByTestId("rail-drawing")).toBeInTheDocument());
   fireEvent.click(screen.getByTestId("rail-delete-d1"));
   expect(screen.queryByTestId("rail-drawing")).not.toBeInTheDocument();
@@ -42,6 +44,7 @@ test("unsupported persisted tools never reach the rail", async () => {
   ]));
   render(<PriceNodeHistory ticker="SPY" open />);
   await waitFor(() => expect(screen.getByTestId("recorded-price-chart")).toBeInTheDocument());
+  fireEvent.click(document.querySelector('[data-testid="stock-dock-open-drawings"]') || screen.getByTestId('stock-inspector-tab-drawings'));
   expect(screen.getByTestId("drawing-rail")).toBeInTheDocument();
   expect(screen.queryByTestId("rail-drawing")).not.toBeInTheDocument();
 });
