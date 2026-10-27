@@ -9,6 +9,8 @@ import { buildPresetRenderSpec } from "./chart/drawings/presetRendering";
 import StockInspector from "./chart/StockInspector";
 import IndicatorsPanel from "./chart/indicators/IndicatorsPanel";
 import { cvdConfig } from "./chart/indicators/paneStudies";
+import { resolveExposureSettings } from "./chart/exposureSettings";
+import { isNewChartEnabled, setChartV1, killSwitch } from "./chart/workspaceFlags";
 import { loadDrawings, saveDrawings } from "./chart/drawings/drawingPersistence";
 import { reduceDrawings, createDrawing, geometryFor, magnetPoint, nudgeDrawing, canEdit, suppressesPan, unprojectPoint, viewportFor, TOOLS as REDUCER_TOOLS } from "./chart/drawings/drawingReducer";
 import { barAt, sweepExtrema, visibleSnapshot } from "./chart/replay/replayReducer";
@@ -153,6 +155,22 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
     try { window.localStorage.setItem(PANE_CFG_KEY, JSON.stringify(next)); } catch { /* in-memory only */ }
   };
   const onPaneCfg = patch => commitPaneCfg({ ...paneCfg, ...patch });
+  // B07 wired: the exposure scope/node selections persist per ticker; the
+  // frozen module derives the honest mismatch disclosure.
+  const [exposureSel, setExposureSel] = useState(() => {
+    try { const raw = window.localStorage.getItem(PANE_CFG_KEY); const parsed = raw ? JSON.parse(raw) : null;
+      return parsed?.exposure || { orbScope: "all", orbNodes: 100, vwapScope: "all", vwapNodes: 100 };
+    } catch { return { orbScope: "all", orbNodes: 100, vwapScope: "all", vwapNodes: 100 }; }
+  });
+  const commitExposureSel = next => { setExposureSel(next); onPaneCfg({ exposure: next }); };
+  // B29 wired: the discoverable controlled entry + the reversible fallback —
+  // the docked workspace is the shipped default; the flag is an in-session
+  // gate (module-true: reversible, no data loss).
+  // The rollout gate ships ON: the docked workspace is the accepted default
+  // (the 13:40 brief + the stock visual passes); the flag mechanism stays the
+  // controlled entry — the Data-tab toggle and the kill switch drive it.
+  const [workspaceOn, setWorkspaceOn] = useState(() => { setChartV1(true); return isNewChartEnabled(); });
+  const [fallbackNote, setFallbackNote] = useState(null);
   const [dockOpen, setDockOpen] = useState(true);
   const [dockTab, setDockTab] = useState("indicators");
   const openDock = tab => { setDockTab(tab); setDockOpen(true); };
@@ -588,16 +606,34 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
   const controls = <><strong className="price-chart-symbol">{ticker}</strong>
     <select aria-label="Candle interval" title="Candle interval" value={minutes} onChange={e=>{setMinutes(Number(e.target.value));onSyncEvent?.({interval:Number(e.target.value)});}}><option value={1}>1 min</option><option value={5}>5 min</option><option value={15}>15 min</option><option value={30}>30 min</option><option value={60}>1 hour</option></select>
     <span className="price-history-summary" data-testid="price-history-summary" title="Selected history period and session coverage">{historyDayLabel} · {historySessionLabel}</span>
-    <span className="stock-dock-actions" data-testid="stock-dock-actions">
-      <button type="button" className="stock-dock-btn" aria-pressed={dockOpen&&dockTab==="indicators"} data-testid="stock-dock-open-indicators" title="Indicators: studies and measured-pane controls" onClick={()=>openDock("indicators")}>Indicators{studyInstances.length?` · ${studyInstances.length}`:""}</button>
-      <button type="button" className="stock-dock-btn" aria-pressed={dockOpen&&dockTab==="drawings"} data-testid="stock-dock-open-drawings" title="Drawings: tools, presets, selection" onClick={()=>openDock("drawings")}>Drawings{drawings.length?` · ${drawings.length}`:""}</button>
-      <button type="button" className="stock-dock-btn" aria-pressed={dockOpen&&dockTab==="data"} data-testid="stock-dock-open-data" title="Data: saved views, reload, node recording, option contract" onClick={()=>openDock("data")}>Data</button>
-      <button type="button" className="stock-dock-btn" aria-pressed={dockOpen&&dockTab==="review"} data-testid="stock-dock-open-review" title="Review: the Wall→Contract→AskFlow→Public brief workflow" onClick={()=>openDock("review")}>Review</button>
+    <span className="stock-dock-actions" data-testid="stock-dock-actions">{!workspaceOn&&<button type="button" className="stock-dock-btn" data-testid="workspace-reentry" title="Open the docked workspace" onClick={()=>{setChartV1(true); setWorkspaceOn(true); setDockOpen(true);}}>Docked workspace</button>}
+      {!workspaceOn&&fallbackNote&&<span className="pane-study-approx" data-testid="workspace-fallback-note" role="note">{fallbackNote}</span>}
+      {workspaceOn&&<button type="button" className="stock-dock-btn" aria-pressed={dockOpen&&dockTab==="indicators"} data-testid="stock-dock-open-indicators" title="Indicators: studies and measured-pane controls" onClick={()=>openDock("indicators")}>Indicators{studyInstances.length?` · ${studyInstances.length}`:""}</button>}
+      {workspaceOn&&<button type="button" className="stock-dock-btn" aria-pressed={dockOpen&&dockTab==="drawings"} data-testid="stock-dock-open-drawings" title="Drawings: tools, presets, selection" onClick={()=>openDock("drawings")}>Drawings{drawings.length?` · ${drawings.length}`:""}</button>}
+      {workspaceOn&&<button type="button" className="stock-dock-btn" aria-pressed={dockOpen&&dockTab==="data"} data-testid="stock-dock-open-data" title="Data: saved views, reload, node recording, option contract" onClick={()=>openDock("data")}>Data</button>}
+      {workspaceOn&&<button type="button" className="stock-dock-btn" aria-pressed={dockOpen&&dockTab==="review"} data-testid="stock-dock-open-review" title="Review: the Wall→Contract→AskFlow→Public brief workflow" onClick={()=>openDock("review")}>Review</button>}
     </span></>;
   const historyPeriodControls = <>
     <label className="price-history-view">History period<select aria-label="History sessions" title="History period" value={days} onChange={e=>setDays(Number(e.target.value))}><option value={1}>1 session</option><option value={5}>1 week</option><option value={20}>1 month</option><option value={60}>3 months</option><option value={260}>1 year</option><option value={2600}>5 years</option></select></label>
     <label className="price-history-view">Session coverage<select aria-label="Session coverage" title="Which trading sessions to load" value={sessions} onChange={e=>{setSessions(e.target.value);onSyncEvent?.({session:e.target.value});}}><option value="regular">Regular hours</option><option value="all">All sessions</option></select></label>
   </>;
+  // B07: the exposure settings surface (ORB vs exposure-VWAP scope/nodes with
+  // the module's mismatch disclosure) + B29: the workspace controlled entry
+  // with its reversible kill switch. Both ride the Data tab.
+  const exposureSettingsBlock = <div className="pane-study-settings" data-testid="exposure-settings" role="group" aria-label="Exposure settings">
+    <strong className="pane-settings-title">Exposure settings</strong>
+    <label>ORB scope<select aria-label="ORB exposure scope" data-testid="exposure-orb-scope" value={exposureSel.orbScope} onChange={e=>commitExposureSel({...exposureSel, orbScope:e.target.value})}>{["all","near-the-money","top-nodes"].map(v=><option key={v} value={v}>{v}</option>)}</select></label>
+    <label>ORB nodes<input aria-label="ORB exposure nodes" data-testid="exposure-orb-nodes" type="number" min="1" max="500" value={exposureSel.orbNodes} onChange={e=>{const n=Math.round(Number(e.target.value));if(Number.isInteger(n)&&n>=1&&n<=500)commitExposureSel({...exposureSel,orbNodes:n});}}/></label>
+    <label>VWAP scope<select aria-label="Exposure VWAP scope" data-testid="exposure-vwap-scope" value={exposureSel.vwapScope} onChange={e=>commitExposureSel({...exposureSel, vwapScope:e.target.value})}>{["all","near-the-money","top-nodes"].map(v=><option key={v} value={v}>{v}</option>)}</select></label>
+    <label>VWAP nodes<input aria-label="Exposure VWAP nodes" data-testid="exposure-vwap-nodes" type="number" min="1" max="500" value={exposureSel.vwapNodes} onChange={e=>{const n=Math.round(Number(e.target.value));if(Number.isInteger(n)&&n>=1&&n<=500)commitExposureSel({...exposureSel,vwapNodes:n});}}/></label>
+    {resolveExposureSettings(exposureSel).mismatch
+      ? <p role="note" data-testid="exposure-mismatch-note" className="pane-study-refusal">ORB exposure and exposure-VWAP use different scope/nodes — the lines describe different node universes.</p>
+      : <p role="note" data-testid="exposure-match-note" className="ind-note">ORB exposure and exposure-VWAP share one scope/nodes selection.</p>}
+    <strong className="pane-settings-title">Workspace</strong>
+    <label className="ind-check"><input type="checkbox" aria-label="Docked workspace" data-testid="workspace-v1-toggle" checked={workspaceOn} onChange={e=>{setChartV1(e.target.checked); setWorkspaceOn(e.target.checked); setFallbackNote(null); if(e.target.checked) setDockOpen(true);}}/>Docked workspace (Indicators/Drawings/Data/Review)</label>
+    <button type="button" data-testid="workspace-kill-switch" onClick={()=>{const r=killSwitch(); setWorkspaceOn(false); setFallbackNote("Reverted to the chart-only layout" + (r.dataLoss ? " with data loss" : " — no data lost") + ".");}}>Revert to chart-only</button>
+    {fallbackNote && <p role="note" data-testid="workspace-fallback-note" className="ind-note">{fallbackNote}</p>}
+  </div>;
   const historyControls = <>
     {!usingMapScope&&payload?.scopes?.length>1&&<label className="price-history-view">Saved view<select aria-label="Saved node view" value={scope||payload.query_key||""} onChange={e=>setScope(e.target.value)}>{payload.scopes.map((saved,i)=><option key={saved} value={saved}>{savedViewLabel(saved,i)}</option>)}</select></label>}
     {forcedScope!=null&&<label className="price-history-view"><input type="checkbox" aria-label="Follow map scope" checked={followMap} onChange={event=>setFollowMap(event.target.checked)}/>Follow map scope</label>}
@@ -608,6 +644,7 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
     <label className="price-history-contract">Option contract<input aria-label="Option contract symbol" placeholder="OSI, e.g. SPY261017C00650000" value={contractInput} onChange={e=>setContractInput(e.target.value)} /></label>
     <button type="button" disabled={!contractInput.trim()} onClick={()=>setContract(contractInput.trim().toUpperCase())}>Load contract</button>
     {contract&&<button type="button" onClick={()=>{setContract("");setContractInput("");}}>Clear contract</button>}
+  {exposureSettingsBlock}
   </>;
   // Visual-reset: the studies catalog and mapped-levels panels now live in
   // the right workspace Indicators tab — same testids, no discovery dead end.
@@ -798,7 +835,7 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
       </div>)}
 
     </div>
-    <StockInspector open={dockOpen} activeTab={dockTab} onTabChange={setDockTab} onClose={()=>setDockOpen(false)}
+    {workspaceOn&&<StockInspector open={dockOpen} activeTab={dockTab} onTabChange={setDockTab} onClose={()=>setDockOpen(false)}
       counts={{indicators:studyInstances.length||null,drawings:drawings.length||null,data:null,review:null}}
       indicators={studiesPanelContent}
       drawings={drawingsPanelContent}
@@ -817,7 +854,7 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
             ? `${studyInstances.length} active stud${studyInstances.length === 1 ? "y" : "ies"} — first: ${inst.kind}${inst.settings?.period ? " " + inst.settings.period : ""}`
             : "No active studies — add one in the Indicators tab."}</p>; })()}
         <p className="stock-review-families" data-testid="stock-review-families">Analytics families — levels, patterns, income, history, moves, structure, exposure, briefing — live on the options desk; the Wall→Contract→AskFlow→Public brief workflow stays in the action band above the chart.</p>
-      </div>} />
+      </div>} />}
     </div>}
   </section>;
 }
