@@ -119,12 +119,24 @@ class PaperBroker:
         return fill_price, slippage, market_impact
 
     def execute_fill(self, order_id: str, market_price: float) -> Fill | None:
-        """Execute a fill for a submitted order."""
+        """Execute a fill for a submitted order.
+
+        Idempotency guard (paper-recovery D1): an order fills exactly once.
+        Replaying ``execute_fill`` on an already-filled order (lost reply,
+        operator retry, double-click) is refused — cash, positions and the
+        fill list must not move twice for one order.
+        """
         if order_id not in self.orders:
             logger.error(f"Order not found: {order_id}")
             return None
 
         order = self.orders[order_id]
+        if order["status"] != "submitted":
+            logger.warning(
+                f"Duplicate fill refused: order {order_id} is already "
+                f"{order['status']}"
+            )
+            return None
         symbol = order["symbol"]
         side = order["side"]
         quantity = order["quantity"]
