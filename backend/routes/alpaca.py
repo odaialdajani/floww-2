@@ -256,18 +256,33 @@ async def close_position(symbol: str):
 
 @router.get("/status")
 async def get_status():
-    """Get Alpaca connection status."""
+    """Get Alpaca connection status.
+
+    Key presence is read from the environment AT CALL TIME (the same
+    convention as AlpacaClient._load_keys) — never from the import-time
+    module constants, which go stale when the environment changes
+    (paper-recovery D4: a removed key must not report configured=True).
+    Values are never included in the response.
+
+    Unknown status fails closed with a generic error. Readiness fields whose
+    truth cannot be established are omitted rather than asserted; exception
+    details are not returned because they could contain sensitive data.
+    """
     try:
-        from alpaca_client import ALPACA_API_KEY, ALPACA_SECRET_KEY
+        import os
+
+        from alpaca_client import AlpacaClient
+        client = AlpacaClient()
         return {
-            "configured": bool(ALPACA_API_KEY and ALPACA_SECRET_KEY),
-            "api_key_set": bool(ALPACA_API_KEY),
-            "secret_key_set": bool(ALPACA_SECRET_KEY),
+            "configured": client.enabled,
+            "api_key_set": bool(os.environ.get("ALPACA_API_KEY")),
+            "secret_key_set": bool(os.environ.get("ALPACA_SECRET_KEY")),
             "base_url": "https://paper-api.alpaca.markets",
             "mode": "paper trading",
         }
-    except Exception as e:
-        return {"error": str(e)}
+    except Exception:
+        # Fail closed without exposing potentially sensitive exception text.
+        return {"error": "Alpaca status unavailable", "configured": False}
 
 
 async def reconcile_pending_close(symbol: str, order_id: str,
