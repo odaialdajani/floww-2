@@ -147,3 +147,8 @@ Imported by RecordedPriceChart (Stock-local); shared files untouched. */
    with the band + desk and returns exactly on Exit/Esc (the same reversible
    state machine; nothing unmounts or wipes). */
 .price-node-focused .stock-inspector { display: none; }
+
+/* Focus releases the filter rail and its grid track, without unmounting it.
+   Scope the override to the layout containing this focused Stock chart. */
+.heatseeker-layout:has(.price-node-focused) > .heatseeker-sidebar-left { display: none !important; }
+.heatseeker-layout:has(.price-node-focused) { grid-template-columns: 0 minmax(0, 1fr); }
