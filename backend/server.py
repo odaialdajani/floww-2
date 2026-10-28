@@ -3665,6 +3665,12 @@ async def on_start():
     except Exception as e:
         log.warning(f"MongoDB unavailable during startup ({type(e).__name__}): {e}")
         log.warning("Server running in degraded mode — DB-dependent endpoints will fail")
+    # An isolated preview can serve explicit reads without duplicating the
+    # original process's collection loops. Essential storage initialization
+    # above and separately registered manual-research startup stay enabled.
+    if os.environ.get("FLOWW_BACKGROUND_LOOPS", "1") == "0":
+        log.info("Automatic scheduler/warmup/VPIN/Public loops disabled (FLOWW_BACKGROUND_LOOPS=0)")
+        return
     global _scheduler_started, _scheduler_task
     if not _scheduler_started:
         _scheduler_started = True
