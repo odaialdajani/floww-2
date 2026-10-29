@@ -4,9 +4,28 @@ import os
 import socket
 import traceback
 from collections import Counter
+from contextlib import contextmanager
+from urllib.parse import urlsplit
 
 import httpx
 import pytest
+
+_owned_loopbacks = set()
+
+
+@contextmanager
+def permit_owned_loopback(url):
+    """Only a test's already-started ephemeral fixture server may be reached."""
+    parsed = urlsplit(url)
+    assert parsed.scheme == "http" and parsed.hostname == "127.0.0.1"
+    assert parsed.port and parsed.port >= 1024
+    identity = (parsed.hostname, parsed.port)
+    assert identity not in _owned_loopbacks
+    _owned_loopbacks.add(identity)
+    try:
+        yield
+    finally:
+        _owned_loopbacks.remove(identity)
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -17,6 +36,8 @@ def deny_external_network():
     attempts = []
     original_connect = socket.socket.connect
     original_connect_ex = socket.socket.connect_ex
+    original_http = httpx.HTTPTransport.handle_request
+    original_async_http = httpx.AsyncHTTPTransport.handle_async_request
 
     def refuse(*args, **kwargs):
         request = next((a for a in args if isinstance(a, httpx.Request)), None)
@@ -31,6 +52,16 @@ def deny_external_network():
     async def refuse_async(*args, **kwargs):
         refuse(*args, **kwargs)
 
+    def dispatch_http(transport, request):
+        if (request.url.host, request.url.port) in _owned_loopbacks:
+            return original_http(transport, request)
+        return refuse(transport, request)
+
+    async def dispatch_async_http(transport, request):
+        if (request.url.host, request.url.port) in _owned_loopbacks:
+            return await original_async_http(transport, request)
+        return await refuse_async(transport, request)
+
     def local_connect(sock, address):
         # Windows asyncio creates a loopback socketpair to wake its event loop.
         if isinstance(address, tuple) and address[0] in {"127.0.0.1", "::1"}:
@@ -44,8 +75,8 @@ def deny_external_network():
 
     monkeypatch.setattr(socket.socket, "connect", local_connect)
     monkeypatch.setattr(socket.socket, "connect_ex", local_connect_ex)
-    monkeypatch.setattr(httpx.HTTPTransport, "handle_request", refuse)
-    monkeypatch.setattr(httpx.AsyncHTTPTransport, "handle_async_request", refuse_async)
+    monkeypatch.setattr(httpx.HTTPTransport, "handle_request", dispatch_http)
+    monkeypatch.setattr(httpx.AsyncHTTPTransport, "handle_async_request", dispatch_async_http)
     try:
         yield
     finally:
