@@ -93,3 +93,36 @@ def test_frozen_caller_clock_cannot_extend_freshness(monkeypatch):
     assert broker.calls == 2
     assert lc.preflight_gate(intent, ctx) is None
     lc._reset_for_tests()
+
+
+def test_actual_wrapper_preserves_option_identity_and_cash_choice():
+    import asyncio
+    import json
+
+    import httpx
+
+    import services.public_execution_lifecycle as lc
+    from services.public_api import BASE_URL, PublicBroker
+
+    seen = []
+    def respond(request):
+        seen.append(json.loads(request.content))
+        return httpx.Response(200, json={"buying_power_ok": True})
+
+    async def run():
+        client = httpx.AsyncClient(base_url=BASE_URL, transport=httpx.MockTransport(respond))
+        broker = PublicBroker(secret_key="offline-only", client=client)
+        broker._access_token, broker._token_expires_at = "offline", float("inf")
+        lc._reset_for_tests()
+        try:
+            result = await lc.preflight(_intent(open_close="CLOSE"), _ctx(), broker)
+            assert result["ok"] is True
+        finally:
+            await broker.close()
+            lc._reset_for_tests()
+
+    asyncio.run(run())
+    assert len(seen) == 1
+    assert seen[0]["instrument"] == {"symbol": "SPY260904C00760000", "type": "OPTION"}
+    assert seen[0]["openCloseIndicator"] == "CLOSE"
+    assert seen[0]["useMargin"] is False

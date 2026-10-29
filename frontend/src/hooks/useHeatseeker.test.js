@@ -37,6 +37,7 @@ describe("useHeatseeker", () => {
 
   afterEach(() => {
     global.fetch = originalFetch;
+    jest.useRealTimers();
     jest.restoreAllMocks();
   });
 
@@ -148,5 +149,69 @@ describe("useHeatseeker", () => {
 
     await waitFor(() => expect(result.current.data).toEqual(responses.MSFT));
     expect(global.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  test("a slow read survives polling ticks instead of being repeatedly aborted", async () => {
+    jest.useFakeTimers();
+    let resolveRead;
+    let signal;
+    global.fetch = jest.fn((_url, options) => {
+      signal = options.signal;
+      return new Promise(resolve => { resolveRead = resolve; });
+    });
+    const { result, unmount } = renderHook(() =>
+      useHeatseeker("flip-zones", { ticker: "SPY", refreshMs: 10000 })
+    );
+    const firstSignal = signal;
+    act(() => { jest.advanceTimersByTime(30000); });
+    expect(firstSignal.aborted).toBe(false);
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    await act(async () => { resolveRead(mockJsonResponse({ spot: 123 })); });
+    expect(result.current.data).toEqual({ spot: 123 });
+    expect(result.current.loading).toBe(false);
+    act(() => { jest.advanceTimersByTime(10000); });
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    unmount();
+  });
+
+  test("a superseded request error cannot overwrite the new symbol reading", async () => {
+    let rejectOld;
+    global.fetch = jest.fn(url => String(url).includes("ticker=SPY")
+      ? new Promise((_resolve, reject) => { rejectOld = reject; })
+      : Promise.resolve(mockJsonResponse({ ticker: "QQQ", spot: 456 })));
+    const { result, rerender } = renderHook(
+      ({ ticker }) => useHeatseeker("flip-zones", { ticker, refreshMs: 0 }),
+      { initialProps: { ticker: "SPY" } }
+    );
+    rerender({ ticker: "QQQ" });
+    await waitFor(() => expect(result.current.data?.ticker).toBe("QQQ"));
+    await act(async () => { rejectOld(new Error("old SPY read failed")); });
+    expect(result.current.error).toBeNull();
+    expect(result.current.data).toEqual({ ticker: "QQQ", spot: 456 });
+    expect(result.current.loading).toBe(false);
+  });
+
+  test("a hung read times out and a later poll can retry", async () => {
+    jest.useFakeTimers();
+    const signals = [];
+    global.fetch = jest.fn((_url, options) => {
+      signals.push(options.signal);
+      return new Promise((_resolve, reject) => {
+        options.signal.addEventListener('abort', () => reject(
+          Object.assign(new Error('aborted'), { name: 'AbortError' })
+        ));
+      });
+    });
+    const { result, unmount } = renderHook(() =>
+      useHeatseeker('flip-zones', { ticker: 'SPY', refreshMs: 10000 })
+    );
+    await act(async () => { jest.advanceTimersByTime(45000); });
+    expect(signals[0].aborted).toBe(true);
+    expect(result.current.loading).toBe(false);
+    expect(result.current.error).toMatch(/timed out/i);
+    act(() => { jest.advanceTimersByTime(5000); });
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    unmount();
+    expect(jest.getTimerCount()).toBe(0);
   });
 });

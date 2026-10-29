@@ -7,6 +7,7 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import PriceNodeHistory from '../../PriceNodeHistory';
+import { openStockPanel } from '../../../../testUtils/openStockPanel';
 import { STUDIES, getStudy, createStudyInstance, validateStudySettings, studySpecs, paneEligibility } from '../indicators/registry';
 import { bollinger, sessionVwapValues } from '../indicators/priceStudies';
 import { saveStudyInstances, loadStudyInstances, STUDY_QUOTA } from '../persistence/studyStore';
@@ -152,6 +153,7 @@ test('MOUNTED: two differently configured studies render independently and survi
   // the panel surface: preset chip (SMA 20) + catalog Add (EMA 20), then edit
   // BOTH instances independently through their own settings inputs (small
   // periods so the 4-frame fixture yields real values)
+  openStockPanel('indicators');
   fireEvent.click(screen.getByTestId('catalog-preset-SMA 20'));
   fireEvent.click(screen.getByTestId('catalog-add-ema'));
   const ids = [...document.querySelectorAll('[data-testid^="instance-period-"]')].map(e => e.getAttribute('data-testid').slice('instance-period-'.length));
@@ -168,6 +170,7 @@ test('MOUNTED: two differently configured studies render independently and survi
   await waitFor(() => expect(document.querySelectorAll('[data-testid^="study-line-"]')).toHaveLength(2));
   // invalid period input is CLAMPED by the panel (fallback to the current
   // value; no silent invalid state, no new line, no instance created)
+  openStockPanel('indicators');
   fireEvent.click(screen.getByTestId('catalog-add-sma'));
   const sid = [...document.querySelectorAll('[data-testid^="instance-period-"]')].map(e => e.getAttribute('data-testid').slice('instance-period-'.length))[0];
   fireEvent.change(screen.getByTestId('instance-period-' + sid), { target: { value: '0' } });

@@ -1,6 +1,7 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import PriceNodeHistory from '../../PriceNodeHistory';
+import { openStockPanel } from '../../../../testUtils/openStockPanel';
 import { createDrawing, geometryFor, TOOLS } from '../drawings/drawingReducer';
 import { DRAWING_TOOLS, isSupportedTool, anchorsFor, toolFamily } from '../drawings/toolRegistry';
 import { riskLevels } from '../drawings/advancedTools';
@@ -100,6 +101,7 @@ test('a saved risk drawing loads back and renders the analysis-only box on the r
   expect(screen.getByTestId('risk-zone-stop')).toBeInTheDocument();
   expect(screen.getByTestId('risk-zone-target')).toBeInTheDocument();
   // the rail lists the risk drawing like every other tool's output
+  openStockPanel('drawings');
   expect(screen.getAllByTestId('rail-drawing').length).toBe(1);
   expect(screen.getAllByTestId('rail-drawing')[0]).toHaveTextContent(/risk/);
 });
@@ -131,6 +133,7 @@ test("CHART-C090: Alt+L/Alt+S arm the risk tool by side; modifier combos never f
   await waitFor(() => expect(screen.getByTestId("drawing-layer")).toBeInTheDocument());
   const layer = screen.getByTestId("drawing-layer");
   // Alt+L arms the risk tool with side long; three pointer anchors commit it
+  openStockPanel('drawings');
   fireEvent.keyDown(window, { key: "l", altKey: true });
   expect(screen.getByTestId("rail-tool-risk")).toHaveAttribute("aria-pressed", "true");
   firePointer(layer, "pointerdown", 150, 90);

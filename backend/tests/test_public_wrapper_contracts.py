@@ -161,52 +161,54 @@ async def test_get_order_v2_returns_typed_payload_verbatim():
 @pytest.mark.asyncio
 async def test_replace_order_payload_and_pending_on_empty_body():
     seen = []
+    old = "00000000-0000-4000-8000-000000000001"
+    new = "00000000-0000-4000-8000-000000000002"
+    original = {"orderId": old, "parentOrderId": "00000000-0000-4000-8000-000000000003", "orderType": "LIMIT",
+                "expiration": {"timeInForce": "GTC"}, "quantity": "2"}
 
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen.append((str(request.url), json.loads(request.read().decode())))
-        return httpx.Response(200, content=b"")  # documented empty-body gateway case
+    def handler(request):
+        seen.append((request.method, request.url.path, json.loads(request.content)))
+        return httpx.Response(200, content=b"")
 
     broker = _broker(handler)
-    out = await broker.replace_order("acct-1", "o-1", limit_price=1.5, quantity=2,
-                                     time_in_force="GTC")
-    url, body = seen[0]
-    assert url.endswith("/userapigateway/trading/acct-1/order/o-1/replace")
-    assert body == {"limitPrice": "1.5", "quantity": 2, "expiration": {"timeInForce": "GTC"}}
-    assert out == {"orderId": "o-1", "status": "REPLACE_PENDING", "raw_empty": True}
+    out = await broker.replace_order("acct-1", old, limit_price="1.50", quantity=2,
+        request_id=new, order_type="LIMIT", expiration=original["expiration"], original_order=original)
+    method, url, body = seen[0]
+    assert method == "PUT" and url.endswith("/userapigateway/trading/acct-1/order")
+    assert body == {"orderId": old, "requestId": new, "orderType": "LIMIT", "quantity": "2",
+                    "expiration": {"timeInForce": "GTC"}, "limitPrice": "1.50"}
+    assert out == {"orderId": old, "requestId": new, "status": "REPLACE_PENDING", "raw_empty": True}
     await broker.close()
 
 
 @pytest.mark.asyncio
 async def test_search_orders_request_params():
     seen = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen.append(dict(request.url.params))
-        return _json_response({"orders": [], "nextToken": None})
-
+    def handler(request):
+        seen.append((request.method, request.url.path, json.loads(request.content)))
+        return _json_response({"orders": []})
     broker = _broker(handler)
-    await broker.search_orders("acct-1", start="2026-10-01", end="2026-10-23",
-                               limit=50, next_token="tok")
-    assert seen[0] == {"limit": "50", "start": "2026-10-01",
-                        "end": "2026-10-23", "nextToken": "tok"}
+    await broker.search_orders("acct-1", created_after="2026-10-01T00:00:00Z",
+                               created_before="2026-10-23T00:00:00Z")
+    assert seen == [("POST", "/userapigateway/trading/acct-1/order/search",
+        {"createdAfter": "2026-10-01T00:00:00Z", "createdBefore": "2026-10-23T00:00:00Z"})]
     await broker.close()
 
 
 @pytest.mark.asyncio
 async def test_get_strategy_quote_posts_exact_leg_definition():
     seen = []
-    legs = [{"symbol": "SPY261230C00500000", "side": "BUY", "quantity": 1}]
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen.append((str(request.url), json.loads(request.read().decode())))
-        return _json_response({"debit": 1.25, "credit": 0.0})
-
+    legs = [{"symbol": "SPY261230C00500000", "side": "BUY", "ratioQuantity": 1}]
+    response = {"strategyLegs": [{"instrument": {"symbol": legs[0]["symbol"]}, "side": "BUY", "ratioQuantity": 1}],
+                "price": "1.25", "bid": "1.25", "ask": "1.30", "strategyName": "Synthetic"}
+    def handler(request):
+        seen.append((request.url.path, json.loads(request.content)))
+        return _json_response(response)
     broker = _broker(handler)
-    out = await broker.get_strategy_quote("acct-1", legs)
-    url, body = seen[0]
-    assert url.endswith("/userapigateway/option-details/acct-1/strategy-quote")
-    assert body == {"legs": legs}
-    assert out == {"debit": 1.25, "credit": 0.0}
+    out = await broker.get_strategy_quote("acct-1", "SPY", legs)
+    assert seen == [("/userapigateway/option-details/acct-1/strategy-details/quote",
+                    {"baseSymbol": "SPY", "optionLegs": legs})]
+    assert out == response
     await broker.close()
 
 

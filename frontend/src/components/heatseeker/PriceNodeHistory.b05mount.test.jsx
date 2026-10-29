@@ -1,3 +1,4 @@
+import { openStockPanel } from '../../testUtils/openStockPanel';
 import React from "react";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import axios from "axios";
@@ -49,7 +50,7 @@ test("the Reload history control performs a fresh read through the mounted hook"
     .mockResolvedValueOnce({ data: { ticker: "SPY", frames: mkFrames(1), candles_with_recorded_nodes: 0 } });
   render(<PriceNodeHistory ticker="SPY" primary />);
   await waitFor(() => expect(screen.getByTestId("recorded-price-chart")).toHaveAttribute("data-candles", "3"));
-  fireEvent.click(screen.getByTestId('stock-inspector-tab-data'));
+  openStockPanel('data');
   fireEvent.click(screen.getByRole("button", { name: "Reload history" }));
   await waitFor(() => expect(screen.getByTestId("recorded-price-chart")).toHaveAttribute("data-candles", "1"));
   const calls = axios.get.mock.calls.filter(([url]) => url.includes("/price-history/"));

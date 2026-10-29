@@ -37,6 +37,9 @@ export function useHeatseeker(endpoint, params = {}) {
     }
     const controller = new AbortController();
     abortRef.current = controller;
+    let timedOut = false;
+    const deadline = setTimeout(() => { timedOut = true; controller.abort(); }, 45000);
+    controller.signal.addEventListener("abort", () => clearTimeout(deadline), { once: true });
     setLoading(true);
     try {
       const qs = new URLSearchParams();
@@ -55,10 +58,14 @@ export function useHeatseeker(endpoint, params = {}) {
         setError(null);
       }
     } catch (e) {
-      if (e.name === "AbortError") return;
-      if (mountedRef.current) setError(e.message || "Fetch failed");
-    } finally {
+      if (e.name === "AbortError" && !timedOut) return;
       if (mountedRef.current && abortRef.current === controller) {
+        setError(timedOut ? "Request timed out. The server may be busy." : e.message || "Fetch failed");
+      }
+    } finally {
+      clearTimeout(deadline);
+      if (mountedRef.current && abortRef.current === controller) {
+        abortRef.current = null;
         setLoading(false);
       }
     }
@@ -70,7 +77,9 @@ export function useHeatseeker(endpoint, params = {}) {
     fetcher();
     let id = null;
     if (refreshMs > 0 && !skip) {
-      id = setInterval(fetcher, refreshMs);
+      // Timer ticks must let a slow read finish. A manual refresh or changed
+      // scope still calls fetcher directly and replaces the old request.
+      id = setInterval(() => { if (!abortRef.current) fetcher(); }, refreshMs);
     }
     return () => {
       mountedRef.current = false;

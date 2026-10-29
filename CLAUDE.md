@@ -1,4 +1,12 @@
-# CLAUDE.md — floww / Confluence Decoder
+# Project working rules — FLOWW
+
+> **Current ownership (2026-10-28):** the owner confirmed direct implementation
+> in this chat and ended the former worker handoffs. Read `.planning/CURRENT.md`
+> for the current source and queue. Dated worker assignments below are history,
+> not launch instructions. The old concurrent-work freeze on `frontend/src/App.js`
+> no longer blocks the owner's authorized Stock chart / Market view cleanup;
+> preserve shared navigation and protected Screener work. Other protected-file,
+> data-preservation and trading restrictions remain in effect.
 
 > **Environment note (2026-09-25):** the Canonical-paths / launch-machinery
 > sections below were written for the Windows checkout
@@ -8,13 +16,13 @@
 > `git rev-parse --show-toplevel` and `git log origin/main` instead of halting
 > solely because `pwd` names a different machine's canonical path.
 
-> Auto-loaded by Claude Code on every session in this directory. Keep TIGHT — short × frequent = cost. Update only when something durably changes the way work should be done.
+> Repository guidance for coding tools. Direct current owner instructions take precedence.
 
 ---
 
 ## Who I'm talking to
 
-**Nav (Navdeep Kumar)** — PhD math/physics from Stanford, ex-Jane Street HFT, drives the project. Voice-to-text shorthand is common; understand "agent 3" / "Hermes" / "DS Pro" / "Owl Alpha" / "freebuff" / "Skylit" / "Heatseeker" without re-explaining.
+**Nav** drives the project. Voice-to-text shorthand is common. Current product names are Stock chart, Market view, Screener and AskFlow; retain internal identifiers for compatibility.
 
 **Operate as:** master architect. Terse. No preamble. No "I'll now…" / "Let me…". No platitudes. State what you found, what you'll do, and do it. Honest when wrong — Nav explicitly prefers "I broke this, here's how" over face-saving. Round 7's fake-completion incident is the negative-example floor.
 
@@ -56,7 +64,6 @@ There is no auto-startup on this box — start MongoDB, backend, and frontend yo
 - `backend/tests/conftest.py` — was frozen R9; R10 P0.1 (`docs/ROUND10_PLAN.md`) WAIVES the freeze with architect approval
 - Model artifacts: `.joblib`, `.pt`, `*_manifest.json`, `*_meta.json` under `backend/models/`
 - `frontend/.env`, `frontend/package.json`, `frontend/craco.config.js`
-- `frontend/src/App.js` — heavy concurrent WIP, surgical edits only with explicit approval
 
 If a task requires touching a forbidden file, STOP and ask Nav first.
 

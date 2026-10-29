@@ -142,19 +142,25 @@ test("a grid re-center marker re-anchors the pair without any scroll event", asy
   expect(adjusted.scrollTop).toBe(300);
 });
 
-test("landmarks follow the comparison maps; profile stays below both", async () => {
+test("supporting workspace panels follow the maps and open one at a time", async () => {
   await act(async () => { render(<TrinityView ticker="SPY" />); });
   const maps = screen.getByTestId("triad-raw-adjusted");
+  fireEvent.click(screen.getByTestId("triad-tab-landmarks"));
   const landmarks = document.querySelector(".trinity-layout .heatmap-landmarks");
-  const profile = screen.getByTestId("triad-signed-profile");
   expect(landmarks).not.toBeNull();
   expect(maps.compareDocumentPosition(landmarks) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  expect(landmarks.compareDocumentPosition(profile) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  fireEvent.click(screen.getByTestId("triad-tab-profile"));
+  expect(document.querySelector(".trinity-layout .heatmap-landmarks")).toBeNull();
+  fireEvent.click(screen.getByTestId("triad-profile-disclosure").querySelector('summary'));
+  const profile = screen.getByTestId("triad-signed-profile");
+  expect(profile).toBeVisible();
   expect(maps.compareDocumentPosition(profile) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   // UI-M03: the replay strip is supporting context (stored-session replay),
   // not map content — it must follow the maps, never push them down. At the
   // top it cost 47px + margin and put the loaded map top at 341px@1470x950 /
   // 374px@1024x768, breaking the <=300px start budget at both sizes.
+  fireEvent.click(screen.getByTestId("triad-tab-replay"));
+  expect(screen.queryByTestId("triad-signed-profile")).toBeNull();
   const replayStrip = document.querySelector('[data-testid="solstice-replay-strip"]');
   expect(replayStrip).not.toBeNull();
   expect(maps.compareDocumentPosition(replayStrip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();

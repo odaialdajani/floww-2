@@ -4,7 +4,7 @@
 <!-- Regenerate: python3 qc/audit/generate_api_docs.py -->
 <!-- Verify:     python3 qc/audit/generate_api_docs.py --check -->
 
-Total endpoints: 404
+Total endpoints: 405
 Route groups: 106
 
 Generated from the live FastAPI app, so every path below is a real,
@@ -428,7 +428,7 @@ callable route rather than a hand-copied guess.
 | GET | `/api/heatmap/{ticker}` | Heatmap |
 | GET | `/api/heatmap/{ticker}/range-analytics` | Heatmap Range Analytics |
 
-## heatseeker (19 endpoints)
+## heatseeker (20 endpoints)
 
 | Method | Path | Summary |
 |--------|------|---------|
@@ -437,6 +437,7 @@ callable route rather than a hand-copied guess.
 | GET | `/api/heatseeker/flip-zones` | Flip Zones Route |
 | GET | `/api/heatseeker/history/{ticker}` | Get History |
 | GET | `/api/heatseeker/latest/{ticker}` | Get Latest |
+| GET | `/api/heatseeker/mapped-levels/{target}` | Mapped Levels |
 | GET | `/api/heatseeker/node-classification` | Node Classification Route |
 | GET | `/api/heatseeker/node-confluence` | Node Confluence Route |
 | GET | `/api/heatseeker/node-lifecycle` | Node Lifecycle Route |

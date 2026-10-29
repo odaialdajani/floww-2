@@ -1,3 +1,4 @@
+import { openStockPanel } from '../../../../testUtils/openStockPanel';
 // B09 MAPPED-LEVELS CALLER (b09_mapped_levels_contract v2): cross-INSTRUMENT
 // source->target price mapping (SPX levels ON the SPY pane) — never
 // naked_levels_claim substitution. The backend route is the ONE authority for
@@ -91,6 +92,7 @@ test('MOUNTED: SPX levels render as diamonds/triangles with a legend on the SPY 
   window.localStorage.clear();
   render(<PriceNodeHistory ticker="SPY" open />);
   await waitFor(() => expect(screen.getByTestId('recorded-price-chart')).toHaveAttribute('data-candles', '3'));
+  openStockPanel('indicators');
   fireEvent.click(screen.getByTestId('mapped-levels-summary'));
   fireEvent.change(screen.getByTestId('mapped-levels-source'), { target: { value: 'SPX' } });
   await waitFor(() => expect(document.querySelectorAll('[data-testid="mapped-level-shape"]').length).toBe(2));
@@ -114,6 +116,7 @@ test('MOUNTED: route absent renders the honest unavailable state; a refused body
   window.localStorage.clear();
   render(<PriceNodeHistory ticker="SPY" open />);
   await waitFor(() => expect(screen.getByTestId('recorded-price-chart')).toHaveAttribute('data-candles', '3'));
+  openStockPanel('indicators');
   fireEvent.click(screen.getByTestId('mapped-levels-summary'));
   fireEvent.change(screen.getByTestId('mapped-levels-source'), { target: { value: 'SPXW' } });
   await waitFor(() => expect(screen.getByTestId('mapped-levels-status')).toHaveTextContent(/unavailable/i));

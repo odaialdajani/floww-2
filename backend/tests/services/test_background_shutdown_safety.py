@@ -20,6 +20,7 @@ def isolated_server(monkeypatch):
     monkeypatch.setattr(server, "_scheduler_task", None)
     monkeypatch.setattr(server, "_BUILD_HEATMAP_CACHE", {})
     monkeypatch.setattr(server, "_BUILD_HEATMAP_INFLIGHT", set())
+    monkeypatch.setattr(server, "_BUILD_HEATMAP_PENDING", {})
     monkeypatch.setattr(server, "_BACKGROUND_SHUTDOWN_TIMEOUT_S", .03, raising=False)
     monkeypatch.setattr(server, "client", MagicMock())
     monkeypatch.setattr(server.app.state, "research_service", None, raising=False)
@@ -83,6 +84,35 @@ async def test_shutdown_refuses_new_heatmap_work(isolated_server, monkeypatch):
     await asyncio.sleep(0)
     build.assert_not_awaited()
     assert not server._BUILD_HEATMAP_INFLIGHT
+
+
+@pytest.mark.asyncio
+async def test_actual_cold_build_stops_before_shared_storage_closes(isolated_server, monkeypatch):
+    server = isolated_server
+    entered = asyncio.Event()
+    events = []
+
+    async def slow_build(*args, **kwargs):
+        entered.set()
+        try:
+            await asyncio.Event().wait()
+        finally:
+            events.append("build_stopped")
+
+    monkeypatch.setattr(server, "_build_heatmap_impl", slow_build)
+    server.client.close.side_effect = lambda: events.append("storage_closed")
+    reader = asyncio.create_task(server.build_heatmap("SPY"))
+    try:
+        await asyncio.wait_for(entered.wait(), 1)
+        await server.on_stop()
+        with pytest.raises(asyncio.CancelledError):
+            await reader
+        assert events == ["build_stopped", "storage_closed"]
+        assert not server._BUILD_HEATMAP_PENDING
+        assert not [task for task in server._background_tasks if not task.done()]
+    finally:
+        reader.cancel()
+        await asyncio.gather(reader, *list(server._background_tasks), return_exceptions=True)
 
 
 @pytest.mark.asyncio

@@ -1,6 +1,7 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import PriceNodeHistory from '../../PriceNodeHistory';
+import { openStockPanel } from '../../../../testUtils/openStockPanel';
 import { createDrawing, geometryFor, TOOLS } from '../drawings/drawingReducer';
 import { DRAWING_TOOLS, isSupportedTool, anchorsFor } from '../drawings/toolRegistry';
 import { FIB_LEVELS, fibPrices } from '../drawings/advancedTools';
@@ -72,6 +73,7 @@ test('B17 MOUNTED: the rail offers every registry tool including brush and fib',
   arm();
   render(<PriceNodeHistory ticker="SPY" open />);
   await waitFor(() => expect(screen.getByTestId('recorded-price-chart')).toBeInTheDocument());
+  openStockPanel('drawings');
   const rail = document.querySelector("[aria-label='Drawing tools']");
   expect(rail).not.toBeNull();
   for (const id of ['brush', 'fib', 'horizontal-ray', 'text', 'trend']) {

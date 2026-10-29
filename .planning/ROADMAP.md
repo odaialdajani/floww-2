@@ -5,7 +5,15 @@ Derived from: deploy runbook (`deploy/free/README.md`), `docs/ROUND10_PLAN.md`
 Historical sequencing started with Oracle go-live. The current user priority is recorded first below; deployment is not active authorization.
 This file retains the live priority and historical phase tracker.
 
-## Current priority — 14 October integration reset [ACTIVE]
+## Current priority — 28 October direct cleanup
+
+Use [CURRENT.md](CURRENT.md) for the consolidated queue, tested changes and
+runtime limits. The current task covers Stock chart and Market view performance,
+missing behavior and obsolete ownership instructions. Earlier phase rosters are
+historical records, not current dispatch authority. Retain their requirements;
+do not restart completed audits or activate trading from an old checklist.
+
+## Historical priority — 14 October integration reset
 
 The user's current task takes priority over the historical deployment queue below. [Integration reset and remaining work](unknowns/integration-reset-20261014.md) records the real source/runtime state, approved-preview gaps, shared Wall/Contract/Flow/Public inspector, qualified heatmap landmarks, separate chart-level context, all 82 branches/41 worktrees and the intact original 62 obligations. This pass does not authorize deployment, paid feeds, trading activation or deletion of old work.
 

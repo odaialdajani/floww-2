@@ -15,6 +15,7 @@ import { usePublishScreenContext } from "../agent/useScreenContext";
 import { replayToDisplay } from "../lib/solsticeReplay";
 import ReplayStrip from "./heatseeker/ReplayStrip";
 import MarketInspectorDock from "./triad/MarketInspectorDock";
+import {OpenInterestPanel, CallPutLadder} from "./heatseeker/LoadedContractPanels";
 import "./triad/MarketDesktop.css";
 
 /**
@@ -659,7 +660,7 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
           roundtrip exactly; the tab ID alone never had to reconstruct it. */}
       <div className="triad-workspace">
       <div className="triad-workspace-tabs" data-testid="triad-workspace-tabs" role="tablist" aria-label="Market workspace">
-        {[["walls", "Walls"], ["landmarks", "Landmarks"], ["replay", "Replay"], ["profile", "Profile"], ["review", "Review"]].map(([id, label]) => (
+        {[["walls", "Walls"], ["landmarks", "Landmarks"], ["replay", "Replay"], ["profile", "Profile"], ["interest", "Open interest"], ["ladder", "Call / put ladder"], ["review", "Review"]].map(([id, label]) => (
           <button key={id} type="button" role="tab" data-testid={`triad-tab-${id}`}
             id={`triad-ws-${id}-tab`} aria-controls={`triad-ws-${id}-panel`}
             aria-selected={workspaceTab === id}
@@ -671,6 +672,8 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
           <WallBar walls={walls} wallId={selectedWall?.wall_id || null} onSelect={selectWall} />
         </div>
       )}
+      {workspaceTab === "interest" && <div role="tabpanel" id="triad-ws-interest-panel" aria-labelledby="triad-ws-interest-tab"><OpenInterestPanel data={payload}/></div>}
+      {workspaceTab === "ladder" && <div role="tabpanel" id="triad-ws-ladder-panel" aria-labelledby="triad-ws-ladder-tab"><CallPutLadder data={payload}/></div>}
       {workspaceTab === "landmarks" && (
         <div role="tabpanel" id="triad-ws-landmarks-panel" aria-labelledby="triad-ws-landmarks-tab">
           <HeatmapLandmarks data={payload} />

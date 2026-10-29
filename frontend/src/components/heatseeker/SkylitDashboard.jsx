@@ -5,6 +5,7 @@ import axios from "axios";
 import { API as BACKEND_API } from "../../config/api";
 import SkylitControlBar from "./SkylitControlBar";
 import SkylitHeatmapGrid from "./SkylitHeatmapGrid";
+import LoadedContractPanels from "./LoadedContractPanels";
 import SkylitMetricsSidebar from "./SkylitMetricsSidebar";
 import SolsticeStatusStrip from "./SolsticeStatusStrip";
 import WallInspector from "./WallInspector";
@@ -495,7 +496,7 @@ function SkylitDashboard({
   // destination on the Stock study (default hidden; the band button opens it;
   // the options-first study keeps today's behavior). State preserved by the
   // same hidden-attribute convention the range mode uses — nothing unmounted.
-  const [deskOpen, setDeskOpen] = useState(defaultStudy === "options");
+  const [deskOpen, setDeskOpen] = useState(() => defaultStudy === "options" || initialView.studyChoice === "options");
   // Chart focus (Root 20:51): hides the page-local secondary chrome and gives
   // the candles the remaining viewport. Reversible (button/Esc); no device
   // zoom is changed and no fake pixels are claimed.
@@ -692,6 +693,7 @@ function SkylitDashboard({
     const historyPreferences = {...incoming, studyChoice:nextStudyChoice};
     if (defaultStudy === "options" && !incoming.found && outgoing) historyPreferences.priceHistoryOpen = outgoing.value.priceHistoryOpen;
     setPriceHistoryOpen(stockStudyOpen(historyPreferences, defaultStudy));
+    setDeskOpen(defaultStudy === "options" || nextStudyChoice === "options");
     setCompareMode(localViewChanged?false:choices.compareMode);setComparePair(choices.comparePair);
     setActivePane(localViewChanged?"gex":choices.activePane);
     // A display-only geometry change keeps the current owning selection and
@@ -834,15 +836,19 @@ function SkylitDashboard({
             openOptionsDesk(); // the desk destination must be VISIBLE on return
             focusStudy("options"); setScrollStudy("options");
           } else {
-            const nextStudy = priceHistoryOpen ? "options" : "price";
+            const nextStudy = defaultStudy === "options"
+              ? priceHistoryOpen ? "options" : "price"
+              : deskOpen ? "price" : "options";
             focusStudy(nextStudy); setScrollStudy(nextStudy);
+            if (defaultStudy !== "options") {
+              setDeskOpen(nextStudy === "options");
+              if (nextStudy === "options") setChartFocus(false);
+            }
           }
           setExpanded(false); setDrawerOpen(false);
-          // The desk toggle is its OWN state machine (the helper's regression):
-          // a functional update reads the CURRENT desk state — immune to the
-          // same-click priceHistoryOpen flip that froze the old branch.
-          if (defaultStudy !== "options") { setDeskOpen(prev => !prev); if (!deskOpen) setChartFocus(false); }
-        }}>{rangeOpen ? "Return to options desk" : !priceHistoryOpen ? "Price chart" : deskOpen ? "Hide options desk" : "Options desk"}</button>
+        }}>{rangeOpen ? "Return to options desk" : defaultStudy === "options"
+          ? priceHistoryOpen ? "Options desk" : "Price chart"
+          : deskOpen ? "Price chart" : "Options desk"}</button>
         {showPriceHistory && !rangeOpen && <button type="button" className="skylit-trade-mode-btn"
           aria-pressed={workspaceEnabled} onClick={()=>{setFocusedChartContext(null);setWorkspaceEnabled(value=>!value);}}>Chart layouts</button>}
         <SavedChartReadings key={replayOpenRequest?.nonce || "saved"} ticker={ticker} disabled={rangeOpen} onOpen={id => {
@@ -936,6 +942,8 @@ function SkylitDashboard({
         onTickerChange={onTickerChange}
         tickers={tickers}
       />
+
+      <LoadedContractPanels key={ticker} data={visibleData} />
 
       {/* 2.4 Solstice status strip — Environment · Location · Setup state · Data status (T23) */}
       <SolsticeStatusStrip

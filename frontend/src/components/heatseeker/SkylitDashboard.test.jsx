@@ -1554,13 +1554,16 @@ describe("primary stock price study", () => {
  test("opens the price chart first with one switch and no duplicate stock search", async () => {
   render(chart());
   expect(screen.getByTestId("price-node-history")).toBeVisible();
-  expect(screen.getByTestId("mock-control-bar")).toBeVisible();
-  expect(screen.getByTestId("mock-heatmap")).toBeVisible();
+  expect(screen.getByTestId("mock-control-bar")).not.toBeVisible();
+  expect(screen.getByTestId("mock-heatmap")).not.toBeVisible();
   expect(screen.getAllByRole("button", {name:"Options desk"})).toHaveLength(1);
   expect(screen.queryByTestId("mock-ticker-bar")).not.toBeInTheDocument();
   expect(screen.queryByRole("button", {name:"Browse all stocks"})).toBeNull();
   expect(screen.getByRole("combobox", {name:"Candle interval"})).toHaveValue("30");
   expect(JSON.parse(screen.getByTestId("research-selection").textContent)).toMatchObject({contextVersion:1,navigationOnly:true,study:"Price chart"});
+  fireEvent.click(screen.getByRole("button", {name:"Options desk"}));
+  expect(screen.getByTestId("mock-control-bar")).toBeVisible();
+  expect(screen.getByTestId("mock-heatmap")).toBeVisible();
   await act(drain);
  });
  test("one switch keeps desk choices and candle interval while research follows the owning view", async () => {
@@ -1649,10 +1652,12 @@ describe("legacy stock study migration", () => {
 
 describe("stock chart scroll-down study continuity",()=>{
  const stock=props=><><SkylitDashboardView ticker="SPY" data={selectionMap()} spot={650} {...props}/><ResearchSelection/></>;
- test("the default chart retains the accessible heatmap and study controls below it",async()=>{
+ test("the chart retains the heatmap and study controls behind its deliberate desk action",async()=>{
   render(stock());
   expect(screen.queryByText("}",{exact:true})).not.toBeInTheDocument();
   const chart=screen.getByTestId("price-node-history"),map=screen.getByTestId("mock-heatmap");
+  expect(chart).toBeVisible();expect(map).not.toBeVisible();
+  fireEvent.click(screen.getByRole("button",{name:"Options desk"}));
   expect(chart).toBeVisible();expect(map).toBeVisible();expect(screen.getByTestId("mock-control-bar")).toBeVisible();
   expect(screen.getByRole("combobox",{name:"Canvas layout"})).toBeVisible();
   expect(chart.compareDocumentPosition(map)&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -1669,7 +1674,7 @@ describe("stock chart scroll-down study continuity",()=>{
   await act(drain);
  });
  test("selecting a visible heatmap cell owns its map context without hiding the historical chart",async()=>{
-  render(stock());fireEvent.click(screen.getByTestId("mock-heatmap-cell"));
+  render(stock());fireEvent.click(screen.getByRole("button",{name:"Options desk"}));fireEvent.click(screen.getByTestId("mock-heatmap-cell"));
   expect(JSON.parse(screen.getByTestId("research-selection").textContent)).toMatchObject({displayMode:"live",selectedStrike:650,mapVersion:selectionMap().asof});
   expect(screen.getByTestId("price-node-history")).toBeVisible();expect(screen.getByTestId("skylit-selected-cell")).toHaveTextContent("123.4");
   fireEvent.change(screen.getByRole("combobox",{name:"Candle interval"}),{target:{value:"15"}});
@@ -1679,7 +1684,7 @@ describe("stock chart scroll-down study continuity",()=>{
  });
  test("range mode remains reachable and returning restores both studies with the chosen candle interval",async()=>{
   render(stock());fireEvent.change(screen.getByRole("combobox",{name:"Candle interval"}),{target:{value:"15"}});
-  fireEvent.click(screen.getByRole("button",{name:"Analytical range · 14–60 DTE"}));
+  fireEvent.click(screen.getByTestId("analytical-range-toggle"));
   expect(screen.getByTestId("price-node-history")).not.toBeVisible();expect(screen.getByTestId("mock-heatmap")).not.toBeVisible();
   await act(async()=>fireEvent.click(screen.getByRole("button",{name:"Return to options desk"})));
   expect(screen.getByTestId("price-node-history")).toBeVisible();expect(screen.getByTestId("mock-heatmap")).toBeVisible();
@@ -1693,7 +1698,9 @@ test("stock navigation actions do not change their destination on pointer down",
  fireEvent.click(screen.getByRole("button",{name:"Options desk"}));
  const back=screen.getByRole("button",{name:"Price chart"});fireEvent.pointerDown(back,{pointerId:1,pointerType:"mouse"});fireEvent.click(back);
  expect(JSON.parse(screen.getByTestId("research-selection").textContent)).toMatchObject({contextVersion:1,navigationOnly:true,study:"Price chart"});
- expect(document.activeElement).toHaveClass("skylit-price-study");expect(screen.getByTestId("mock-heatmap")).toBeVisible();
+ expect(document.activeElement).toHaveClass("skylit-price-study");expect(screen.getByTestId("mock-heatmap")).not.toBeVisible();
+ fireEvent.click(screen.getByRole("button",{name:"Options desk"}));
+ expect(screen.getByTestId("mock-heatmap")).toBeVisible();
  await act(drain);
 });
 

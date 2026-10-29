@@ -38,6 +38,8 @@ def _canon_strikes(payload: dict[str, Any]) -> list:
 def _canon_grids(payload: dict[str, Any]) -> dict:
     out: dict[str, Any] = {}
     grid = payload.get("grid") or {}
+    if isinstance(grid, dict) and isinstance(grid.get("oi_surface"), dict):
+        out["oi_surface"] = copy.deepcopy(grid["oi_surface"])
     for key in ("grid", "charm_grid", "vex_grid", "vomma_grid"):
         section = grid.get(key) if isinstance(grid, dict) else None
         if not isinstance(section, dict):

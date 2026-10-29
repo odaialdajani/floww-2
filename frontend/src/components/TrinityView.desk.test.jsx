@@ -67,8 +67,8 @@ test("desktop composition: dock mounts with a concise selection prompt before an
 
 test("desktop composition: one grouped header carries focus, scope, basis, assistant and identity", async () => {
   await act(async () => { render(<TrinityView />); });
-  await waitFor(() => expect(screen.getByTestId("triad-control-band")).toBeInTheDocument());
-  const head = screen.getByTestId("triad-control-band");
+  await waitFor(() => expect(screen.getByTestId("triad-command-bar")).toBeInTheDocument());
+  const head = screen.getByTestId("triad-command-bar");
   for (const control of [
     screen.getByLabelText("Focused symbol"),
     screen.getByLabelText("Market view expiry scope"),
@@ -79,13 +79,17 @@ test("desktop composition: one grouped header carries focus, scope, basis, assis
   ]) {
     expect(head).toContainElement(control);
   }
-  // Identity line keeps the honest LIVE/snapshot/source/quality shape.
-  expect(screen.getByTestId("triad-source").textContent).toContain("LIVE · snapshot snap-desk-1");
-  expect(screen.getByTestId("triad-source").textContent).toContain("public_api");
+  // Compact status and deliberately opened exact provenance retain both facts.
+  expect(screen.getByTestId("triad-observation-line")).toHaveTextContent("LIVE · quality usable");
+  const provenance = screen.getByTestId("triad-provenance-details");
+  fireEvent.click(provenance.querySelector('summary'));
+  expect(screen.getByText("snap-desk-1", { selector: 'dd' })).toBeVisible();
+  expect(screen.getByText("public_api", { selector: 'dd' })).toBeVisible();
 });
 
 test("selecting a wall fills the dock: compact human-scale readings, the wall card, and gated review tabs", async () => {
   await act(async () => { render(<TrinityView />); });
+  fireEvent.click(await screen.findByTestId("triad-tab-walls"));
   await waitFor(() => expect(screen.getByTestId("triad-walls")).toBeInTheDocument());
   await act(async () => { fireEvent.click(screen.getByTestId("triad-wall-w1")); });
   const dock = screen.getByTestId("triad-inspector-dock");
@@ -117,6 +121,8 @@ test("the inspector toggle collapses and restores the dock without touching the 
   await act(async () => { render(<TrinityView />); });
   await waitFor(() => expect(screen.getByTestId("triad-view")).toBeInTheDocument());
   const toggle = screen.getByTestId("triad-inspector-toggle");
+  expect(toggle).toHaveAttribute("aria-pressed", "false");
+  await act(async () => { fireEvent.click(toggle); });
   expect(toggle).toHaveAttribute("aria-pressed", "true");
   await act(async () => { fireEvent.click(toggle); });
   expect(screen.getByTestId("triad-view")).toHaveClass("tdk-dock-closed");

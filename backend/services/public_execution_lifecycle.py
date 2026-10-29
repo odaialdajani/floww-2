@@ -1202,6 +1202,8 @@ async def preflight(intent: dict[str, Any], ctx: dict[str, Any], broker: Any) ->
         quantity=float(intent.get("quantity")),
         limit_price=str(intent.get("limit_price")),
         use_margin=(intent.get("cash_margin_choice") == "MARGIN"),
+        instrument_type="OPTION",
+        open_close_indicator=intent.get("open_close"),
     ))
     out = {"ok": True, "estimate": estimate, "intent_hash": digest,
            "ctx_fingerprint": key.split("|", 1)[1], "cached": False}

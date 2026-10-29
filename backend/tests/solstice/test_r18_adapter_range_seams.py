@@ -60,7 +60,9 @@ def _mk_broker(spot=600.0, fail_expiries=frozenset()):
 
 
 @pytest.fixture(autouse=True)
-def _clean_cache():
+def _clean_cache(monkeypatch):
+    from services import public_budget
+    monkeypatch.setattr(public_budget, "budget", public_budget.PublicBudget())
     adapter._clear_chain_cache()
     yield
     adapter._clear_chain_cache()

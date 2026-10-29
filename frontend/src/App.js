@@ -497,6 +497,7 @@ export default function App() {
 
   // Main data fetch with in-flight guard
   useEffect(() => {
+    if (page !== "heatseeker" && page !== "skylit") return;
     let cancelled = false;
     let inFlight = false;
     const ctrl = new AbortController();
@@ -518,10 +519,11 @@ export default function App() {
     doFetch();
     const id = setInterval(doFetch, refreshMs);
     return () => { cancelled = true; ctrl.abort(); clearInterval(id); };
-  }, [ticker, refreshMs, debouncedExpiries, debouncedMode, debouncedDte, effectiveExpiryScope]);
+  }, [page, ticker, refreshMs, debouncedExpiries, debouncedMode, debouncedDte, effectiveExpiryScope]);
 
   // Advanced analytics with in-flight guard
   useEffect(() => {
+    if (page !== "skylit") return;
     let cancelled = false;
     let inFlight = false;
     const doFetch = async () => {
@@ -538,7 +540,7 @@ export default function App() {
     doFetch();
     const id = setInterval(doFetch, refreshMs * 2);
     return () => { cancelled = true; clearInterval(id); };
-  }, [ticker, refreshMs, debouncedExpiries]);
+  }, [page, ticker, refreshMs, debouncedExpiries]);
 
   // Ensemble toxicity polling
   useEffect(() => {
@@ -557,6 +559,7 @@ export default function App() {
 
   // Live spot polling with in-flight guard
   useEffect(() => {
+    if (!["heatseeker", "skylit", "portfolio"].includes(page)) return;
     let cancelled = false;
     let inFlight = false;
     const poll = async () => {
@@ -571,7 +574,7 @@ export default function App() {
     poll();
     const id = setInterval(poll, 5000);
     return () => { cancelled = true; clearInterval(id); };
-  }, [ticker]);
+  }, [ticker, page]);
 
   // Keyboard shortcuts
   useEffect(() => {

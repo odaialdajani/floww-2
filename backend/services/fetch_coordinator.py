@@ -19,6 +19,7 @@ import asyncio
 import contextlib
 import copy
 import logging
+import os
 import time
 from collections.abc import Callable
 from typing import Any
@@ -49,6 +50,8 @@ class FetchCoordinator:
         ticker: str,
         expiries: int,
         fetcher: Callable,
+        *,
+        source_owns_budget: bool = False,
     ) -> dict[str, Any]:
         """Fetch with deduplication.
 
@@ -56,6 +59,8 @@ class FetchCoordinator:
             ticker: Uppercase ticker symbol.
             expiries: Number of expiries.
             fetcher: Async callable (ticker, expiries) -> dict.
+            source_owns_budget: Internal composition only: the hardwired
+                Public adapter owns admission before any provider/auth work.
 
         Returns:
             Chain data dict.
@@ -106,7 +111,7 @@ class FetchCoordinator:
             # silent by design: the budget shield is optional, a missing
             # module must not stop a fetch that used to work.
             BudgetExhausted = _pub_budget = None
-        if _pub_budget is not None:
+        if _pub_budget is not None and not source_owns_budget:
             try:
                 await _pub_budget.acquire()
                 pub_budget = _pub_budget
@@ -241,7 +246,13 @@ class CacheRouter:
             return cached["data"]
 
         try:
-            data = await coordinator.fetch(ticker, expiries, fetch_spot_and_chains_merged)
+            # Public-only merged reads either use the adapter's full fan-out
+            # admission or refuse. Reserving another outer slot can exhaust
+            # all four slots before any adapter is able to start.
+            data = await coordinator.fetch(
+                ticker, expiries, fetch_spot_and_chains_merged,
+                source_owns_budget=os.getenv("FLOWW_MARKET_DATA_PROVIDER") == "public",
+            )
             if data and data.get("spot") and data.get("contracts"):
                 self._cache[cache_key] = {"ts": time.monotonic(), "data": data}
             return data
