@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import math
 import time
 from datetime import UTC, datetime
 from typing import Any
@@ -26,6 +27,56 @@ from typing import Any
 from services.execution_engine import ExecutionEngine, ExecutionResult, MarketState, Order
 
 logger = logging.getLogger(__name__)
+
+
+def _valid_paper_value(value: Any) -> bool:
+    """A zero can be observed; booleans, negatives and non-finite values cannot."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return False
+    try:
+        return math.isfinite(value) and value >= 0
+    except OverflowError:
+        return False
+
+
+def _replay_open_lots(trades: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Replay fills in order using average cost for the currently open lot."""
+    result: dict[str, dict[str, Any]] = {}
+    for trade in trades:
+        raw_symbol = trade.get("symbol")
+        symbol = raw_symbol if isinstance(raw_symbol, str) and raw_symbol else "<unknown symbol>"
+        side = trade.get("side")
+        qty = trade.get("quantity")
+        price = trade.get("fill_price")
+        row = result.setdefault(symbol, {"quantity": 0.0, "avg_cost": 0.0,
+                                         "realized_pnl": 0.0, "commissions": 0.0,
+                                         "trades": 0, "complete": True, "fees_complete": True})
+        row["trades"] += 1
+        fee = trade.get("commission")
+        if _valid_paper_value(fee):
+            row["commissions"] += fee
+        else:
+            row["fees_complete"] = False
+        if symbol == "<unknown symbol>" or side not in ("buy", "sell") or not _valid_paper_value(qty) \
+                or qty == 0 or not _valid_paper_value(price) or not _valid_paper_value(fee):
+            row["complete"] = False
+            continue
+        change = float(qty) if side == "buy" else -float(qty)
+        current = row["quantity"]
+        if current == 0 or current * change > 0:
+            row["avg_cost"] = ((abs(current) * row["avg_cost"] + abs(change) * price)
+                               / (abs(current) + abs(change)))
+        else:
+            closed = min(abs(current), abs(change))
+            direction = 1 if current > 0 else -1
+            row["realized_pnl"] += (price - row["avg_cost"]) * closed * direction
+            if abs(change) > abs(current):
+                row["avg_cost"] = float(price)
+        row["quantity"] = current + change
+        if abs(row["quantity"]) < 1e-9:
+            row["quantity"] = 0.0
+            row["avg_cost"] = 0.0
+    return result
 
 
 class PaperTradingEngine:
@@ -286,7 +337,7 @@ class PaperTradingEngine:
 
         return {"approved": True, "reason": ""}
 
-    def get_portfolio_summary(self) -> dict[str, Any]:
+    def get_portfolio_summary(self, current_prices: dict[str, float] | None = None) -> dict[str, Any]:
         """Get current portfolio summary.
 
         Positions are stored per ``symbol_side``; here we NET the buy and sell
@@ -298,34 +349,67 @@ class PaperTradingEngine:
         for pos in self.positions.values():
             agg = by_symbol.setdefault(
                 pos["symbol"],
-                {"buy_qty": 0.0, "buy_cost": 0.0, "sell_qty": 0.0, "sell_cost": 0.0},
+                {"buy_qty": 0.0, "buy_cost": 0.0, "sell_qty": 0.0, "sell_cost": 0.0,
+                 "buy_basis_known": True, "sell_basis_known": True},
             )
             if pos["side"] == "buy":
                 agg["buy_qty"] += pos["quantity"]
-                agg["buy_cost"] += pos["avg_cost"] * pos["quantity"]
+                if _valid_paper_value(pos.get("avg_cost")):
+                    agg["buy_cost"] += pos["avg_cost"] * pos["quantity"]
+                else:
+                    agg["buy_basis_known"] = False
             else:
                 agg["sell_qty"] += pos["quantity"]
-                agg["sell_cost"] += pos["avg_cost"] * pos["quantity"]
+                if _valid_paper_value(pos.get("avg_cost")):
+                    agg["sell_cost"] += pos["avg_cost"] * pos["quantity"]
+                else:
+                    agg["sell_basis_known"] = False
 
+        lots = _replay_open_lots(self.trade_history)
+        prices = current_prices or {}
         total_value = self.cash
+        marked_value = 0.0
+        unrealized_subtotal = 0.0
+        missing_marks = 0
+        missing_basis = 0
         positions_summary = []
         for symbol, agg in by_symbol.items():
             net_qty = agg["buy_qty"] - agg["sell_qty"]
             if abs(net_qty) < 1e-9:
                 continue  # round-trip closed -> flat, no open position
-            # Value the net position at the average cost of its dominant side.
-            if net_qty > 0:
-                avg_cost = agg["buy_cost"] / agg["buy_qty"] if agg["buy_qty"] else 0.0
+            lot = lots.get(symbol)
+            if lot and lot["complete"] and abs(lot["quantity"] - net_qty) < 1e-9:
+                avg_cost = lot["avg_cost"]
+            elif agg["sell_qty"] == 0 and agg["buy_qty"] and agg["buy_basis_known"]:
+                avg_cost = agg["buy_cost"] / agg["buy_qty"]
+            elif agg["buy_qty"] == 0 and agg["sell_qty"] and agg["sell_basis_known"]:
+                avg_cost = agg["sell_cost"] / agg["sell_qty"]
             else:
-                avg_cost = agg["sell_cost"] / agg["sell_qty"] if agg["sell_qty"] else 0.0
+                avg_cost = None  # incomplete journal cannot establish the remaining lot
+            mark = prices.get(symbol)
+            mark = float(mark) if _valid_paper_value(mark) else None
+            if mark is None:
+                missing_marks += 1
+            else:
+                marked_value += mark * net_qty
+            if avg_cost is None or not _valid_paper_value(avg_cost):
+                avg_cost = None
+                missing_basis += 1
+            elif mark is not None:
+                unrealized_subtotal += (mark - avg_cost) * net_qty
             positions_summary.append({
                 "symbol": symbol,
                 "side": "long" if net_qty > 0 else "short",
                 "quantity": net_qty,
-                "avg_cost": round(avg_cost, 4),
+                "avg_cost": round(avg_cost, 4) if avg_cost is not None else None,
+                "mark_price": mark,
+                "mark_source": None,
+                "mark_time": None,
+                "unrealized": round((mark - avg_cost) * net_qty, 2)
+                if mark is not None and avg_cost is not None else None,
             })
-            # Simplified: mark-to-cost for paper (assume current price = avg_cost).
-            total_value += avg_cost * net_qty
+            if avg_cost is not None:
+                total_value += avg_cost * net_qty
 
         # Root correction (2026-10-27): this figure carries positions at
         # HISTORICAL COST — it is a cost-basis carrying value, NOT observed
@@ -334,11 +418,16 @@ class PaperTradingEngine:
         # may be promoted to observed equity, and no mark is ever invented.
         return {
             "cash": round(self.cash, 2),
-            "total_value": round(total_value, 2),
-            "cost_basis_value": round(total_value, 2),
+            "total_value": None if missing_basis else round(total_value, 2),
+            "cost_basis_value": None if missing_basis else round(total_value, 2),
             "valuation_basis": "historical_cost",
-            "total_pnl": round(total_value - self.initial_capital, 2),
-            "total_pnl_pct": round((total_value - self.initial_capital) / self.initial_capital * 100, 2) if self.initial_capital else 0.0,
+            "total_pnl": None if missing_basis else round(total_value - self.initial_capital, 2),
+            "total_pnl_pct": None if missing_basis else round((total_value - self.initial_capital) / self.initial_capital * 100, 2) if self.initial_capital else 0.0,
+            "equity": None if missing_marks else round(self.cash + marked_value, 2),
+            "total_unrealized": None if missing_marks or missing_basis else round(unrealized_subtotal, 2),
+            "known_marked_subtotal": round(unrealized_subtotal, 2),
+            "marks_coverage": {"known": len(positions_summary) - missing_marks, "missing": missing_marks},
+            "basis_coverage": {"known": len(positions_summary) - missing_basis, "missing": missing_basis},
             "open_positions": len(positions_summary),
             "positions": positions_summary,
             "total_trades": len(self.trade_history),
@@ -352,67 +441,32 @@ class PaperTradingEngine:
     ) -> dict[str, Any]:
         """P&L attribution by ticker (Phase 6.5 remainder, 2026-09-05).
 
-        Replays trade_history with average-cost matching per symbol, the same
-        convention as get_portfolio_summary (fills are recorded with their
-        realized fill_price, so this is deterministic for a given history):
-          - buys accumulate cost; sells realize (sell_price - avg_buy) * qty
-          - short-first flow mirrors: covers realize (avg_short - buy_price)
-          - commissions summed per symbol (not allocated to open/closed)
+        Replays trade_history in order using the current open lot's average
+        cost. Commissions are reported separately, not allocated to lots.
         Unrealized P&L needs live marks: pass current_prices
         {symbol: price} or it reports null (honest unknown, never
         mark-to-model).
         """
         prices = current_prices or {}
-        by_symbol: dict[str, dict[str, float]] = {}
-        for t in self.trade_history:
-            sym = t.get("symbol", "")
-            qty = float(t.get("quantity") or 0)
-            px = float(t.get("fill_price") or 0)
-            fee = float(t.get("commission") or 0)
-            if not sym or qty <= 0:
-                continue
-            a = by_symbol.setdefault(sym, {
-                "trades": 0, "buy_qty": 0.0, "sell_qty": 0.0,
-                "buy_cost": 0.0, "sell_proceeds": 0.0,
-                "realized_pnl": 0.0, "commissions": 0.0,
-            })
-            a["trades"] += 1
-            a["commissions"] += fee
-            if t.get("side") == "buy":
-                # Covering a short first (if any), else adding long.
-                # Accumulation stays GROSS (net = buys − sells); average cost
-                # is invariant to partial closes, realized captures the rest.
-                short_open = a["sell_qty"] - a["buy_qty"]
-                if short_open > 0:
-                    covering = min(qty, short_open)
-                    avg_short = (a["sell_proceeds"] / a["sell_qty"]) if a["sell_qty"] else 0.0
-                    a["realized_pnl"] += (avg_short - px) * covering
-                a["buy_qty"] += qty
-                a["buy_cost"] += px * qty
-            else:
-                # Closing a long first (if any), else opening short.
-                long_open = a["buy_qty"] - a["sell_qty"]
-                if long_open > 0:
-                    closing = min(qty, long_open)
-                    avg_buy = (a["buy_cost"] / a["buy_qty"]) if a["buy_qty"] else 0.0
-                    a["realized_pnl"] += (px - avg_buy) * closing
-                a["sell_qty"] += qty
-                a["sell_proceeds"] += px * qty
+        by_symbol = _replay_open_lots(self.trade_history)
 
         symbols = []
         total_realized = 0.0
         total_unrealized = 0.0
         unmarked_symbols: list[str] = []
+        incomplete_history_symbols: list[str] = []
         for sym, a in sorted(by_symbol.items()):
-            net = a["buy_qty"] - a["sell_qty"]
-            if net > 0:
-                avg = (a["buy_cost"] / a["buy_qty"]) if a["buy_qty"] else 0.0
-            elif net < 0:
-                avg = (a["sell_proceeds"] / a["sell_qty"]) if a["sell_qty"] else 0.0
-            else:
-                avg = 0.0
-            if sym in prices and prices[sym] is not None and net != 0:
-                unrealized = (prices[sym] - avg) * net
+            if not a["complete"]:
+                incomplete_history_symbols.append(sym)
+                symbols.append({"symbol": sym, "trades": a["trades"], "net_qty": None,
+                                "realized_pnl": None, "unrealized_pnl": None,
+                                "commissions": round(a["commissions"], 2)
+                                if a["fees_complete"] else None})
+                continue
+            net = a["quantity"]
+            mark = prices.get(sym)
+            if _valid_paper_value(mark) and net != 0:
+                unrealized = (mark - a["avg_cost"]) * net
             else:
                 unrealized = None  # no live mark: unknown, never mark-to-model
             if net != 0 and unrealized is None:
@@ -435,10 +489,11 @@ class PaperTradingEngine:
         # numeric totals.
         return {
             "symbols": symbols,
-            "total_realized_pnl": round(total_realized, 2),
-            "total_unrealized_pnl": None if unmarked_symbols else round(total_unrealized, 2),
+            "total_realized_pnl": None if incomplete_history_symbols else round(total_realized, 2),
+            "total_unrealized_pnl": None if unmarked_symbols or incomplete_history_symbols else round(total_unrealized, 2),
             "known_marked_subtotal": round(total_unrealized, 2),
             "unmarked_symbols": unmarked_symbols,
+            "incomplete_history_symbols": incomplete_history_symbols,
             "data_source": "paper_trading",
         }
 

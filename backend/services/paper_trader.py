@@ -514,10 +514,16 @@ class PaperTrader:
         signed_market_value = 0.0
         marked_unrealized_subtotal = 0.0
         unknown_positions = 0
+        unknown_basis = 0
 
         for _key, pos in self.positions.items():
             if pos.status != "open":
                 continue
+            basis = pos.entry_price
+            basis_known = (not isinstance(basis, bool) and isinstance(basis, (int, float))
+                           and math.isfinite(basis) and basis >= 0)
+            if not basis_known:
+                unknown_basis += 1
             mark = current_prices.get(pos.symbol)
             if isinstance(mark, bool) or not isinstance(mark, (int, float)) \
                     or not math.isfinite(mark) or mark < 0:
@@ -534,19 +540,20 @@ class PaperTrader:
                 continue
             mark = float(mark)
             if pos.side == "LONG":
-                unrealized = (mark - pos.entry_price) * pos.quantity
+                unrealized = (mark - basis) * pos.quantity if basis_known else None
                 signed_market_value += mark * pos.quantity
             else:
-                unrealized = (pos.entry_price - mark) * pos.quantity
+                unrealized = (basis - mark) * pos.quantity if basis_known else None
                 signed_market_value -= mark * pos.quantity
-            marked_unrealized_subtotal += unrealized
+            if unrealized is not None:
+                marked_unrealized_subtotal += unrealized
             open_positions.append({
                 "symbol": pos.symbol,
                 "side": pos.side,
                 "quantity": pos.quantity,
                 "entry_price": pos.entry_price,
                 "current_price": mark,
-                "unrealized_pnl": round(unrealized, 2),
+                "unrealized_pnl": round(unrealized, 2) if unrealized is not None else None,
                 "mark_status": "observed",
             })
 
@@ -569,9 +576,9 @@ class PaperTrader:
         else:
             basis = "observed_marks"
             total_value = self.cash + signed_market_value
-            total_unrealized_out = marked_unrealized_subtotal
-            total_pnl = total_value - self.initial_capital
-            total_pnl_pct = (total_pnl / self.initial_capital * 100
+            total_unrealized_out = None if unknown_basis else marked_unrealized_subtotal
+            total_pnl = None if unknown_basis else total_value - self.initial_capital
+            total_pnl_pct = (None if total_pnl is None else total_pnl / self.initial_capital * 100
                              if self.initial_capital else 0.0)
 
         return {
@@ -587,6 +594,8 @@ class PaperTrader:
             "total_trades": len(self.trade_history),
             "total_orders": len(self.order_log),
             "unknown_positions": unknown_positions,
+            "marks_coverage": {"known": len(open_positions) - unknown_positions, "missing": unknown_positions},
+            "basis_coverage": {"known": len(open_positions) - unknown_basis, "missing": unknown_basis},
             "known_marked_subtotal": round(marked_unrealized_subtotal, 2),
             "valuation_basis": basis,
         }

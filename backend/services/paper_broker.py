@@ -244,11 +244,17 @@ class PaperBroker:
         signed_market_value = 0.0
         partial_unrealized = 0.0
         unknown = 0
+        unknown_basis = 0
         open_count = 0
         for pos in self.positions.values():
             if pos.quantity == 0:
                 continue
             open_count += 1
+            basis = pos.avg_cost
+            basis_known = (not isinstance(basis, bool) and isinstance(basis, (int, float))
+                           and math.isfinite(basis) and basis >= 0)
+            if not basis_known:
+                unknown_basis += 1
             mark = marks.get(pos.symbol)
             if isinstance(mark, bool) or not isinstance(mark, (int, float)) \
                     or not math.isfinite(mark) or mark < 0:
@@ -256,7 +262,8 @@ class PaperBroker:
                 continue
             mark = float(mark)
             signed_market_value += mark * pos.quantity
-            partial_unrealized += (mark - pos.avg_cost) * pos.quantity
+            if basis_known:
+                partial_unrealized += (mark - basis) * pos.quantity
 
         realized = round(self.total_realized_pnl, 2)
         if open_count and unknown:
@@ -267,8 +274,8 @@ class PaperBroker:
             total = realized
         else:
             equity = round(self.cash + signed_market_value, 2)
-            unrealized = round(partial_unrealized, 2)
-            total = round(self.total_realized_pnl + partial_unrealized, 2)
+            unrealized = None if unknown_basis else round(partial_unrealized, 2)
+            total = None if unknown_basis else round(self.total_realized_pnl + partial_unrealized, 2)
         return {
             "realized_pnl": realized,
             "unrealized_pnl": unrealized,
@@ -277,6 +284,8 @@ class PaperBroker:
             "cash": round(self.cash, 2),
             "equity": equity,
             "unknown_positions": unknown,
+            "marks_coverage": {"known": open_count - unknown, "missing": unknown},
+            "basis_coverage": {"known": open_count - unknown_basis, "missing": unknown_basis},
             "known_marked_subtotal": round(partial_unrealized, 2),
         }
 
