@@ -723,7 +723,9 @@ export default function FlowseekerProBlademap({ active = true, ticker: sharedTic
   const [activityChoice,setActivityChoice]=useState("auto");
   const activityView=activityChoice==="auto"?(scan.length?"current":"saved"):activityChoice;
   const showSavedActivity=()=>{setActivityChoice("saved");document.getElementById("pulse")?.scrollIntoView?.({behavior:"smooth",block:"start"});};
-  const pulseRowCap = (mode === "trade" ? 8 : mode === "monitor" ? 14 : 30) * pulsePages;
+  const pulsePageSize = mode === "trade" ? 8 : mode === "monitor" ? 14 : 30;
+  const pulseRowCap = pulsePageSize * pulsePages;
+  const pulseRevealRef = useRef(null);
 
   // today's knobs (behind Filters disclosure; active ones surface as chips)
   const [knobType, setKnobType] = useState(prefs.knobType ?? "all");
@@ -823,6 +825,17 @@ export default function FlowseekerProBlademap({ active = true, ticker: sharedTic
     return rows;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scan, screen, universe, tickerFacts, feed, universeOnly, knobType, knobMinVol, knobMinScore, knobQ, knobDteMin, knobDteMax, sortPreset]);
+
+  useEffect(() => {
+    const index = screenedScans.findIndex(row => row.under === focusTicker);
+    if (index < 0) { pulseRevealRef.current = null; return; }
+    const reveal = `${focusTicker}|${index}|${pulsePageSize}`;
+    // Reveal a newly focused/moved row, but honor an explicit Show fewer
+    // until the focus or its position changes. Never bypass active filters.
+    if (pulseRevealRef.current === reveal) return;
+    pulseRevealRef.current = reveal;
+    setPulsePages(pages => Math.max(pages, Math.ceil((index + 1) / pulsePageSize)));
+  }, [focusTicker, screenedScans, pulsePageSize]);
 
   const screenedFeed = useMemo(
     () => applyScreenToAlerts(feed, screen, { universe, scanRows: scan, tickerFacts }).filter(a => {
@@ -1115,6 +1128,7 @@ export default function FlowseekerProBlademap({ active = true, ticker: sharedTic
   useEffect(() => {
     if (!active) return;
     const onKey = (e) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
       const t = e.target;
       if (t?.closest?.('button,a,summary,tr,[role="button"],[role="dialog"],[contenteditable="true"]')) return;
       if (t && (t.tagName === "INPUT" || t.tagName === "SELECT" || t.tagName === "TEXTAREA")) {
@@ -1135,29 +1149,36 @@ export default function FlowseekerProBlademap({ active = true, ticker: sharedTic
       if (!n) return;
       if (e.key === "j" || e.key === "ArrowDown") {
         e.preventDefault();
+        e.stopImmediatePropagation();
         kbActiveRef.current = true; // verdict feed holds its order while navigating
-        setKbIdx((k) => Math.min(n - 1, k + 1));
+        setKbIdx((k) => (k + 1) % n);
       } else if (e.key === "k" || e.key === "ArrowUp") {
         e.preventDefault();
+        e.stopImmediatePropagation();
         kbActiveRef.current = true;
-        setKbIdx((k) => Math.max(0, k - 1));
+        setKbIdx((k) => k <= 0 ? n - 1 : k - 1);
       } else if (e.key === "g") {
         e.preventDefault();
+        e.stopImmediatePropagation();
         kbActiveRef.current = true;
         setKbIdx(0);
       } else if (e.key === "G") {
         e.preventDefault();
+        e.stopImmediatePropagation();
         kbActiveRef.current = true;
         setKbIdx(n - 1);
       } else if (e.key === "Enter" && kbIdx >= 0 && screenedScans[kbIdx]) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
         doDrill(screenedScans[kbIdx]);
       } else if (e.key === "Escape") {
         setKbIdx(-1);
         kbActiveRef.current = false;
       }
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    // This page owns pulse navigation before shell shortcuts (j = Journal).
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
   }, [active, screenedScans, pulseRowCap, kbIdx, forceRefresh, doDrill]);
   useEffect(() => {
     setKbIdx(-1);
@@ -1780,6 +1801,7 @@ export default function FlowseekerProBlademap({ active = true, ticker: sharedTic
                     <div className="th-sh">
                       <h2>Activity results</h2>
                       <select aria-label="Activity readings" value={activityView} onChange={e=>setActivityChoice(e.target.value)}><option value="saved">Saved stock activity</option><option value="current">Current readings</option></select>
+                      <label className="th-meta">Ticker <input aria-label="Search activity tickers" style={{width:112}} value={knobQ} onChange={event => setKnobQ((event.target.value || "").toUpperCase())} /></label>
                       <span className="th-meta"><b>{scanState.status}</b> screened contracts · {screenedScans.length} of {scan.length} · {screen.label}{limitedScan && ` · ${limitedScan}`}</span>
                       <span className="th-sp" />
                       {holdingPresentation && <span className="th-meta">Row positions held while you interact; age labels keep updating.</span>}

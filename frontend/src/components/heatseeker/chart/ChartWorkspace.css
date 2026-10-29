@@ -47,3 +47,54 @@
 .workspace-layouts-import { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: #b9c6d2; }
 .workspace-layouts-import input { font: inherit; font-size: 11px; max-width: 180px; }
 .workspace-layouts [data-testid="layout-status"] { display: block; margin-top: 4px; font-size: 11px; color: #e8c96a; }
+
+/* B27 usability surface. Replay control: rendered BEFORE the chips row and
+   raised, so it is visible above them on every viewport; touch-sized. */
+.touch-replay { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; padding: 6px 16px; margin: 4px 8px 4px 0; font: inherit; font-size: 13px; border: 1px solid #435260; border-radius: 6px; background: #16212b; color: #dce8f2; cursor: pointer; position: relative; z-index: 3; }
+.touch-replay[aria-pressed="true"] { border-color: #e3c16a; color: #f2d795; }
+.touch-replay:focus-visible { outline: 2px solid #e3c16a; outline-offset: 2px; }
+.replay-banner { margin: 4px 0; padding: 6px 10px; border: 1px solid #6d5a2a; border-radius: 4px; background: #1d2612; color: #e8c96a; font-size: 12px; }
+.chart-watermark { display: block; margin: 6px 0; font-size: 10px; letter-spacing: 0.4px; color: #6f8896; }
+.workspace-shortcuts { display: flex; flex-direction: column; gap: 4px; margin: 8px 0; font-size: 11px; color: #b9c6d2; }
+.workspace-shortcuts strong { color: #dce8f2; }
+.shortcut-row { display: flex; align-items: center; gap: 8px; }
+.shortcut-row kbd { border: 1px solid #3a4a5a; border-radius: 3px; padding: 1px 6px; background: #101820; color: #f2d795; font-family: monospace; }
+.shortcut-row button { font: inherit; font-size: 11px; border: 1px solid #435260; border-radius: 4px; background: #16212b; color: #dce8f2; padding: 3px 9px; min-height: 26px; cursor: pointer; }
+.shortcut-row button[aria-pressed="true"] { border-color: #e3c16a; color: #f2d795; }
+.shortcut-row button:focus-visible { outline: 2px solid #e3c16a; outline-offset: 2px; }
+/* Phone bottom sheet: fixed to the visual viewport with a dynamic-viewport
+   height cap and safe-area padding, so it stays clear of the on-screen
+   keyboard (viewport shrinks -> dvh keeps the sheet inside it) and scrolls
+   internally instead of hiding controls. */
+@media (max-width: 620px) {
+  .workspace-layouts { position: fixed; left: 0; right: 0; bottom: 0; margin: 0; padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); border-top: 1px solid #37575f; border-radius: 10px 10px 0 0; background: #0d151d; max-height: 60dvh; overflow-y: auto; z-index: 20; }
+  .workspace-layouts[open] { display: block; }
+  .workspace-layouts:not([open]) { display: none; }
+  .workspace-layouts > summary { border: none; background: transparent; color: #f2d795; }
+  .workspace-layouts-row { flex-wrap: wrap; }
+  .workspace-layouts-import input { max-width: 150px; }
+}
+
+/* B15 replay readout: the algebra's visible state, one compact strip. */
+.replay-readout { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 6px 0; padding: 6px 10px; border: 1px solid #2c3a46; border-radius: 6px; background: #0d151d; }
+.replay-readout span { font-size: 11px; color: #b9c6d2; white-space: nowrap; }
+.replay-readout span:first-child { color: #dce8f2; }
+
+/* B23 profiles panel: one compact honest-reads strip beside the flow pane. */
+.profiles-panel { display: flex; flex-direction: column; gap: 3px; margin: 6px 0; padding: 6px 10px; border: 1px solid #2c3a46; border-radius: 6px; background: #0d151d; }
+.profiles-panel span { font-size: 11px; color: #b9c6d2; }
+.profiles-panel span[data-testid="profile-ib"] { color: #dce8f2; }
+
+/* Desktop composition keeps the plotted instrument ahead of diagnostics. */
+.workspace-controls { display:flex; align-items:center; flex-wrap:wrap; gap:6px; padding:0 0 6px; }
+.workspace-controls .touch-replay { margin:0; min-height:32px; padding:4px 10px; font-size:12px; }
+.workspace-controls [data-testid="atlas-toggle"] { font:inherit; font-size:12px; color:#c7b5e8; border:1px solid #435260; background:#131820; border-radius:4px; padding:4px 9px; min-height:32px; }
+.workspace-controls .pane-layout-picker { margin:0; }
+.workspace-evidence { margin:8px 0; padding-top:6px; border-top:1px solid #26303a; }
+.workspace-evidence > summary { cursor:pointer; color:#b5c4d0; font-size:12px; min-height:30px; display:flex; align-items:center; }
+.workspace-evidence > summary::before { content:'▸ '; margin-right:6px; color:#d3b877; }
+.workspace-evidence[open] > summary::before { content:'▾ '; }
+.workspace-evidence .chart-context-strip { font-size:12px; overflow-wrap:anywhere; line-height:1.5; }
+.workspace-evidence .flow-pane { font-size:12px; padding:6px 0; }
+.chart-watermark { font-size:12px; }
+[data-testid="workspace-quality"] { display:flex; flex-wrap:wrap; gap:4px 14px; font-size:12px; color:#9bafbc; }

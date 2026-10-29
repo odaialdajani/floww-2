@@ -1009,6 +1009,7 @@ _BUILD_HEATMAP_CACHE_TTL = 60# Stale-while-revalidate: serve stale data immediat
 # for repeat views. In-flight set provides single-flight per cache key.
 _BUILD_HEATMAP_STALE_TTL = 900  # 15 min — max age of stale-serveable data
 _BUILD_HEATMAP_INFLIGHT: set[str] = set()
+_BUILD_HEATMAP_PENDING: dict[str, asyncio.Task] = {}
 
 
 def _public_heatmap_cache_allowed(cached: dict) -> bool:
@@ -1022,7 +1023,7 @@ def _public_heatmap_cache_allowed(cached: dict) -> bool:
 async def _revalidate_heatmap(cache_key: str, ticker: str, max_expiries: int,
                               with_taps: bool, mode: str, dte, scalp: bool,
                               max_strikes: int, expiry_scope: str = "loaded", scope_session: str | None = None):
-    """Background refresh — never raises to the caller."""
+    """Refresh once; stale readers return early and expired readers may join."""
     provider_policy = "public" if os.getenv("FLOWW_MARKET_DATA_PROVIDER") == "public" else "legacy"
     try:
         scope_kwargs = {"expiry_scope": expiry_scope, "scope_session": scope_session} if expiry_scope == "next" else {}
@@ -1030,8 +1031,10 @@ async def _revalidate_heatmap(cache_key: str, ticker: str, max_expiries: int,
         if isinstance(fresh, dict) and not fresh.get("error") and (fresh.get("strikes") or fresh.get("grid")):
             _BUILD_HEATMAP_CACHE[cache_key] = {"ts": time.time(), "data": fresh,
                                             "provider_policy": provider_policy}
+        return fresh
     except Exception as e:
         log.warning(f"swr revalidate failed {cache_key}: {e}")
+        raise
     finally:
         _BUILD_HEATMAP_INFLIGHT.discard(cache_key)
 
@@ -1053,6 +1056,23 @@ async def build_heatmap(ticker: str, max_expiries: int = 4, with_taps: bool = Tr
         raise HTTPException(422, str(exc)) from exc
     cache_key = scope_cache_key(ticker, query)
     scope_kwargs = {"expiry_scope": expiry_scope, "scope_session": scope_session} if expiry_scope == "next" else {}
+
+    def own(task):
+        # One owner registry covers both stale revalidation and cold builds,
+        # including a stale entry that expires while its refresh is pending.
+        _BUILD_HEATMAP_PENDING[cache_key] = task
+        _background_tasks.add(task)
+
+        def completed(done):
+            if _BUILD_HEATMAP_PENDING.get(cache_key) is done:
+                _BUILD_HEATMAP_PENDING.pop(cache_key, None)
+            _background_tasks.discard(done)
+            if not done.cancelled():
+                done.exception()  # retrieve failures even if all readers left
+
+        task.add_done_callback(completed)
+        return task
+
     cached = _BUILD_HEATMAP_CACHE.get(cache_key)
     if cached and not _public_heatmap_cache_allowed(cached):
         cached = None
@@ -1063,19 +1083,30 @@ async def build_heatmap(ticker: str, max_expiries: int = 4, with_taps: bool = Tr
             return cached_market_copy(cached["data"], age)
         if (
             age < _BUILD_HEATMAP_STALE_TTL
-            and cache_key not in _BUILD_HEATMAP_INFLIGHT
             and isinstance(cached.get("data"), dict)
             and not cached["data"].get("error")
         ):
-            _BUILD_HEATMAP_INFLIGHT.add(cache_key)
-            refresh = asyncio.create_task(_revalidate_heatmap(
-                cache_key, ticker, max_expiries, with_taps, mode, dte, scalp, max_strikes, **scope_kwargs,
-            ))
-            _background_tasks.add(refresh)
-            refresh.add_done_callback(_background_tasks.discard)
+            # Every stale reader can return immediately; only the refresh
+            # owner starts work. Later readers must not fall into a second
+            # foreground build while that refresh is still in flight.
+            pending = _BUILD_HEATMAP_PENDING.get(cache_key)
+            if pending is None or pending.done():
+                _BUILD_HEATMAP_INFLIGHT.add(cache_key)
+                own(asyncio.create_task(_revalidate_heatmap(
+                    cache_key, ticker, max_expiries, with_taps, mode, dte, scalp, max_strikes, **scope_kwargs,
+                )))
             return cached_market_copy(cached["data"], age, revalidating=True)
     try:
-        return await _build_heatmap_impl(ticker, max_expiries, with_taps, mode, dte, scalp, max_strikes, **scope_kwargs)
+        import copy
+
+        pending = _BUILD_HEATMAP_PENDING.get(cache_key)
+        if pending is None or pending.done():
+            pending = own(asyncio.create_task(_build_heatmap_impl(
+                ticker, max_expiries, with_taps, mode, dte, scalp, max_strikes, **scope_kwargs,
+            )))
+        # A browser cancel cannot cancel another reader's build. Shutdown
+        # still owns the tracked task, and each caller receives its own copy.
+        return copy.deepcopy(await asyncio.shield(pending))
     except HTTPException:
         raise
     except Exception as e:
@@ -1126,6 +1157,9 @@ def _display_surfaces(spot: float, contracts: list[dict[str, Any]], ticker: str,
     # always rendered "surface unavailable". Same honesty rule as VEX: attach
     # the surface with its own status, never zero-fill, never fall back to raw.
     def _with_vex(grid: dict) -> dict:
+        from services.open_interest import build_open_interest
+
+        grid["oi_surface"] = build_open_interest(contracts)
         _cg = compute_charm_grid_local(spot, contracts, ticker,
                                        weight_key="volume" if exposure_basis != "OI" else "oi")
         grid["charm_grid"] = _cg["grid"]
@@ -3665,6 +3699,12 @@ async def on_start():
     except Exception as e:
         log.warning(f"MongoDB unavailable during startup ({type(e).__name__}): {e}")
         log.warning("Server running in degraded mode — DB-dependent endpoints will fail")
+    # An isolated preview can serve explicit reads without duplicating the
+    # original process's collection loops. Essential storage initialization
+    # above and separately registered manual-research startup stay enabled.
+    if os.environ.get("FLOWW_BACKGROUND_LOOPS", "1") == "0":
+        log.info("Automatic scheduler/warmup/VPIN/Public loops disabled (FLOWW_BACKGROUND_LOOPS=0)")
+        return
     global _scheduler_started, _scheduler_task
     if not _scheduler_started:
         _scheduler_started = True
@@ -4081,11 +4121,19 @@ try:
             from services.public_scanner import peek_scan_view
             return peek_scan_view()
 
+        def read_recorded_chart(ticker, first, last):
+            # Synchronous recorded-store probe for focused-chart asks: the
+            # route-shaped reader over as-of rows; eligibility is decided
+            # later at the ask cursor. No provider or live read.
+            from routes.price_history import read_snapshots
+            return read_snapshots(duckdb_engine, ticker, first, last)
+
         try:
             repository = AgentRepository(db)
             await repository.initialize()
             reads = ResearchReads(peek_chain, peek_map, read_alerts, read_recorded_map=read_recorded_map,
-                                  read_recorded_range=read_recorded_range, peek_scan=peek_scan, read_daily_bars=peek_daily_bars)
+                                  read_recorded_range=read_recorded_range, peek_scan=peek_scan,
+                                  read_daily_bars=peek_daily_bars, read_recorded_chart=read_recorded_chart)
             from services.agent.codex_model import CodexModel
             from services.agent.spend import SpendLedger, money_units
             spending = SpendLedger(repository.budgets, cap_units=money_units(os.getenv("AGENT_DAILY_BUDGET_USD", "20")), audit_collection=db["agent_budget_audit"])

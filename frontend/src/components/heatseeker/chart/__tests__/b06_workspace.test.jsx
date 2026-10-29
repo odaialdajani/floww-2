@@ -1,5 +1,6 @@
 import React from 'react';
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
+import { openStockPanel } from '../../../../testUtils/openStockPanel';
 
 // Hermetic data: the real lifecycle reads a controlled payload. The factory
 // stays bare and each test re-arms the implementation — the pattern the
@@ -17,6 +18,7 @@ const workspace = () => require('../ChartWorkspace').default;
 // contract or history props, these controls would disappear.
 const expectIncumbentControls = () => {
   expect(screen.getByTestId('price-node-history')).toBeInTheDocument();
+  openStockPanel('data');
   expect(screen.getByRole('button', { name: 'Reload history' })).toBeInTheDocument();
   expect(screen.getByLabelText('Option contract')).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Chart tools', exact: true })).toBeInTheDocument();

@@ -1,8 +1,14 @@
 # STATE.md — Confluence Decoder
 
-**Last updated:** 2026-10-16
+**Current entry point, updated 2026-10-28:** [Direct cleanup and current queue](CURRENT.md).
+The owner has one implementation owner in this chat. Earlier worker assignments,
+test totals and runtime descriptions below are dated history. Current Stock chart
+and Market view cleanup supersedes those handoffs; retained obligations remain
+explicit in the linked record.
 
-## Current user priority — integration reset and PR 1–131 audit
+**Historical snapshot last updated:** 2026-10-16
+
+## Historical user priority — integration reset and PR 1–131 audit
 
 The 14 October request supersedes the old deployment-first headline: stop the repeating chart checks, reconcile historical work, improve the approved Solstice/Triad inspector and make heatmap/chart levels readable. The merged review candidate is `6716946b`; the current locally verified source head is `f623771a`. The review backend on :8002 has loaded the tested history diagnostics, with capture and live Public trading off. See [current findings, checks and unfinished queue](unknowns/integration-reset-20261014.md), the [completion evidence](eval/completion-20261016/STATUS.md), and the exact-once [PR 1–131 audit](eval/pr-history-1-131-20261016/STATUS.md). Whole-product acceptance and trading commissioning remain open. No historical test count below is current proof.
 

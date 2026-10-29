@@ -3,6 +3,8 @@ import copy
 
 import pytest
 
+from tests.owned_loopback import allow_owned_loopback  # noqa: F401
+
 pytest.importorskip("mongomock_motor", reason="mongo mock unavailable in this env")
 from mongomock_motor import AsyncMongoMockClient
 

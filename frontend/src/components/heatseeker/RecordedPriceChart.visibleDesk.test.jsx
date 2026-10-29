@@ -42,3 +42,17 @@ test('Tools closes by Escape and explicit touch action, returning focus to its s
   fireEvent.click(tools);fireEvent.click(screen.getByRole('button',{name:'Close chart tools'}));
   expect(details).not.toHaveAttribute('open');expect(tools).toHaveFocus();
 });
+
+// UI-03/04 control-band compaction: the readout collapses to two tight lines
+// and the replay row stays one row — CSS contract pinned from the stylesheet
+// bytes (real geometry proof lives in the live captures).
+test('control band compaction rules exist (readout two-line, replay one-row)', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const css = fs.readFileSync(path.join(__dirname, 'RecordedPriceChart.css'), 'utf8');
+  expect(css).toMatch(/recorded-chart-tools \.recorded-chart-readout\{[^}]*flex:0 1 auto/);
+  expect(css).toMatch(/recorded-chart-tools \.recorded-chart-readout\{[^}]*flex-wrap:wrap/);
+  expect(css).not.toMatch(/recorded-chart-tools \.recorded-chart-readout\{[^}]*overflow:hidden/);
+  expect(css).toMatch(/recorded-chart-tools \.recorded-chart-readout > span\{[^}]*white-space:nowrap/);
+  expect(css).toMatch(/recorded-chart-replay-row\{[^}]*white-space:nowrap/);
+});

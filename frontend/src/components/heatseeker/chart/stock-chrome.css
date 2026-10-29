@@ -1,0 +1,154 @@
+/* Stock-local chrome (the owned declutter pass). Token contract (owner 27 Oct,
+root-verified cascade): reuse the EXISTING theme tokens — surfaces
+var(--floww-surface,var(--panel,#111111)), raised var(--floww-raised,var(--panel-2,#191919)),
+controls var(--floww-control,var(--surface-3,#222222)), hairlines var(--border,#282828),
+line var(--floww-line,var(--border-2,#454545)), text var(--text), secondary var(--text-dim),
+accent var(--gold,#e3c16a). NO second theme layer; the explicit light theme stays
+honored through these fallbacks. Data semantics — candle up/down, signed-grid
+polarity, drawing/preset colors, source hatches — are untouched by this file.
+Imported by RecordedPriceChart (Stock-local); shared files untouched. */
+
+/* ONE compact command row: identity + interval + replay + readout + scale +
+   the Indicators/Drawings/Workspace openers all ride the same line. */
+.recorded-chart-tools { flex-wrap: wrap; row-gap: 4px; }
+.recorded-chart-tools .recorded-chart-readout { font-size: 11px; gap: 6px; }
+.recorded-chart-tools .recorded-chart-readout strong { font-size: 11px; }
+.recorded-chart-tools .recorded-chart-readout b { font-weight: 600; }
+.recorded-chart-replay-inline { display: inline-flex; align-items: center; gap: 6px; margin-left: 4px; }
+.recorded-chart-replay-inline button { font-size: 11px; padding: 2px 8px; }
+.recorded-chart-replay-inline input[type="range"] { width: 110px; accent-color: var(--gold, #e3c16a); }
+.recorded-chart-scale button { font-size: 11px; padding: 2px 7px; }
+.recorded-chart-tools select { font-size: 12px; }
+.stock-dock-actions .stock-dock-btn { font-size: 11px; padding: 2px 9px; }
+.price-history-summary { font-size: 11px; }
+
+/* The workspace: one bounded right column, stable header/tabs/close. */
+.stock-inspector { border-radius: 8px; border-color: var(--border, #282828);
+  background: var(--floww-surface, var(--panel, #111111)); }
+.stock-inspector-tab { font-size: 11px; padding: 3px 8px; }
+/* The inspector's legacy hairlines follow the same token contract (the
+   App.css literals stay untouched — this override wins the later cascade). */
+.stock-inspector-head { border-color: var(--border, #282828); }
+.stock-inspector-tab { border-color: var(--border, #282828); }
+.stock-inspector-close { border-color: var(--border, #282828); }
+.stock-inspector-title { font-size: 12px; color: var(--text-dim); }
+.stock-inspector-body .price-history-drawings { border: none; padding: 0; margin: 0; }
+.stock-inspector-body details.price-studies-panel { border: none; }
+
+/* The OHLC readout overlays the candle canvas — never a stacked row. */
+.recorded-chart-surface.recorded-chart-surface { position: relative; }
+.recorded-chart-readout-overlay { position: absolute; top: 2px; left: 4px; right: auto; z-index: 30;
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center; pointer-events: none;
+  font-size: 10px; color: var(--text);
+  background: var(--floww-surface, var(--panel, #111111));
+  border: 1px solid var(--border, #282828); border-radius: 4px; padding: 2px 6px; max-width: 92%; }
+.recorded-chart-readout-overlay .recorded-chart-popover { pointer-events: auto; }
+.recorded-chart-readout-overlay strong { font-size: 11px; color: var(--text); }
+.recorded-chart-readout-overlay .recorded-chart-popover { display: inline-block; font-size: 11px; }
+
+/* the command row: ONE compact line at desktop widths (doubled class
+   out-specifies the shared row rule without touching shared files). */
+.recorded-chart-tools.recorded-chart-tools { flex-wrap: nowrap; white-space: nowrap; gap: 6px; align-items: center; }
+.recorded-chart-replay-inline.recorded-chart-replay-inline { gap: 4px; margin-left: 0; }
+.recorded-chart-replay-inline input[type="range"] { width: 90px; }
+.recorded-chart-replay-inline button { font-size: 10px; padding: 1px 5px; }
+.stock-dock-actions.stock-dock-actions { gap: 4px; }
+.stock-dock-actions .stock-dock-btn.stock-dock-btn { font-size: 10px; padding: 2px 7px; }
+.recorded-chart-tools .price-history-summary { font-size: 10px; max-width: 84px; overflow: hidden; text-overflow: ellipsis; }
+.recorded-chart-tools .price-chart-symbol { font-size: 13px; margin-right: 4px; }
+.recorded-chart-tools select { font-size: 12px; padding: 1px 4px; }
+.recorded-chart-tools button { font-size: 11px; padding: 2px 7px; }
+.recorded-chart-tools .recorded-chart-scale { gap: 3px; }
+.recorded-chart-tools summary { font-size: 11px; padding: 2px 7px; }
+.recorded-chart-tools > *:last-child { margin-left: 2px; }
+
+/* The replay controls ride the command row as ONE compact inline group:
+   their legacy band styling (border/margins/wrap/flex:1 slider) is
+   neutralized ONLY inside the row — the standalone replay row is gone. */
+.recorded-chart-tools .price-history-replay.price-history-replay { flex-wrap: nowrap; padding-top: 0; margin-top: 0; border-top: 0; gap: 4px; flex: 0 1 auto; min-width: 0; margin-left: 0; }
+.recorded-chart-tools .price-history-replay input { flex: 0 0 80px; min-width: 80px; width: 80px; }
+.recorded-chart-tools .price-history-replay button { min-height: 26px; padding: 2px 8px; font-size: 11px; }
+.recorded-chart-tools .price-history-replay span { font-size: 10px; max-width: 92px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recorded-chart-tools.recorded-chart-tools > button, .recorded-chart-tools.recorded-chart-tools > select { min-height: 26px; padding: 2px 7px; font-size: 11px; }
+.recorded-chart-tools.recorded-chart-tools .recorded-chart-popover > summary { min-height: 26px; padding: 2px 8px; font-size: 11px; }
+.recorded-chart-tools .stock-dock-btn.recorded-chart-tools-btn, .stock-dock-actions .stock-dock-btn { min-height: 26px; }
+
+/* Native study inputs never render as a raw browser-gray strip (root 21:5x):
+   the CVD/Profile/TPO settings and the exposure/workspace settings carry the
+   raised control token, hairline borders and theme text, compact one row. */
+.pane-study-settings.pane-study-settings { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center;
+  background: var(--floww-raised, var(--panel-2, #191919)); border: 1px solid var(--border, #282828);
+  border-radius: 6px; padding: 6px 8px; margin: 6px 0; }
+.pane-study-settings .pane-settings-title { font-size: 11px; color: var(--text-dim); margin-right: 4px; }
+.pane-study-settings select, .pane-study-settings input[type="number"], .pane-study-settings input[type="text"] {
+  background: var(--floww-control, var(--surface-3, #222222)); color: var(--text);
+  border: 1px solid var(--border, #282828); border-radius: 4px; padding: 2px 6px; font-size: 11px; min-height: 24px; }
+.pane-study-settings select:focus-visible, .pane-study-settings input:focus-visible {
+  outline: 1px solid var(--floww-line, var(--border-2, #454545)); outline-offset: 0; }
+.pane-study-settings input[type="checkbox"], .pane-study-settings input[type="range"] { accent-color: var(--gold, #e3c16a); }
+.pane-study-settings .ind-note, .pane-study-settings .pane-study-refusal { font-size: 10px; color: var(--text-dim); margin: 0; }
+
+/* The momentum study panes (RSI / MACD / ATR): separate honest scales. */
+.recorded-momentum-pane { margin-top: 2px; border: 1px solid var(--border, #282828); border-radius: 4px;
+  background: var(--floww-surface, var(--panel, #111111)); }
+.recorded-momentum-pane svg { display: block; }
+.recorded-momentum-label { display: flex; gap: 8px; align-items: baseline; padding: 2px 6px; font-size: 10px; color: var(--text-dim); }
+.recorded-momentum-label strong { color: var(--text); font-size: 10px; letter-spacing: 0.04em; }
+.recorded-momentum-label small { color: var(--text-dim); }
+
+/* Chart focus (owner 20:51, root-caught gap fixed — the class now binds on the
+   pane's rendered host): the pane's product chrome folds away and the candle
+   surface takes the remaining viewport honestly — no device zoom, no fake
+   pixels; Esc or the row button restores the exact prior state. */
+.price-node-focused .recorded-chart-surface { height: min(72vh, 900px); }
+.price-node-focused { scroll-margin-top: 0; }
+
+/* Hallmark craft (owner 21:23, within the EXISTING tokens): every Stock-local
+   control carries an instant :focus-visible ring. */
+.recorded-chart-tools button:focus-visible, .stock-inspector-tab:focus-visible,
+.recorded-momentum-pane ~ * button:focus-visible, .recorded-chart-scale button:focus-visible,
+.stock-dock-actions .stock-dock-btn:focus-visible, .stock-inspector-close:focus-visible,
+.pane-study-settings select:focus-visible, .pane-study-settings input:focus-visible,
+.skylit-askflow-trigger summary:focus-visible {
+  outline: 2px solid var(--gold, #e3c16a); outline-offset: 1px; border-radius: 4px;
+}
+
+/* The AskFlow trigger (root 21:5x): restrained, opens ONLY on click — never
+   automatic, never a paid request, never obscuring the chart by default. */
+.skylit-askflow-trigger { display: inline-block; position: relative; }
+.skylit-askflow-trigger > summary { cursor: pointer; list-style: none; display: inline-block;
+  font-size: 11px; padding: 2px 9px; border: 1px solid var(--border, #282828); border-radius: 4px;
+  background: var(--floww-control, var(--surface-3, #222222)); color: var(--text); }
+.skylit-askflow-trigger > summary::-webkit-details-marker { display: none; }
+.skylit-askflow-trigger[open] > summary { border-color: var(--floww-line, var(--border-2, #454545)); }
+
+/* The B23 profiles panel: real separation between the session-zone footer
+   fragments (root: "barsage0szones" concatenated) — flex with gaps, no glue. */
+.profiles-panel-flow { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.profiles-panel-flow > span { font-size: 10px; color: var(--text-dim); }
+
+/* Narrow chart containers (the 1280 IAB split, side-by-side layouts):
+   the command row wraps back to a clean banded stack instead of
+   overflowing its own pane. The chart root already declares
+   container-type: inline-size, so this keys on the REAL pane width. */
+@container (max-width: 900px) {
+  .recorded-chart-tools.recorded-chart-tools { flex-wrap: wrap; white-space: normal; row-gap: 4px; }
+  .recorded-chart-tools.recorded-chart-tools > * { white-space: normal; }
+}
+
+/* Root's actual-46 geometry finding: the closed inspector still carried
+   App.css's display:flex / flex:0 0 300px at desktop widths (the display:none
+   existed only under 1180px), so a CLOSED dock kept reserving ~300px beside the
+   candles. This Stock-local rule closes it at ALL widths — the component stays
+   MOUNTED (state, studies, presets, replay untouched); only the layout slot is
+   released. The open inspector is untouched. */
+.stock-inspector[data-open="false"] { display: none; }
+/* Chart focus: the inspector is product chrome in focus mode — it folds away
+   with the band + desk and returns exactly on Exit/Esc (the same reversible
+   state machine; nothing unmounts or wipes). */
+.price-node-focused .stock-inspector { display: none; }
+
+/* Focus releases the filter rail and its grid track, without unmounting it.
+   Scope the override to the layout containing this focused Stock chart. */
+.heatseeker-layout:has(.price-node-focused) > .heatseeker-sidebar-left { display: none !important; }
+.heatseeker-layout:has(.price-node-focused) { grid-template-columns: 0 minmax(0, 1fr); }

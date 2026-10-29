@@ -15,3 +15,21 @@ if (typeof window.URL.revokeObjectURL !== "function") {
 window.HTMLMediaElement.prototype.play = () => Promise.resolve();
 window.HTMLMediaElement.prototype.pause = () => {};
 window.HTMLMediaElement.prototype.load = () => {};
+
+// jsdom lacks PointerEvent, so testing-library's fireEvent.pointer* fell back to
+// a bare Event (clientX/clientY undefined) and production pointer-drawing
+// handlers honestly refused non-finite coordinates. Define a jsdom-compatible
+// PointerEvent so pointer geometry is testable with real coordinates.
+if (typeof window !== 'undefined' && !window.PointerEvent) {
+  window.PointerEvent = class PointerEvent extends MouseEvent {
+    constructor(type, opts = {}) {
+      super(type, opts);
+      this.pointerType = opts.pointerType || '';
+      this.pointerId = opts.pointerId ?? 1;
+      this.width = opts.width ?? 0;
+      this.height = opts.height ?? 0;
+      this.pressure = opts.pressure ?? 0;
+      this.isPrimary = opts.isPrimary ?? true;
+    }
+  };
+}

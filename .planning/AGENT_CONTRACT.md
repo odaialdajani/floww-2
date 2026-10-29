@@ -1,6 +1,10 @@
-# AGENT CONTRACT — Meridian / Confluence Decoder (floww)
+# Historical multi-worker contract — FLOWW
 
-> Source of truth for every agent spawned in this repo. Read this FIRST. If anything here conflicts with what your spawn prompt says, this file wins.
+> **Superseded for current ownership on 2026-10-28.** Read `AGENTS.md` and
+> `.planning/CURRENT.md`. This file preserves historical lane evidence and
+> must not launch retired workers, select another machine's checkout, or
+> reinstate the former concurrent-work freeze on `frontend/src/App.js`.
+> Current protected-file, data and trading rules remain in `AGENTS.md`.
 
 ---
 

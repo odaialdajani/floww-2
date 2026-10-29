@@ -589,7 +589,11 @@ class PublicBroker:
             exp_str = f"20{y:02d}-{mth:02d}-{d:02d}"
 
         od = quote_data.get("optionDetails", {})
-        greeks = od.get("greeks", {}) if od else {}
+        greeks = od.get("greeks") if od else None
+        # The optional object may be explicitly null on a usable quote.
+        # Preserve missing Greeks as unknown, independently of quote fields.
+        if greeks is None:
+            greeks = {}
         try:
             bid_size = int(quote_data["bidSize"]) if quote_data.get("bidSize") is not None else None
         except (TypeError, ValueError):
@@ -696,11 +700,23 @@ class PublicBroker:
         instrument_type: str = "EQUITY",
         equity_market_session: str | None = None,
         validate_order: bool = True,
+        use_margin: bool | None = None,
+        open_close_indicator: str | None = None,
     ) -> dict[str, Any]:
         """Cost estimate for a single-leg order before placing it.
 
         Path: POST /userapigateway/trading/{accountId}/preflight/single-leg
         """
+        if type(validate_order) is not bool:
+            raise ValueError("Account validation choice must be boolean")
+        if use_margin is not None and type(use_margin) is not bool:
+            raise ValueError("Cash/margin choice must be boolean")
+        if use_margin is False and not validate_order:
+            raise ValueError("Cash-only evaluation requires account validation")
+        if instrument_type == "OPTION" and open_close_indicator not in {"OPEN", "CLOSE"}:
+            raise ValueError("Option preflight requires an explicit position effect")
+        if open_close_indicator is not None and open_close_indicator not in {"OPEN", "CLOSE"}:
+            raise ValueError("Invalid position effect")
         await self._ensure_token()
         payload: dict[str, Any] = {
             "instrument": {"symbol": symbol, "type": instrument_type},
@@ -716,6 +732,10 @@ class PublicBroker:
             payload["stopPrice"] = str(stop_price)
         if instrument_type == "EQUITY" and equity_market_session:
             payload["equityMarketSession"] = equity_market_session
+        if use_margin is not None:
+            payload["useMargin"] = use_margin
+        if open_close_indicator is not None:
+            payload["openCloseIndicator"] = open_close_indicator
         url = f"{GW}/trading/{account_id}/preflight/single-leg"
         resp = await self._client.post(url, json=payload, headers=self._auth_headers())
         resp.raise_for_status()
@@ -957,51 +977,64 @@ class PublicBroker:
             return {"orderId": order_id, "status": "CANCEL_PENDING", "raw_empty": True}
 
     async def replace_order(
-        self, account_id: str, order_id: str, limit_price: float | None = None,
-        quantity: int | None = None, time_in_force: str | None = None,
+        self, account_id: str, order_id: str, limit_price=None,
+        quantity=None, time_in_force: str | None = None, *, request_id=None,
+        order_type=None, expiration=None, amount=None, stop_price=None, original_order=None,
     ) -> dict[str, Any]:
-        """Replace a bracket-eligible closing leg price (quantity/type/expiry preserved).
+        """Reprice an identified bracket closing leg; never retry an unknown outcome.
 
-        Replacement of bracket entry legs is excluded per current docs — caller
-        must enforce closing-leg-only policy before invoking.
+        No mounted caller is added. Full original metadata is mandatory; a
+        submission acknowledgement is neither a fill nor a confirmed replacement.
         """
-        await self._ensure_token()
-        payload: dict[str, Any] = {}
-        if limit_price is not None:
-            payload["limitPrice"] = str(limit_price)
-        if quantity is not None:
-            payload["quantity"] = quantity
+        from services.public_request_contracts import replacement_body
+
         if time_in_force is not None:
-            payload["expiration"] = {"timeInForce": time_in_force}
-        url = f"{GW}/trading/{account_id}/order/{order_id}/replace"
-        resp = await self._client.post(url, json=payload or {}, headers=self._auth_headers())
-        resp.raise_for_status()
-        try:
-            return resp.json()
-        except Exception:
-            return {"orderId": order_id, "status": "REPLACE_PENDING", "raw_empty": True}
+            if expiration is None:
+                expiration = {"timeInForce": time_in_force}
+            elif expiration.get("timeInForce") != time_in_force:
+                raise ValueError("Conflicting expiration fields")
+        payload = replacement_body(order_id, request_id, order_type, expiration,
+                                   quantity, amount, limit_price, stop_price, original_order)
+        locks = self.__dict__.setdefault("_replacement_locks", {})
+        lock = locks.setdefault((account_id, order_id), asyncio.Lock())
+        if lock.locked():
+            raise ValueError("A replacement for this order is already in flight")
+        async with lock:
+            await self._ensure_token()
+            resp = await self._client.put(f"{GW}/trading/{account_id}/order", json=payload,
+                                          headers=self._auth_headers())
+            resp.raise_for_status()
+            if not resp.content:
+                return {"orderId": order_id, "requestId": request_id,
+                        "status": "REPLACE_PENDING", "raw_empty": True}
+            result = resp.json()
+            if not isinstance(result, dict) or not result.get("orderId"):
+                raise ValueError("Replacement acknowledgement is malformed; reconcile before retry")
+            return result
 
     async def search_orders(
-        self, account_id: str, start: str | None = None, end: str | None = None,
-        limit: int = 100, next_token: str | None = None,
+        self, account_id: str, *, status=None, created_after=None, created_before=None,
+        instruments=None, side=None, open_close_indicator=None, security_type=None,
     ) -> dict[str, Any]:
-        """Search recent orders (≤500 results, last 30 days per docs).
+        """Search at most 500 recent orders; never infer complete history.
 
-        Split searches by known time ranges with overlap/dedup; detect the
-        500-result ceiling upstream.
+        HTTPStatusError preserves status and the complete response body, including
+        the documented ambiguous 404-with-orders case. No automatic retry.
         """
+        payload = {key: value for key, value in {
+            "status": status, "createdAfter": created_after, "createdBefore": created_before,
+            "instruments": instruments, "side": side, "openCloseIndicator": open_close_indicator,
+            "securityType": security_type,
+        }.items() if value is not None}
         await self._ensure_token()
-        params: dict[str, Any] = {"limit": limit}
-        if start:
-            params["start"] = start
-        if end:
-            params["end"] = end
-        if next_token:
-            params["nextToken"] = next_token
-        url = f"{GW}/trading/{account_id}/orders/search"
-        resp = await self._client.get(url, params=params, headers=self._auth_headers())
+        resp = await self._client.post(f"{GW}/trading/{account_id}/order/search", json=payload,
+                                       headers=self._auth_headers())
         resp.raise_for_status()
-        return resp.json()
+        result = resp.json()
+        if not isinstance(result, dict) or not isinstance(result.get("orders"), list):
+            raise ValueError("Order search response is missing orders")
+        return {**result, "possible_truncation": len(result["orders"]) >= 500,
+                "complete_history": False}
 
     async def get_order_v2(self, account_id: str, order_id: str) -> dict[str, Any]:
         """Richer typed order/leg/fill/bracket details (prefer over legacy)."""
@@ -1011,17 +1044,17 @@ class PublicBroker:
         resp.raise_for_status()
         return resp.json()
 
-    async def get_strategy_quote(self, account_id: str, legs: list[dict[str, Any]]) -> dict[str, Any]:
-        """Combined strategy pricing for an exact shared leg definition.
+    async def get_strategy_quote(self, account_id: str, base_symbol: str,
+                                 option_legs: list[dict[str, Any]], equity_leg=None) -> dict[str, Any]:
+        """Read exact strategy pricing, preserving decimal text and unknown enums."""
+        from services.public_request_contracts import strategy_body, strategy_response
 
-        Preserves debit/credit sign separately from displayed absolute premium.
-        UNKNOWN/UNDECIDED near zero → indeterminate; block ambiguous submission.
-        """
+        payload = strategy_body(base_symbol, option_legs, equity_leg)
         await self._ensure_token()
-        url = f"{GW}/option-details/{account_id}/strategy-quote"
-        resp = await self._client.post(url, json={"legs": legs}, headers=self._auth_headers())
+        url = f"{GW}/option-details/{account_id}/strategy-details/quote"
+        resp = await self._client.post(url, json=payload, headers=self._auth_headers())
         resp.raise_for_status()
-        return resp.json()
+        return strategy_response(resp.json(), payload)
 
     async def get_order(self, account_id: str, order_id: str) -> Order:
         """Get order status and details.

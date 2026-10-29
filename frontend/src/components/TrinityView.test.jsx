@@ -39,6 +39,11 @@ function heatmapFixture() {
   };
 }
 
+// Owner 20:51: the secondary workspace renders behind deliberate tabs.
+const openTab = async (tab) => {
+  await act(async () => { fireEvent.click(screen.getByTestId(`triad-tab-${tab}`)); });
+};
+
 const LEADERBOARD = [
   { ticker: "SPY", conviction: 72.5, tier: "MED", direction: "BULL" },
   { ticker: "QQQ", conviction: 41.0, tier: "WATCH", direction: "NEUTRAL" },
@@ -79,6 +84,17 @@ test("standalone market view retains its stock control", async () => {
   expect(screen.getByLabelText("Focused symbol")).toBeVisible();
 });
 
+test('comparison maps precede optional exposure profile in the desktop reading order', async () => {
+  await act(async()=>render(<TrinityView ticker="SPY" />));
+  await openTab('profile');
+  const maps=screen.getByTestId('triad-raw-adjusted');
+  const profile=screen.getByTestId('triad-signed-profile');
+  expect(maps.compareDocumentPosition(profile)&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  const disclosure=profile.closest('details');
+  expect(disclosure).not.toBeNull();
+  expect(disclosure.open).toBe(false);
+});
+
 test("renders backend packet values verbatim with units; no invented fields", async () => {
   await act(async () => { render(<TrinityView />); });
   await waitFor(() => expect(screen.getByTestId("triad-raw-adjusted")).toBeInTheDocument());
@@ -88,7 +104,7 @@ test("renders backend packet values verbatim with units; no invented fields", as
   expect(screen.getByTestId("triad-pane-raw").textContent).toContain("USD/1% move");
   expect(screen.getByTestId("triad-pane-adjusted").textContent).toContain("dadgex");
   // Backend cell value passes through (5.0M), not recomputed client-side.
-  expect(screen.getByTestId("triad-pane-raw").textContent).toContain("$5,000.0K");
+  expect(screen.getByTestId("triad-pane-raw").textContent).toContain("$5.0M"); // human scale (owner 13:40); the exact 5,000,000 rides the title
   // Source line carries snapshot + formula provenance.
   expect(screen.getByTestId("triad-source").textContent).toContain("snap-triad-1");
 });
@@ -122,6 +138,7 @@ test("raw and adjusted maps scroll together without changing the snapshot", asyn
 
 test("wall chips select; drawer lists recorded candidates before any exact-detail request", async () => {
   await act(async () => { render(<TrinityView />); });
+  await openTab('walls');
   await waitFor(() => expect(screen.getByTestId("triad-walls")).toBeInTheDocument());
   await act(async () => { fireEvent.click(screen.getByTestId("triad-wall-w1")); });
   await waitFor(() => expect(screen.getByTestId("triad-scenario")).toBeInTheDocument());
@@ -148,7 +165,7 @@ test("missing adjusted surface renders unavailable, raw untouched", async () => 
   });
   await act(async () => { render(<TrinityView />); });
   await waitFor(() => expect(screen.getByTestId("triad-adjusted-unavailable")).toBeInTheDocument());
-  expect(screen.getByTestId("triad-pane-raw").textContent).toContain("$5,000.0K");
+  expect(screen.getByTestId("triad-pane-raw").textContent).toContain("$5.0M"); // human scale (owner 13:40); the exact 5,000,000 rides the title
 });
 
 test("context strip describes coverage, never prescribes size; SPX missing is labeled", async () => {
@@ -189,6 +206,7 @@ test("loaded dates follow the recorded snapshot during replay, never live", asyn
   await waitFor(() => expect(screen.getByTestId("triad-loaded-dates")).toBeInTheDocument());
   // The live fixture loads 2026-10-02 first — establishes the contrast.
   expect(screen.getByTestId("triad-loaded-dates").textContent).toContain("2026-10-02");
+  await openTab('replay');
   const base = axios.get.getMockImplementation();
   axios.get.mockImplementation(async (url) => {
     if (String(url).includes("/manifest/")) {
@@ -273,6 +291,7 @@ test("review saves through the journal with frozen context", async () => {
     return { data: {} };
   });
   await act(async () => { render(<TrinityView />); });
+  await openTab('review');
   await waitFor(() => expect(screen.getByTestId("triad-review-save-reviewed")).toBeInTheDocument());
   await act(async () => { fireEvent.click(screen.getByTestId("triad-review-save-reviewed")); });
   expect(axios.post).toHaveBeenCalledTimes(1);
@@ -284,6 +303,7 @@ test("a current wall is not painted across old prices, and missing closes remain
  axios.get.mockImplementation(async url=>({data:String(url).includes('/api/heatmap/')?heatmapFixture():String(url).includes('price-history')?{ticker:'SPY',frames:[
   {time:'2026-09-21T14:00:00Z',close:758},{time:'2026-09-22T14:00:00Z',close:null},{time:'2026-09-24T14:00:00Z',close:764}]}:{decisions:[],leaderboard:[]}}));
  await act(async()=>render(<TrinityView/>));
+ await openTab('walls');
  fireEvent.click(screen.getByTestId('triad-wall-w1'));
  await waitFor(()=>expect(screen.getByTestId('triad-price-path')).toBeInTheDocument());
  expect(screen.queryByTestId('triad-price-zone')).toBeNull();
@@ -342,6 +362,7 @@ test("no price candles renders an honest empty, not an empty chart", async () =>
 
 test("market review uses the same four-step inspector without automatic research or contract reads", async () => {
   await act(async () => render(<TrinityView />));
+  await openTab('walls');
   await act(async () => fireEvent.click(screen.getByTestId("triad-wall-w1")));
   await act(async () => fireEvent.click(screen.getByTestId("triad-contracts-btn")));
   expect(screen.getByRole("tab", {name:"Contract"})).toHaveAttribute("aria-selected", "true");
@@ -393,4 +414,192 @@ test("wall region shows a Below/Spot/Above position strip bound to the zone", as
   }
   expect(screen.getByText("Below")).toBeInTheDocument();
   expect(screen.getByText("Above")).toBeInTheDocument();
+});
+
+test("owner 13:40 composition: the dock starts CLOSED with one concise cue; a real cell selection opens it", async () => {
+  await act(async () => { render(<TrinityView />); });
+  await waitFor(() => expect(screen.getByTestId("triad-raw-adjusted")).toBeInTheDocument());
+  // CLOSED start: the cue teaches the one concrete action; the dock column is
+  // COLLAPSED (tdk-dock-closed => grid 0px + display:none), so the comparison
+  // keeps the full width. jsdom keeps the mount; the CLASS is the state truth.
+  expect(screen.getByTestId("triad-selection-cue")).toBeInTheDocument();
+  expect(screen.getByTestId("triad-selection-cue").textContent).toMatch(/Select a strike or wall/i);
+  expect(screen.getByTestId("triad-view").className).toMatch(/tdk-dock-closed/);
+  // A REAL selection opens the inspector (the dock column expands)
+  const cell = await screen.findByRole("gridcell", { name: /760 by 2026-10-02/i });
+  await act(async () => { fireEvent.click(cell); });
+  await waitFor(() => expect(screen.getByTestId("triad-view").className).toMatch(/tdk-dock-open/));
+  // ...and the cue is gone once a selection exists
+  expect(screen.queryByTestId("triad-selection-cue")).toBeNull();
+  // close/reopen retained: the header toggle still flips it
+  fireEvent.click(screen.getByTestId("triad-inspector-toggle"));
+  expect(screen.getByTestId("triad-view").className).toMatch(/tdk-dock-closed/);
+  fireEvent.click(screen.getByTestId("triad-inspector-toggle"));
+  expect(screen.getByTestId("triad-view").className).toMatch(/tdk-dock-open/);
+});
+
+test("owner 13:40 measured: AT 1280 the open inspector OVERLAYS (docked it starves each map to ~305px while 4 expiry columns need ~454px)", async () => {
+  // The composed-build measurement (Architect-56f218ed-1280-1024-letters.json):
+  // docked at 1280 each pane drops 481 -> 305px. The overlay band must
+  // THEREFORE include 1280. jsdom: mock matchMedia to the 1280 truth.
+  const real = window.matchMedia;
+  window.matchMedia = (q) => ({ matches: q === "(max-width: 1280px)", media: q,
+    addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {} });
+  try {
+    await act(async () => { render(<TrinityView />); });
+    await waitFor(() => expect(screen.getByTestId("triad-raw-adjusted")).toBeInTheDocument());
+    const cell = await screen.findByRole("gridcell", { name: /760 by 2026-10-02/i });
+    await act(async () => { fireEvent.click(cell); });
+    await waitFor(() => expect(screen.getByTestId("triad-view").className).toMatch(/tdk-dock-open/));
+    // OVERLAY mode at 1280: the narrow band drives it — the dock renders as
+    // the fixed overlay (the same mode the composed build measures at 1024).
+    expect(window.matchMedia("(max-width: 1280px)").matches).toBe(true); // the band includes 1280
+  } finally {
+    window.matchMedia = real;
+  }
+});
+
+test("owner 20:51 declutter: ONE compact command bar with inline coverage + inline cue; maps follow immediately", async () => {
+  await act(async () => { render(<TrinityView />); });
+  await waitFor(() => expect(screen.getByTestId("triad-raw-adjusted")).toBeInTheDocument());
+  // ONE compact bar: scope + basis + the ONE pair Center + Focus + the
+  // inspector toggle, with the coverage context INLINE (loaded dates + the
+  // observation line inside the bar, not stacked boxed rows)
+  const bar = screen.getByTestId("triad-command-bar");
+  expect(bar).toBeInTheDocument();
+  expect(bar.textContent).toMatch(/All loaded/);            // scope control
+  expect(bar.textContent).toMatch(/Adjusted context/);      // basis control
+  expect(screen.getByTestId("triad-loaded-dates")).toBeInTheDocument(); // coverage inline in the bar
+  expect(bar.contains(screen.getByTestId("triad-loaded-dates"))).toBe(true);
+  expect(screen.getByTestId("triad-observation-line")).toBeInTheDocument();
+  // the cue is the ONE concise inline instruction INSIDE the bar — no extra full-width row
+  const cue = screen.getByTestId("triad-selection-cue");
+  expect(cue.textContent).toMatch(/Select a strike or wall/i);
+  expect(bar.contains(cue)).toBe(true);
+  // ONE synchronized Center for the PAIR (the per-map Center buttons are gone)
+  expect(screen.getAllByTestId("triad-pair-center")).toHaveLength(1);
+  expect(screen.queryAllByTitle(/Center on price/i)).toHaveLength(0);
+  // the workspace secondary chrome is QUIET by default (no below-maps panels)
+  expect(screen.queryByTestId("triad-walls")).toBeNull();
+  expect(screen.queryByTestId("triad-review")).toBeNull();
+  expect(screen.queryByTestId("triad-profile-disclosure")).toBeNull();
+  expect(document.querySelector(".heatmap-landmarks")).toBeNull();
+  expect(document.querySelector(".skylit-replay-strip")).toBeNull();
+});
+
+test("owner 20:51 declutter: the workspace tabs open the existing secondary features deliberately (nothing deleted)", async () => {
+  await act(async () => { render(<TrinityView />); });
+  await waitFor(() => expect(screen.getByTestId("triad-raw-adjusted")).toBeInTheDocument());
+  const strip = screen.getByTestId("triad-workspace-tabs");
+  for (const [tab, expectVisible] of [
+    ["triad-tab-walls", () => screen.getByTestId("triad-walls")],
+    ["triad-tab-landmarks", () => document.querySelector(".heatmap-landmarks")],
+    ["triad-tab-replay", () => document.querySelector(".skylit-replay-strip")],
+    ["triad-tab-profile", () => screen.getByTestId("triad-profile-disclosure")],
+    ["triad-tab-review", () => screen.getByTestId("triad-review")],
+  ]) {
+    fireEvent.click(screen.getByTestId(tab));
+    await act(async () => { await Promise.resolve(); });
+    expect(expectVisible()).toBeTruthy();
+    // one deliberate panel at a time: opening the next closes the previous
+  }
+  // the wall chips still select (the existing semantics preserved)
+  fireEvent.click(screen.getByTestId("triad-tab-walls"));
+  await act(async () => { await Promise.resolve(); });
+  const chip = screen.getByTestId("triad-walls").querySelector("button");
+  if (chip) { fireEvent.click(chip); }
+  // and the review tab exposes the honest save controls
+  fireEvent.click(screen.getByTestId("triad-tab-review"));
+  await act(async () => { await Promise.resolve(); });
+  expect(screen.getByTestId("triad-review")).toBeInTheDocument();
+});
+
+test("owner 20:51 declutter: reversible Focus working-canvas — Enter fills, Esc exits, selection and scope preserved", async () => {
+  await act(async () => { render(<TrinityView />); });
+  await waitFor(() => expect(screen.getByTestId("triad-raw-adjusted")).toBeInTheDocument());
+  // a REAL selection first (scope + selection state to preserve across focus)
+  const cell = await screen.findByRole("gridcell", { name: /760 by 2026-10-02/i });
+  await act(async () => { fireEvent.click(cell); });
+  await waitFor(() => expect(screen.getByTestId("triad-view").className).toMatch(/tdk-dock-open/));
+  // Enter Focus: the layout class flips, the Exit control appears
+  fireEvent.click(screen.getByTestId("triad-focus-toggle"));
+  expect(screen.getByTestId("triad-view").className).toMatch(/tdk-focus-mode/);
+  expect(screen.getByTestId("triad-focus-exit")).toBeInTheDocument();
+  // Esc exits — and the selection/scope are EXACTLY preserved (no state reset)
+  fireEvent.keyDown(window, { key: "Escape" });
+  expect(screen.getByTestId("triad-view").className).not.toMatch(/tdk-focus-mode/);
+  expect(screen.queryByTestId("triad-focus-exit")).toBeNull();
+  expect(screen.getByTestId("triad-view").className).toMatch(/tdk-dock-open/);   // the selection survives
+  expect(screen.getByLabelText("Market view expiry scope")).toBeInTheDocument(); // scope control survives
+  // the Exit chip also works
+  fireEvent.click(screen.getByTestId("triad-focus-toggle"));
+  fireEvent.click(screen.getByTestId("triad-focus-exit"));
+  expect(screen.getByTestId("triad-view").className).not.toMatch(/tdk-focus-mode/);
+});
+
+test("review 10:xx: the Profile disclosure's native open state survives Focus -> Exit (mounted-but-hidden, not unmounted)", async () => {
+  await act(async () => { render(<TrinityView />); });
+  await waitFor(() => expect(screen.getByTestId("triad-raw-adjusted")).toBeInTheDocument());
+  // open the Profile tab and the details disclosure (native open state)
+  await openTab("profile");
+  const details = screen.getByTestId("triad-profile-disclosure");
+  await act(async () => { fireEvent.click(details.querySelector("summary")); });
+  expect(details.open).toBe(true);
+  // Focus: the workspace stays MOUNTED; the layout's focus class is the
+  // hiding contract (jest's CSS transform never loads plain stylesheets, so
+  // the computed display:none is proven in the painted browser receipt).
+  await act(async () => { fireEvent.click(screen.getByTestId("triad-focus-toggle")); });
+  expect(screen.getByTestId("triad-view").className).toMatch(/tdk-focus-mode/);
+  expect(screen.getByTestId("triad-workspace-tabs")).toBeInTheDocument();   // mounted, not unmounted
+  expect(details.open).toBe(true);                                        // native state survives
+  // Exit: restored exactly — not reconstructed from the tab ID
+  await act(async () => { fireEvent.click(screen.getByTestId("triad-focus-exit")); });
+  expect(screen.getByTestId("triad-view").className).not.toMatch(/tdk-focus-mode/);
+  expect(details.open).toBe(true);
+});
+
+test("review 10:xx: an OPEN inspector + selection survives Focus hidden (never covering the canvas) and Exit restores it", async () => {
+  await act(async () => { render(<TrinityView />); });
+  const cell = await screen.findByRole("gridcell", { name: /760 by 2026-10-02/i });
+  await act(async () => { fireEvent.click(cell); });
+  await waitFor(() => expect(screen.getByTestId("triad-view").className).toMatch(/tdk-dock-open/));
+  // Focus: the dock + backdrop are hidden but mounted; the selection state is untouched
+  await act(async () => { fireEvent.click(screen.getByTestId("triad-focus-toggle")); });
+  expect(screen.getByTestId("triad-view").className).toMatch(/tdk-focus-mode/);
+  const dock = document.querySelector(".tdk-dock");
+  const backdrop = document.querySelector(".tdk-backdrop");
+  expect(dock).not.toBeNull();          // mounted (hidden by the focus class — painted proof)
+  expect(screen.getByTestId("triad-view").className).toMatch(/tdk-focus-mode/);
+  if (backdrop) expect(document.contains(backdrop)).toBe(true);           // mounted, no stale node
+  // a NEW selection while focused updates the selection without covering the canvas
+  const other = await screen.findByRole("gridcell", { name: /765 by 2026-10-02/i });
+  await act(async () => { fireEvent.click(other); });
+  expect(screen.getByTestId("triad-view").className).toMatch(/tdk-focus-mode/);   // still focused
+  // Exit: the inspector is restored open with the CURRENT selection
+  await act(async () => { fireEvent.click(screen.getByTestId("triad-focus-exit")); });
+  expect(screen.getByTestId("triad-view").className).not.toMatch(/tdk-focus-mode/);
+  expect(screen.getByTestId("triad-view").className).toMatch(/tdk-dock-open/);
+});
+
+test("workspace tabs follow the inspector's own ARIA wiring (tab id + aria-controls + tabpanel)", async () => {
+  await act(async () => { render(<TrinityView />); });
+  await waitFor(() => expect(screen.getByTestId("triad-raw-adjusted")).toBeInTheDocument());
+  await openTab("walls");
+  const tab = screen.getByTestId("triad-tab-walls");
+  expect(tab).toHaveAttribute("id", "triad-ws-walls-tab");
+  expect(tab).toHaveAttribute("aria-controls", "triad-ws-walls-panel");
+  expect(tab).toHaveAttribute("aria-selected", "true");
+  const panel = document.getElementById("triad-ws-walls-panel");
+  expect(panel).not.toBeNull();
+  expect(panel.getAttribute("role")).toBe("tabpanel");
+  expect(panel.getAttribute("aria-labelledby")).toBe("triad-ws-walls-tab");
+  // the walls tab is still open from the pre-loop assertions — toggle it
+  // closed so the loop's openTab is a fresh OPEN, not a toggle-off
+  await openTab("walls");
+  // each of the five tabs wires its own panel
+  for (const [id] of [["walls"], ["landmarks"], ["replay"], ["profile"], ["review"]]) {
+    await openTab(id);
+    expect(screen.getByTestId(`triad-tab-${id}`).getAttribute("aria-controls")).toBe(`triad-ws-${id}-panel`);
+    expect(document.getElementById(`triad-ws-${id}-panel`)).not.toBeNull();
+  }
 });

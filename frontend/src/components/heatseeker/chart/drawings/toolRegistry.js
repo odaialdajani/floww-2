@@ -12,6 +12,9 @@ export const DRAWING_TOOLS = [
   { id: 'brush', anchors: 2, magnet: false, family: 'free' },
   { id: 'fib', anchors: 2, magnet: true, family: 'fib' },
   { id: 'text', anchors: 1, magnet: false, family: 'label' },
+  // CHART-C090 (owner-approved 2026-10-24): analysis entry/stop/target risk box,
+  // never broker intent — three order-independent anchors, side long/short.
+  { id: 'risk', anchors: 3, magnet: true, family: 'risk' },
 ];
 // Named in census counts but NOT in retrieved evidence — do not construct.
 export const UNVERIFIED_TOOLS = [];

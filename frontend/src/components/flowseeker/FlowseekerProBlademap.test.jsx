@@ -927,3 +927,101 @@ it('shows other stocks before repeated fund alerts and lets every alert page be 
  expect(seen).toHaveLength(alerts.length);expect(new Set(seen)).toEqual(new Set(alerts.map(a=>a.key)));
  expect(screen.getByTestId('vector-feed')).toHaveTextContent('38 alerts');
 });
+
+describe("pulse reachability beyond the render cap", () => {
+  const rowsBeyondCap = () => Array.from({length:12}, (_, index) => [
+    index === 11 ? "ZZZ" : `AA${String.fromCharCode(65 + index)}`,
+    `pulse-contract-${index}`, "call", 180 + index, "2026-09-19",
+    218000, 100000, .38, null, 178.4,
+  ]);
+  const sortedPrefs = focusTicker => localStorage.setItem("th-prefs-v1", JSON.stringify({
+    focusTicker, sortPreset: {key:"under", dir:"asc"},
+  }));
+
+  it.each([["j", "k"], ["ArrowDown", "ArrowUp"]])("wraps %s/%s across the visible pulse bounds", async (down, up) => {
+    sortedPrefs("SPY");
+    mockBackend({scanOverrides:{rows:rowsBeyondCap()}});
+    render(<FlowseekerProBlademap active />);
+    const pulse = await screen.findByTestId("pulse-table");
+    await waitFor(() => expect(pulse.querySelectorAll("tbody tr")).toHaveLength(8));
+    const visible = pulse.querySelectorAll("tbody tr");
+    fireEvent.keyDown(window, {key:up});
+    expect(visible[7]).toHaveClass("kbcursor");
+    fireEvent.keyDown(window, {key:down});
+    expect(visible[0]).toHaveClass("kbcursor");
+    fireEvent.keyDown(window, {key:up});
+    expect(visible[7]).toHaveClass("kbcursor");
+  });
+
+  it("searches before the cap without opening Filters or changing source clocks", async () => {
+    sortedPrefs("SPY");
+    const urls = mockBackend({scanOverrides:{rows:rowsBeyondCap()}});
+    render(<FlowseekerProBlademap active />);
+    const pulse = await screen.findByTestId("pulse-table");
+    await waitFor(() => expect(pulse.querySelectorAll("tbody tr")).toHaveLength(8));
+    expect(within(pulse).queryByRole("button", {name:"ZZZ", exact:true})).toBeNull();
+    const sourceClocks = () => Array.from(screen.getByTestId("market-tape").children)
+      .filter(node => /^(Updated|Source)/.test(node.textContent)).map(node => node.textContent);
+    const beforeSourceClocks = sourceClocks();
+    expect(beforeSourceClocks).toHaveLength(2);
+    const search = screen.getByRole("textbox", {name:"Search activity tickers"});
+    fireEvent.change(search, {target:{value:"zzz"}});
+    expect(search).toHaveValue("ZZZ");
+    expect(screen.queryByTestId("filters-panel")).toBeNull();
+    expect(pulse.querySelectorAll("tbody tr")).toHaveLength(1);
+    expect(pulse).toHaveTextContent("Showing 1 of 1");
+    expect(within(pulse).getByRole("button", {name:"ZZZ", exact:true})).toBeInTheDocument();
+    expect(sourceClocks()).toEqual(beforeSourceClocks);
+    fireEvent.keyDown(search, {key:"j"});
+    expect(pulse.querySelector(".kbcursor")).toBeNull();
+    fireEvent.click(within(pulse).getByRole("button", {name:"ZZZ", exact:true}));
+    expect(screen.getByText("Stock details · ZZZ")).toBeInTheDocument();
+    expect(urls.filter(url => /auto-trade|\/order|alpaca|broker/i.test(url))).toEqual([]);
+  });
+
+  it("reveals a saved focused ticker beyond the cap and still permits Show fewer", async () => {
+    sortedPrefs("ZZZ");
+    mockBackend({scanOverrides:{rows:rowsBeyondCap()}});
+    render(<FlowseekerProBlademap active />);
+    const pulse = await screen.findByTestId("pulse-table");
+    await waitFor(() => expect(within(pulse).getByRole("button", {name:"ZZZ", exact:true})).toBeInTheDocument());
+    expect(pulse).toHaveTextContent("Showing 12 of 12");
+    fireEvent.click(within(pulse).getByRole("button", {name:"Show fewer contracts"}));
+    expect(pulse.querySelectorAll("tbody tr")).toHaveLength(8);
+    expect(pulse).toHaveTextContent("Showing 8 of 12");
+  });
+
+  it("reveals a changed shared ticker but never overrides an explicit search", async () => {
+    sortedPrefs("AAA");
+    mockBackend({scanOverrides:{rows:rowsBeyondCap()}});
+    const onTickerChange = jest.fn();
+    const view = render(<FlowseekerProBlademap active ticker="AAA" onTickerChange={onTickerChange} />);
+    const pulse = await screen.findByTestId("pulse-table");
+    await waitFor(() => expect(pulse.querySelectorAll("tbody tr")).toHaveLength(8));
+    view.rerender(<FlowseekerProBlademap active ticker="ZZZ" onTickerChange={onTickerChange} />);
+    await waitFor(() => expect(within(pulse).getByRole("button", {name:"ZZZ", exact:true})).toBeInTheDocument());
+    fireEvent.change(screen.getByRole("textbox", {name:"Search activity tickers"}), {target:{value:"AAA"}});
+    expect(pulse.querySelectorAll("tbody tr")).toHaveLength(1);
+    expect(within(pulse).queryByRole("button", {name:"ZZZ", exact:true})).toBeNull();
+    expect(within(pulse).getByRole("button", {name:"AAA", exact:true})).toBeInTheDocument();
+  });
+
+  it("consumes pulse navigation before the outer application's journal shortcut", async () => {
+    sortedPrefs("SPY");
+    mockBackend({scanOverrides:{rows:rowsBeyondCap()}});
+    let outerPage = "flowseeker-pro";
+    const outerShortcut = event => { if (event.key === "j") outerPage = "journal"; };
+    // The shell installs its listener before this child mounts. A bubble
+    // listener added later cannot keep the owning pulse key inside the page.
+    window.addEventListener("keydown", outerShortcut);
+    try {
+      render(<FlowseekerProBlademap active />);
+      const pulse = await screen.findByTestId("pulse-table");
+      fireEvent.keyDown(document.body, {key:"j"});
+      expect(pulse.querySelector("tbody tr")).toHaveClass("kbcursor");
+      expect(outerPage).toBe("flowseeker-pro");
+    } finally {
+      window.removeEventListener("keydown", outerShortcut);
+    }
+  });
+});

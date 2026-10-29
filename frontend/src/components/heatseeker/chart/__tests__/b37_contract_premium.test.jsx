@@ -1,3 +1,4 @@
+import { openStockPanel } from '../../../../testUtils/openStockPanel';
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import axios from 'axios';
@@ -52,6 +53,8 @@ test('chart page contract picker loads premium bars through price-history', asyn
     contract_symbol: 'SPY261017C00650000', contract_status: 'available', contract_bars: contractBars } });
   render(<PriceNodeHistory ticker="SPY" open />);
   await waitFor(() => expect(screen.getByTestId('recorded-price-chart')).toBeInTheDocument());
+  fireEvent.click(screen.getByTestId('stock-inspector-tab-data'));
+  openStockPanel('data');
   fireEvent.change(screen.getByLabelText(/option contract/i), { target: { value: 'SPY261017C00650000' } });
   fireEvent.click(screen.getByRole('button', { name: /load contract/i }));
   await waitFor(() => expect(screen.getByTestId('contract-premium-pane')).toBeInTheDocument());

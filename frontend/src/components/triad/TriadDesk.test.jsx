@@ -36,7 +36,7 @@ test('sub-2% negative bars keep the negative hatch cue so sign stays visible',()
 });
 
 const EXPIRIES = {
- version: 'coverage.v1', ticker: 'SPY',
+ version: 'coverage-read.v1', ticker: 'SPY',
  window: {min_dte: 0, max_dte: 7},
  expiries: [
   {expiry: '2026-10-07', dte: 0, admitted: true, reason: null, display_envelope: true},

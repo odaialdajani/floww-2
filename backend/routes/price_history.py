@@ -143,13 +143,95 @@ async def record_snapshot_now(ticker: str, expiries: int = Query(4, ge=1, le=12)
     raise HTTPException(status_code=503, detail="Recording did not land within 20s; retry or check recorder status")
 
 
+def _recorded_envelopes(ticker, bars, receipt, bar_seconds, opening_minutes,
+                        tick_size, units, entitlement, max_delay_seconds):
+    """R21-03/04 supplier half: admission envelopes alongside THIS read's own
+    bars. The master truth is the committed admission modules; every envelope
+    is computed from rows knowable at an explicit cursor — the read's own
+    recorded receipt when present, else the newest bar's own clock. Sources
+    this route does not carry are NAMED in the exact refused/unavailable
+    vocabulary instead of becoming invented totals."""
+    from services.chart_darkpool import admit_darkpool_prints
+    from services.chart_delta import admit_delta
+    from services.chart_flow import admit_flow_bucket, resolve_epoch, session_bounds_for_date
+    from services.chart_profiles import admit_initial_balance
+    valid_clock_bars = [bar for bar in bars if isinstance(bar, dict) and epoch(bar.get("t")) is not None]
+    malformed_clocks = len(bars) - len(valid_clock_bars)
+    normalized = build_history(ticker, valid_clock_bars, [], bar_seconds=bar_seconds)["frames"]
+    bars = [{"t": frame["time"], "o": frame["open"], "h": frame["high"],
+             "l": frame["low"], "c": frame["close"]} for frame in normalized]
+    source_gaps = {"malformed_bar_clock": malformed_clocks,
+                   "invalid_or_duplicate_bars": len(valid_clock_bars) - len(bars)}
+    if not bars:
+        missing = {"status": "unavailable", "reason": "no valid bar clocks at this supplier"}
+        return {"session": None, "source_gaps": source_gaps,
+                **{key: dict(missing) for key in ("initial_balance", "flow", "naked", "delta", "darkpool")}}
+    # The response rides the newest catalogued session of this read.
+    read_dates = sorted({datetime.fromtimestamp(epoch(bar.get("t")), UTC).astimezone(ZoneInfo("America/New_York")).date()
+                         for bar in bars if bar.get("t") is not None})
+    last_date = read_dates[-1]
+    upright = ticker.strip().upper()
+    knowable = [epoch(bar.get("t")) for bar in bars if bar.get("t") is not None]
+    receipt_epoch = resolve_epoch(receipt)
+    cursor = receipt_epoch if isinstance(receipt_epoch, (int, float)) else (max(knowable) if knowable else None)
+    session_block = {"date": last_date.isoformat(), "tz": "America/New_York"}
+    live_date = None
+    if isinstance(receipt_epoch, (int, float)):
+        live_date = datetime.fromtimestamp(receipt_epoch, UTC).astimezone(ZoneInfo("America/New_York")).date()
+    bounds = session_bounds_for_date(last_date)
+    if bounds:
+        session_block.update({"start": bounds["start"], "end": bounds["end"]})
+    # The contract ties an autonomous admission to the cursor's own session.
+    # A fresh provider read has no per-bar recorded receipts, so only the
+    # receipt's own live day can carry receipt clocks; any older day in the
+    # range honestly gets no envelope from this supplier.
+    live_session = live_date is not None and live_date in read_dates
+    if live_session:
+        ib_rows = [{"time": epoch(bar.get("t")), "open": bar.get("o"), "high": bar.get("h"),
+                    "low": bar.get("l"), "close": bar.get("c"), "received_at": receipt_epoch}
+                   for bar in bars
+                   if bar.get("t") is not None
+                   and datetime.fromtimestamp(epoch(bar.get("t")), UTC).astimezone(ZoneInfo("America/New_York")).date() == live_date]
+        ib_envelope = admit_initial_balance(
+            ib_rows, ticker=upright, cursor=cursor, bar_seconds=bar_seconds,
+            session_date=live_date.isoformat(), opening_minutes=opening_minutes,
+            tick_size=tick_size, units=units, entitlement=entitlement)
+    else:
+        ib_envelope = {"status": "not_requested",
+                       "reason": "no live-session bars for the receipt's own day; the supplier does not fabricate availability for older days"}
+    return {
+        "source_gaps": source_gaps,
+        "session": session_block,
+        "initial_balance": ib_envelope,
+        "flow": admit_flow_bucket([], ticker=upright, cursor=cursor, bar_seconds=bar_seconds),
+        "naked": {"status": "not_requested",
+                  "reason": "no naked-level candidates at this supplier; claims render only when explicit candidates and coverage exist"},
+        # No classified-size source rides this read, so the capability stays
+        # undeclared: the contract's own refusal names the gap exactly.
+        "delta": admit_delta(
+            [], ticker=upright, cursor=cursor, bar_seconds=bar_seconds,
+            capabilities={}, tick_size=tick_size, units=units,
+            entitlement=entitlement),
+        "darkpool": admit_darkpool_prints(
+            [], ticker=upright, cursor=cursor, bar_seconds=bar_seconds,
+            tick_size=tick_size, units=units, entitlement=entitlement,
+            max_delay_seconds=max_delay_seconds),
+    }
+
+
 @router.get("/price-history/{ticker}")
 async def price_history(ticker: str, days: int = Query(5, ge=1, le=2600),
                         query_key: str | None = Query(None, max_length=2000),
                         interval_minutes: int | None = Query(None, ge=1, le=60),
                         include_metric_lines: bool = Query(False),
                         contract_symbol: str | None = Query(None, max_length=32),
-                        sessions: str = Query("regular", pattern="^(regular|all)$")):
+                        sessions: str = Query("regular", pattern="^(regular|all)$"),
+                        include_envelopes: bool = False,
+                        opening_minutes: int = 60,
+                        tick_size: float = 0.01,
+                        units: str = "usd",
+                        entitlement: str = "delayed-15m",
+                        max_delay_seconds: int = 900):
     if interval_minutes is not None and interval_minutes not in {1, 5, 15, 30, 60}:
         raise HTTPException(status_code=422, detail="Choose 1, 5, 15, 30 or 60 minute candles")
     contract = None
@@ -175,7 +257,7 @@ async def price_history(ticker: str, days: int = Query(5, ge=1, le=2600),
     # This path deliberately does not use market_bars' stale-on-error cache:
     # a failed historical fetch must be visible, not labelled as a new read.
     bars, price_failure, received_at = await _history_bars(ticker, period, aggregation, sessions)
-    price_only = build_history(ticker, bars, [], query_key)
+    price_only = build_history(ticker, bars, [], query_key, bar_seconds)
     session_dates = sorted({datetime.fromtimestamp(epoch(frame["time"]), UTC).astimezone(ZoneInfo("America/New_York")).date()
                             for frame in price_only["frames"]})
     if interval_minutes is not None and len(session_dates) > days:
@@ -183,11 +265,11 @@ async def price_history(ticker: str, days: int = Query(5, ge=1, le=2600),
         valid_instants = {epoch(frame["time"]) for frame in price_only["frames"]
                           if datetime.fromtimestamp(epoch(frame["time"]), UTC).astimezone(ZoneInfo("America/New_York")).date() in keep}
         bars = [bar for bar in bars if epoch(bar.get("t")) in valid_instants]
-        price_only = build_history(ticker, bars, [], query_key)
+        price_only = build_history(ticker, bars, [], query_key, bar_seconds)
         session_dates = session_dates[-days:]
     valid_times = [epoch(frame["time"]) for frame in price_only["frames"]]
     if not valid_times:
-        return {**build_history(ticker, [], [], query_key), "price_status": "unavailable",
+        return {**build_history(ticker, [], [], query_key, bar_seconds), "price_status": "unavailable",
                 "node_status": "not_loaded", "days": days, "recording": recording,
                 "price_failure": price_failure or {"reason": "invalid_price_bars", "retry_after_seconds": None},
                 "prices_received_at": received_at,
@@ -205,7 +287,7 @@ async def price_history(ticker: str, days: int = Query(5, ge=1, le=2600),
     truncated = len(rows) > 50000
     if truncated:
         rows = rows[:50000]
-    result = build_history(ticker, bars, rows, query_key)
+    result = build_history(ticker, bars, rows, query_key, bar_seconds)
     if node_status == "unavailable":
         result["node_coverage"] = {"scope_status": "unavailable", "gap_counts": None}
     if include_metric_lines:
@@ -224,9 +306,49 @@ async def price_history(ticker: str, days: int = Query(5, ge=1, le=2600),
         contract_bars = fetched if isinstance(fetched, list) else []
         if contract_bars:
             contract_status = "available"
-    return {**result, "price_status": "available", "price_failure": None, "node_status": node_status,
+    result = {**result, "price_status": "available", "price_failure": None, "node_status": node_status,
             "records_truncated": truncated, "days": days, "prices_received_at": received_at,
             "last_candle_at": datetime.fromtimestamp(max(valid_times), UTC).isoformat(),
             "bar_seconds": bar_seconds, "price_sessions_returned": len(session_dates), "recording": recording,
             "contract_symbol": contract, "contract_status": contract_status,
             "contract_bars": contract_bars}
+    if include_envelopes and bars:
+        result["envelopes"] = _recorded_envelopes(
+            ticker, bars, received_at, bar_seconds, opening_minutes,
+            tick_size, units, entitlement, max_delay_seconds)
+    return result
+
+
+@router.get("/mapped-levels/{target}")
+async def mapped_levels(
+    target: str,
+    source: str = Query(..., min_length=1, max_length=12),
+    cursor: float = Query(...),
+    combine: str | None = Query(None, max_length=32),
+    scope: str | None = Query(None, max_length=64),
+):
+    """B09 cross-instrument mapped levels: the ratio lock + typed refusals only.
+
+    Contract: C2-PRODUCER-CONTRACTS-20261024.json v2 b09_mapped_levels_contract.
+    Supported pairs only (C040); the review-mode ratio is an explicit
+    horizontal lock at-or-before the cursor (C042); C115 board-combination
+    stays a refusal; levels are never invented (levels_status says so).
+    """
+    from services.chart_mapped_levels import is_supported_pair, mapped_levels_response
+
+    target = target.strip().upper()
+    source = source.strip().upper()
+    combine_clean = (combine or "").strip().lower() or None
+    scope_clean = (scope or "").strip().upper() or None
+
+    # Pair validation BEFORE any provider read: an unsupported pair never spends one.
+    if not is_supported_pair(source, target):
+        return mapped_levels_response(target, source, cursor, [], [], combine_clean)
+
+    src_bars, _, _ = await _history_bars(source, "DAY", "FIVE_MINUTES", "regular")
+    tgt_bars, _, _ = await _history_bars(target, "DAY", "FIVE_MINUTES", "regular")
+    body = mapped_levels_response(target, source, cursor,
+                                   src_bars or [], tgt_bars or [], combine_clean)
+    if scope_clean:
+        body["scope"] = scope_clean
+    return body

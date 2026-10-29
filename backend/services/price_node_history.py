@@ -85,7 +85,7 @@ def scope_id(row):
 
 
 def build_history(ticker: str, bars: list[dict], snapshots: list[dict],
-                  query_key: str | None = None) -> dict:
+                  query_key: str | None = None, bar_seconds: int | None = None) -> dict:
     ticker = ticker.strip().upper()
     known = []
     for row in snapshots:
@@ -160,6 +160,10 @@ def build_history(ticker: str, bars: list[dict], snapshots: list[dict],
                        "snapshot_id": row.get("snapshot_id") if usable else None,
                        "nodes_known_at": datetime.fromtimestamp(chosen[0], UTC).isoformat() if usable else None,
                        "node_age_seconds": age if usable else None,
+                       # The bar's own window end (start + provider duration):
+                       # availability is never inferred from the next candle.
+                       "end_time": datetime.fromtimestamp(at + bar_seconds, UTC).isoformat()
+                                    if bar_seconds else None,
                        "exposure_centre": centre, "exposure_upper": upper,
                        "exposure_lower": lower})
     # BVC-estimated CVD from the same OHLCV+volume (no tape needed). Unknown

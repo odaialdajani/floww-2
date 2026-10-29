@@ -65,7 +65,7 @@ export default function TriadDesk({ ticker }) {
     });
     const load = async () => {
       const listed = await json(expiriesUrl(ticker));
-      if (listed?.version !== 'coverage.v1' || listed.ticker !== ticker
+      if (listed?.version !== 'coverage-read.v1' || listed.ticker !== ticker
         || listed.window?.min_dte !== 0 || listed.window?.max_dte !== 7 || !Array.isArray(listed.expiries)) {
         throw new Error('Expiry response does not identify the requested symbol and 0–7 day window.');
       }
@@ -162,7 +162,7 @@ export default function TriadDesk({ ticker }) {
           <p>Conventional signed OI gamma, USD per 1% spot move · gex.v2: Σ sign(type) × Γ × multiplier × spot² × 0.01 × OI; calls positive, puts negative. The backend supplies values and measured coverage. Partial values are observed subtotals, not complete totals. This chart does not infer dealer positions, trade direction, or volume × |delta| behavior.</p>
         </details>
       </div>
-      <TriadChainTable rows={contracts} ticker={ticker} expiry={expiry} selectedStrike={selection?.strike ?? null}
+      <TriadChainTable rows={contracts} ticker={ticker} expiry={expiry} spot={spot} selectedStrike={selection?.strike ?? null}
         onReview={focusStrike} onSelectContract={selectContract} />
       <aside aria-label="Triad wall review">
         <h3>Wall read</h3><p>{selection ? `Selected ${selection.strike} · ${selection.expiry} · ${ticker}. A selection is a zone focus, not a classified structural wall.` : 'Select a strike to focus review; nothing is selected.'}</p>

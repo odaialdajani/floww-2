@@ -465,3 +465,22 @@ test('confirmed cancellation allows an immediate new ask while its older read is
  await waitFor(()=>expect(screen.getByTestId('request-active')).toHaveTextContent('New answer'));
  expect(JSON.parse(screen.getByTestId('request-turns').textContent).find(turn=>turn.turn_id==='cancelled-old').status).toBe('cancelled');
 });
+
+
+test('focused chart ask transports the bound descriptor next to its screen and an ordinary ask carries none',async()=>{
+ publishScreenContext({contextVersion:1,page:'heatseeker',ticker:'SPY',study:'Price chart',navigationOnly:true,displayMode:'price-history'});
+ const descriptor={status:'bound',focus:'SPY',query:'focused-chart',scope:'SPY|expiries=2026-10-23|gex.v2|OI',cursor:1792510200,generation:'SPY:5:30:x:1'};
+ function FocusedConsumer(){const a=useAgent();return <button onClick={()=>a.askQuestion('What does the recorded wall show here?',{chartContext:descriptor})}>Ask focused</button>;}
+ render(<><AgentProvider><><Consumer/><FocusedConsumer/></></AgentProvider></>);
+ fireEvent.click(screen.getByText('Ask focused'));
+ await waitFor(()=>expect(screen.getByTestId('answer')).toHaveTextContent('Saved final answer'));
+ const focused=JSON.parse(global.fetch.mock.calls.find(([url])=>String(url).endsWith('/ask'))[1].body);
+ expect(focused.chart_context).toEqual(descriptor);
+ expect(focused.screen.displayMode).toBe('price-history');
+ expect(focused.screen.ticker).toBe('SPY');
+ global.fetch.mockClear();
+ fireEvent.click(screen.getByText('Ask shared'));
+ await waitFor(()=>expect(global.fetch.mock.calls.some(([url])=>String(url).endsWith('/ask'))).toBe(true));
+ const ordinary=JSON.parse(global.fetch.mock.calls.find(([url])=>String(url).endsWith('/ask'))[1].body);
+ expect('chart_context' in ordinary).toBe(false);
+});

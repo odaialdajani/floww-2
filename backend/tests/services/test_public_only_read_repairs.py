@@ -95,7 +95,7 @@ def builder(monkeypatch, raw=None):
            'log': logging.getLogger('policy-test'), '_BUILD_HEATMAP_CACHE': {},
            '_BUILD_HEATMAP_CACHE_TTL': 30, '_background_tasks': set(),
            'MIN_GRID_STRIKES': 8, '_shutdown_event': asyncio.Event(),
-           '_BUILD_HEATMAP_STALE_TTL': 900, '_BUILD_HEATMAP_INFLIGHT': set()}
+           '_BUILD_HEATMAP_STALE_TTL': 900, '_BUILD_HEATMAP_INFLIGHT': set(), '_BUILD_HEATMAP_PENDING': {}}
     functions_from('server.py', env)
     env.update(fetch_spot_and_chains_merged=fetch,
                _display_surfaces=lambda *args: ('OI', 'vendor-supplied-greeks',

@@ -25,18 +25,24 @@ beforeEach(() => {
 });
 const mount = async () => { await act(async () => render(<><TrinityView /><Context /></>)); };
 
+const openWSTab = (tab) => { fireEvent.click(screen.getByTestId(`triad-tab-${tab}`)); };
+
 test("Triad follows the shared symbol and clears a wall on a header symbol change",async()=>{
  let view;
  await act(async()=>{view=render(<><TrinityView ticker="QQQ"/><Context/></>);});
  expect(JSON.parse(screen.getByTestId("r11-context").textContent).ticker).toBe("QQQ");
+ openWSTab('walls');
  fireEvent.click(screen.getByTestId("triad-wall-wall"));
  await act(async()=>view.rerender(<><TrinityView ticker="SPY"/><Context/></>));
  expect(JSON.parse(screen.getByTestId("r11-context").textContent)).toMatchObject({ticker:"SPY",selectedWall:null,selectedContract:null});
 });
 
-test("Triad starts with same-session scope and session Volume × absolute delta, not copied OI", async () => {
+test("Triad starts with the all-loaded scope and session Volume × absolute delta, not copied OI", async () => {
  await mount();
- expect(screen.getByLabelText("Market view expiry scope")).toHaveValue("0dte");
+ // Owner UX decision 2026-10-24: a FRESH Market entry requests the existing
+ // explicitly-labeled "All loaded" scope so the desk is useful on weekends;
+ // the 0DTE request stays explicitly selectable with its strict refusal.
+ expect(screen.getByLabelText("Market view expiry scope")).toHaveValue("loaded");
  expect(screen.getByLabelText("Adjusted context")).toHaveValue("session_delta_volume");
  // Activity coverage lives inside the Market context disclosure now: open
  // the outer, then the nested disclosure, and assert real visibility
@@ -47,7 +53,9 @@ test("Triad starts with same-session scope and session Volume × absolute delta,
  fireEvent.click(screen.getByText("Activity window and coverage"));
  expect(screen.getByTestId("triad-activity-coverage")).toBeVisible();
  expect(screen.getByTestId("triad-activity-coverage")).toHaveTextContent("Volume window: unavailable");
- expect(axios.get.mock.calls.some(([url])=>String(url).includes("dte=0"))).toBe(true);
+ // The default mount is the all-loaded request — never a guessed dte=0 read.
+ expect(axios.get.mock.calls.some(([url])=>String(url).includes("dte=0"))).toBe(false);
+ expect(axios.get.mock.calls.some(([url])=>String(url).includes("/heatmap/"))).toBe(true);
  expect(screen.getByTestId("triad-pane-adjusted")).toHaveTextContent("$5.0K");
 });
 
@@ -55,6 +63,9 @@ test("a requested 0DTE scope cannot relabel an explicitly loaded multi-expiry ob
  const ordinary=axios.get.getMockImplementation();
  axios.get.mockImplementation(async(url,opts)=>String(url).includes("/heatmap/")?{data:{...packet(),map_query:{mode:"day",expiries:4,dte:null}}}:ordinary(url,opts));
  await mount();
+ // Explicit 0DTE request (owner decision 2026-10-24: fresh default is
+ // all-loaded; the refusal coverage reconciles under the explicit intent).
+ await act(async()=>{fireEvent.change(screen.getByLabelText("Market view expiry scope"),{target:{value:"0dte"}});});
  expect(screen.getByTestId("triad-scope-admission")).toHaveTextContent("Same-day admission unavailable");
  expect(JSON.parse(screen.getByTestId("r11-context").textContent).dte).toBe("all");
 });
@@ -63,6 +74,7 @@ test("the 0DTE refusal offers the loaded expiries in one explicit step",async()=
  const ordinary=axios.get.getMockImplementation();
  axios.get.mockImplementation(async(url,opts)=>String(url).includes("/heatmap/")?{data:{...packet(),map_query:{mode:"day",expiries:4,dte:null}}}:ordinary(url,opts));
  await mount();
+ await act(async()=>{fireEvent.change(screen.getByLabelText("Market view expiry scope"),{target:{value:"0dte"}});});
  const button=screen.getByTestId("triad-show-loaded");
  axios.get.mockClear();
  await act(async()=>{fireEvent.click(button);});
@@ -70,6 +82,71 @@ test("the 0DTE refusal offers the loaded expiries in one explicit step",async()=
  const urls=axios.get.mock.calls.map(([url])=>String(url));
  expect(urls.some(url=>url.includes("dte=0"))).toBe(false);
  expect(urls.some(url=>url.includes("/heatmap/"))).toBe(true);
+});
+
+test("an explicit 0DTE selection keeps its strict refusal and is never auto-changed",async()=>{
+ // Owner decision 2026-10-24: 0DTE stays an explicitly selectable request.
+ // An intentional 0DTE selection renders the strict same-day refusal, the
+ // scope select STAYS 0dte (UI-M02: no automatic broader-scope
+ // substitution), and the refusal never relabels the loaded axis as 0DTE.
+ const ordinary=axios.get.getMockImplementation();
+ axios.get.mockImplementation(async(url,opts)=>String(url).includes("/heatmap/")?{data:{...packet(),map_query:{mode:"day",expiries:4,dte:null}}}:ordinary(url,opts));
+ await mount();
+ // Fresh default is all-loaded: no refusal on entry, maps render.
+ expect(screen.getByLabelText("Market view expiry scope")).toHaveValue("loaded");
+ expect(screen.queryByTestId("triad-scope-admission")).toBeNull();
+ await act(async()=>{fireEvent.change(screen.getByLabelText("Market view expiry scope"),{target:{value:"0dte"}});});
+ expect(screen.getByTestId("triad-scope-admission")).toBeInTheDocument();
+ expect(screen.getByLabelText("Market view expiry scope")).toHaveValue("0dte");
+ await act(async()=>{await new Promise(resolve=>setTimeout(resolve,30));});
+ // After the settle the intentional selection is still 0dte with its
+ // refusal — the desk never flips it back by itself.
+ expect(screen.getByLabelText("Market view expiry scope")).toHaveValue("0dte");
+ expect(screen.getByTestId("triad-scope-admission")).toHaveTextContent("not verified 0DTE");
+ expect(screen.getByTestId("triad-scope-admission")).toHaveTextContent("0DTE was your explicit request");
+});
+
+test("the 0DTE refusal distinguishes an explicit request from a saved choice",async()=>{
+ // Owner live request 2026-10-24: the desk copy must say whether the 0DTE
+ // scope was a persisted choice or an explicit request. Measured in the
+ // fresh-context preflight: scope is plain session state (nothing
+ // persists — reload reverts to the all-loaded default; no storage key
+ // is written), so the refusal copy must say so explicitly.
+ const ordinary=axios.get.getMockImplementation();
+ axios.get.mockImplementation(async(url,opts)=>String(url).includes("/heatmap/")?{data:{...packet(),map_query:{mode:"day",expiries:4,dte:null}}}:ordinary(url,opts));
+ await mount();
+ await act(async()=>{fireEvent.change(screen.getByLabelText("Market view expiry scope"),{target:{value:"0dte"}});});
+ const admission=screen.getByTestId("triad-scope-admission");
+ expect(admission).toHaveTextContent("Same-day admission unavailable");
+ expect(admission).toHaveTextContent("0DTE was your explicit request");
+ expect(admission).toHaveTextContent("not a saved choice");
+ expect(admission).toHaveTextContent("nothing is saved between visits");
+});
+
+test("loading all expiries restores the reading position instead of jumping to the top",async()=>{
+ // Owner live request 2026-10-24 (ancestor scroll jumps): clicking
+ // "Show all loaded expiries" unmounts the refusal blocks synchronously,
+ // the document collapses and the browser clamps the page from scrollY 355
+ // to 0 (measured in owner-preflight-fresh-context.json) — the desk moves
+ // under the user. The click must restore the reading position once, after
+ // the loaded payload lands, and only via this path (never on reloads or
+ // scope switches the user did not initiate from the desk).
+ const ordinary=axios.get.getMockImplementation();
+ axios.get.mockImplementation(async(url,opts)=>String(url).includes("/heatmap/")?{data:{...packet(),map_query:{mode:"day",expiries:4,dte:null}}}:ordinary(url,opts));
+ await mount();
+ await act(async()=>{fireEvent.change(screen.getByLabelText("Market view expiry scope"),{target:{value:"0dte"}});});
+ const scrollTo=jest.spyOn(window,"scrollTo").mockImplementation(()=>{});
+ Object.defineProperty(window,"scrollY",{value:355,configurable:true});
+ const button=screen.getByTestId("triad-show-loaded");
+ await act(async()=>{fireEvent.click(button);});
+ await waitFor(()=>expect(screen.getByLabelText("Market view expiry scope")).toHaveValue("loaded"));
+ // jsdom schedules requestAnimationFrame on a timer — flush it before
+ // asserting the one-shot restore fired.
+ await act(async()=>{await new Promise(resolve=>setTimeout(resolve,60));});
+ expect(scrollTo).toHaveBeenCalledWith(0,355);
+ expect(scrollTo).toHaveBeenCalledTimes(1);
+ scrollTo.mockRestore();
+ Object.defineProperty(window,"scrollY",{value:0,configurable:true});
 });
 
 test("Raw and adjusted share expiry/strike rails and a zero-anchored range without borrowing missing activity",async()=>{
@@ -92,6 +169,7 @@ test("Triad timeline restores the stored pair without fetching live Greeks and r
   return ordinary(url,opts);
  });
  await mount();
+ openWSTab('replay');
  await act(async()=>fireEvent.click(screen.getByTestId("solstice-replay-load")));
  const liveReads=axios.get.mock.calls.filter(([url])=>String(url).includes("/heatmap/")).length;
  await act(async()=>fireEvent.click(screen.getByTestId("solstice-replay-play")));
@@ -135,8 +213,10 @@ test("recorded Next listed scope restores without a second fetch or a live subst
 test("raw-wall-first desk exposes top profile, one adjustment selector, and honest readiness", async () => {
   await mount();
   fireEvent.change(screen.getByLabelText("Adjusted context"), { target: { value: "delta" } });
+  openWSTab('profile');
   expect(screen.getByTestId("triad-signed-profile")).toBeInTheDocument();
   expect(screen.getByLabelText("Adjusted context")).toBeInTheDocument();
+  openWSTab('walls');
   await act(async () => { fireEvent.click(screen.getByTestId("triad-wall-wall")); });
   expect(screen.getByTestId("triad-readiness")).toHaveTextContent("Wait");
   expect(screen.getByTestId("triad-readiness")).toHaveTextContent("Bounce watch");
@@ -150,6 +230,7 @@ test("resolved contract becomes the canonical Triad selection and basis changes 
  const ordinary=axios.get.getMockImplementation();
  axios.get.mockImplementation(async(url,opts)=>String(url).includes("/contract")?{data:{status:"ok",ticker:"SPY",snapshot_id:"SPY-snap",matched_identity:{...contract,strike:String(contract.strike)}}}:ordinary(url,opts));
  await mount();
+ openWSTab('walls');
  fireEvent.click(screen.getByTestId("triad-wall-wall"));
  fireEvent.click(screen.getByTestId("triad-contracts-btn"));
  fireEvent.click(screen.getByRole("button",{name:`Review ${contract.osi}`}));
@@ -161,6 +242,7 @@ test("resolved contract becomes the canonical Triad selection and basis changes 
 
 test("contract review requires choosing listed identity, not midpoint or first expiry", async () => {
   await mount();
+  openWSTab('walls');
   await act(async () => { fireEvent.click(screen.getByTestId("triad-wall-wall")); });
   fireEvent.click(screen.getByTestId("triad-contracts-btn"));
   expect(axios.get.mock.calls.some(([url]) => String(url).includes("/contract"))).toBe(false);
@@ -176,6 +258,7 @@ test("changing symbol releases wall and exact-contract response ownership, inclu
   const defaultMock = axios.get.getMockImplementation();
   axios.get.mockImplementation((url, opts) => String(url).includes("/solstice/SPY/contract") ? new Promise((resolve, reject) => { rejectOld = reject; }) : defaultMock(url, opts));
   await mount();
+  openWSTab('walls');
   await act(async () => { fireEvent.click(screen.getByTestId("triad-wall-wall")); });
   fireEvent.click(screen.getByTestId("triad-contracts-btn"));
   fireEvent.click(screen.getByRole("button", { name: `Review ${contract.osi}` }));

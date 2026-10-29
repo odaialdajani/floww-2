@@ -2738,7 +2738,7 @@
     },
     "/api/alpaca/status": {
       "get": {
-        "description": "Get Alpaca connection status.",
+        "description": "Get Alpaca connection status.\n\nKey presence is read from the environment AT CALL TIME (the same\nconvention as AlpacaClient._load_keys) \u2014 never from the import-time\nmodule constants, which go stale when the environment changes\n(paper-recovery D4: a removed key must not report configured=True).\nValues are never included in the response.\n\nUnknown status fails closed with a generic error. Readiness fields whose\ntruth cannot be established are omitted rather than asserted; exception\ndetails are not returned because they could contain sensitive data.",
         "operationId": "get_api_alpaca_status",
         "responses": {
           "200": {
@@ -4913,7 +4913,7 @@
     },
     "/api/data-quality/history": {
       "get": {
-        "description": "Recent cross-source consistency checks (per-process).",
+        "description": "Recent cross-source consistency checks (per-process).\n\nRegistered BEFORE /data-quality/{ticker}: FastAPI matches routes in\nregistration order, so the literal path must be declared first or the\nword \"history\" is captured as a ticker (root-reproduced 2026-10-26).",
         "operationId": "get_api_data-quality_history",
         "parameters": [
           {
@@ -8750,7 +8750,7 @@
     },
     "/api/health": {
       "get": {
-        "description": "Check status of all dependencies.\n\nReturns:\n    {\n        \"status\": \"healthy\" | \"degraded\",\n        \"timestamp\": \"<ISO8601 UTC>\",\n        \"checks\": {\n            \"duckdb\": {\"status\": \"healthy\"},\n            \"public_api\": {\"status\": \"healthy\"} | {\"status\": \"unhealthy\", \"error\": \"...\"},\n            \"alpha_vantage\": {\"status\": \"disabled\", \"deprecated\": True, ...},\n            \"websocket\": {\"status\": \"healthy\", \"active_connections\": 0}\n        }\n    }",
+        "description": "Collect dependency diagnostics without blocking the async request loop.",
         "operationId": "get_api_health",
         "responses": {
           "200": {
@@ -9320,6 +9320,101 @@
         ]
       }
     },
+    "/api/heatseeker/mapped-levels/{target}": {
+      "get": {
+        "description": "B09 cross-instrument mapped levels: the ratio lock + typed refusals only.\n\nContract: C2-PRODUCER-CONTRACTS-20261024.json v2 b09_mapped_levels_contract.\nSupported pairs only (C040); the review-mode ratio is an explicit\nhorizontal lock at-or-before the cursor (C042); C115 board-combination\nstays a refusal; levels are never invented (levels_status says so).",
+        "operationId": "get_api_heatseeker_mapped-levels_target",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "target",
+            "required": true,
+            "schema": {
+              "title": "Target",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "source",
+            "required": true,
+            "schema": {
+              "maxLength": 12,
+              "minLength": 1,
+              "title": "Source",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": true,
+            "schema": {
+              "title": "Cursor",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "combine",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 32,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Combine"
+            }
+          },
+          {
+            "in": "query",
+            "name": "scope",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Scope"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Mapped Levels",
+        "tags": [
+          "price-node-history"
+        ]
+      }
+    },
     "/api/heatseeker/node-classification": {
       "get": {
         "description": "Classify nodes as real (growing intent) vs hedge (fading protection).\n\nBuilds the top-|GEX| nodes from the current chain, attaches a\n``gamma_sign`` (positive/negative based on signed net GEX) and an\n``oi_trend`` (growing/fading based on 24h OI history when available),\nthen runs ``classify_nodes`` to assign real/hedge/unknown labels.",
@@ -9615,6 +9710,66 @@
               "pattern": "^(regular|all)$",
               "title": "Sessions",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_envelopes",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Envelopes",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "opening_minutes",
+            "required": false,
+            "schema": {
+              "default": 60,
+              "title": "Opening Minutes",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tick_size",
+            "required": false,
+            "schema": {
+              "default": 0.01,
+              "title": "Tick Size",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "units",
+            "required": false,
+            "schema": {
+              "default": "usd",
+              "title": "Units",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "entitlement",
+            "required": false,
+            "schema": {
+              "default": "delayed-15m",
+              "title": "Entitlement",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "max_delay_seconds",
+            "required": false,
+            "schema": {
+              "default": 900,
+              "title": "Max Delay Seconds",
+              "type": "integer"
             }
           }
         ],

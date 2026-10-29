@@ -272,6 +272,38 @@
   .heatseeker-sidebar-left.open {
     position: static !important;
   }
+
+  /* S1 optional filter rail (desktop >=1024 only; tablet is unchanged):
+     the rail HONORS the existing Filters toggle — closed (the default
+     state) hides the column and the chart takes the full main track;
+     open shows the static filters column, never the mobile overlay. */
+  .heatseeker-sidebar-left {
+    display: none !important;
+  }
+
+  .heatseeker-sidebar-left.open {
+    display: block !important;
+    inset: auto !important;
+  }
+
+  /* S1: the Filters/Analytics toggles stay REACHABLE at desktop — a slim
+     static strip under the layout, never a fixed overlay on the plot. */
+  .mobile-toggle-bar {
+    position: static;
+    display: flex;
+    gap: 0.5rem;
+    padding: 0.35rem 0.75rem;
+    border-top: 1px solid var(--border);
+    grid-column: 1 / -1;
+    background: var(--bg-2);
+    z-index: auto;
+  }
+
+  /* S1 chart-first desktop: tighter main padding so the plot starts at or
+     above the 220px line at 1470x950 (tablet keeps 0.75rem). */
+  .heatseeker-main {
+    padding: 0.5rem;
+  }
 }
 
 /* ===== PWA STANDALONE ===== */
@@ -2908,6 +2940,12 @@ button, select, input {
   font-family: "Inter", system-ui, sans-serif;
   color: #c9d1d9;
   overflow: hidden;
+  /* Desktop load stability: the container is programmatic-scroll only
+     (overflow hidden), so browser scroll anchoring can only ever MOVE it
+     during late-mounting content changes (the candle chart arriving after
+     the map). Anchoring off keeps the container exactly where the app/user
+     left it; deliberate user scrolling elsewhere is unaffected. */
+  overflow-anchor: none;
   width: 100%;
 }
 
@@ -4623,6 +4661,28 @@ input[class*="bg-slate-800"], select[class*="bg-slate-800"], textarea[class*="bg
   border-color: rgba(255,255,255,0.09) !important;
 }
 
+/* Research routes (Stock/Market): raw native controls adopt the EXISTING
+   dark tokens so no browser-gray/white natives surface on those pages.
+   Route-scoped by the page roots; component-scoped styles (H1/H2 lanes)
+   keep winning with their own selectors. Existing tokens + fallbacks only —
+   no second theme layer (root's color-cascade correction). */
+.heatseeker-layout select,
+.heatseeker-layout input,
+.heatseeker-layout textarea,
+.legacy-theme select,
+.legacy-theme input,
+.legacy-theme textarea {
+  background: var(--floww-surface, var(--panel, #111111));
+  color: var(--text, #d5dde5);
+  border: 1px solid var(--floww-line, var(--border-2, #454545));
+}
+.heatseeker-layout select:disabled,
+.heatseeker-layout input:disabled,
+.legacy-theme select:disabled,
+.legacy-theme input:disabled {
+  color: var(--text-dim, #8e9aa7);
+}
+
 .lodestar-open { position:fixed;right:18px;bottom:18px;z-index:1100;background:#22262d;color:#d2d6dd;border:1px solid #495160;border-radius:8px;padding:10px 16px;box-shadow:0 4px 20px #0005; }
 @media (max-width: 768px) { .lodestar-open { bottom:calc(64px + env(safe-area-inset-bottom)); } }
 .lodestar-open small {display:block;font-size:10px;color:#98a3b4;}
@@ -4806,4 +4866,77 @@ input[class*="bg-slate-800"], select[class*="bg-slate-800"], textarea[class*="bg
    rail margin. Presentation-only; no shell logic changes. */
 @media (max-width: 600px) {
   .floww-workspace { margin-left: 64px !important; }
+}
+
+/* 2026-10-19 punch item 3 (reviewer spec, integrator relay): compact the rail
+   error card. ErrorState (components/RetryButton.js) renders
+   className="panel p-4 text-center" data-testid="error-state"; in the narrow
+   left rail that padding plus the 2xl emoji crowds the summary. Rail-scoped
+   override only — desktop panels and other ErrorState mounts unchanged. */
+.heatseeker-layout .heatseeker-sidebar-left [data-testid="error-state"] {
+  padding: 10px 12px;
+  text-align: left;
+}
+.heatseeker-layout .heatseeker-sidebar-left [data-testid="error-state"] > div:first-child {
+  font-size: 18px;
+  margin-bottom: 4px;
+}
+
+/* 2026-10-20 punch item 2: the Related pill in the header actions clipped at
+   390px (scrollWidth 52 vs clientWidth ~41) — the flex row squeezed the
+   unstyled button below its label. The pill keeps its natural hit-width: it
+   never shrinks under its label and never clips. App.js is protected; this is
+   the CSS-only geometry fix. */
+.ap-header-actions .related-workspace-toggle { flex: none; min-width: max-content; white-space: nowrap; }
+
+/* Desktop Stock chart: keep the existing study filters, but give the
+   primary plot more width than the secondary context rail. */
+@media(min-width:900px) {
+ .heatseeker-layout:has(.skylit-full-dashboard[data-study="price"]) .heatseeker-sidebar-left { width:220px; min-width:220px; max-width:220px; flex:0 0 220px; }
+}
+
+/* ── Visual-reset-20261025: Stock contextual right workspace ────────────
+   One dock beside the chart; the chart keeps the dominant width. Below
+   ~1180px the dock becomes a controlled overlay so narrow desktop never
+   starves the candles. */
+.stock-pane-row { display: flex; flex-direction: row; gap: 10px; align-items: stretch; min-width: 0; }
+.stock-pane-main { flex: 1 1 auto; min-width: 0; }
+.stock-inspector { flex: 0 0 300px; max-width: 300px; display: flex; flex-direction: column;
+  border: 1px solid #2c3440; border-radius: 8px; background: #151a21; padding: 10px 12px;
+  max-height: 780px; overflow: hidden; }
+.stock-inspector-head { display: flex; flex-direction: column; gap: 6px; border-bottom: 1px solid #2c3440; padding-bottom: 8px; }
+.stock-inspector-title { font-size: 13px; color: #dce8f2; letter-spacing: 0.02em; }
+.stock-inspector-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+.stock-inspector-head { flex-wrap: wrap; row-gap: 6px; }
+.stock-inspector-tab { background: transparent; border: 1px solid #2c3440; border-radius: 6px; color: #9fb0c0;
+  padding: 4px 10px; font-size: 12px; cursor: pointer; }
+.stock-inspector-tab.is-active { color: #e3c16a; border-color: #6b5a2a; background: #1d2330; }
+.stock-inspector-close { margin-left: auto; align-self: flex-end; background: none; border: none; color: #9fb0c0;
+  font-size: 16px; line-height: 1; cursor: pointer; padding: 2px 6px; border-radius: 4px; }
+.stock-inspector-close:hover { color: #e3c16a; background: #1d2330; }
+.stock-inspector-body { overflow: auto; padding-top: 8px; font-size: 13px; color: #c9d6e2; flex: 1 1 auto; }
+.stock-inspector-body label { font-size: 12px; color: #9fb0c0; }
+.stock-inspector-closed { color: #7d8ea0; font-size: 12px; padding: 8px 0; }
+.stock-inspector-empty { color: #7d8ea0; font-size: 12px; }
+.stock-review-tab { display: flex; flex-direction: column; gap: 8px; }
+.stock-review-families { color: #7d8ea0; font-size: 12px; border-top: 1px solid #2c3440; padding-top: 8px; }
+.stock-dock-actions { display: inline-flex; gap: 6px; margin-left: auto; }
+.stock-dock-btn { background: #1d2330; border: 1px solid #2c3440; border-radius: 6px; color: #c9d6e2;
+  font-size: 12px; padding: 3px 10px; cursor: pointer; }
+.stock-dock-btn[aria-pressed="true"] { color: #e3c16a; border-color: #6b5a2a; }
+@media (max-width: 1180px) {
+  .stock-pane-row { flex-direction: column; }
+  .stock-inspector { flex: 1 1 auto; max-width: none; }
+  .stock-inspector[data-open="false"] { display: none; }
+  /* Narrow-desktop overlay: the dock can never exceed the viewport or clip
+     its own controls — width caps at 100vw minus gutters, height leaves the
+     chart row reachable, and the tab row wraps instead of overflowing. */
+  .stock-inspector[data-open="true"] { position: fixed; top: 72px;
+    /* gutter-anchored on BOTH sides: the dock spans between 12px gutters of
+       whatever containing block resolves, capped at 320px — it can never
+       clip off either edge of a real narrow desktop pane (319px measured). */
+    left: 12px; right: 12px; width: auto; max-width: 320px;
+    z-index: 220; box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+    max-height: min(70vh, calc(100vh - 96px)); }
+  .stock-inspector-tabs { width: 100%; }
 }

@@ -13,7 +13,7 @@
 .recorded-candle-up{color:#57c5b0;}.recorded-candle-down{color:#e48d94;}.recorded-price-label,.recorded-time-label{font-family:var(--font-mono,Consolas,monospace);font-size:12px;fill:#aebcc9;user-select:none;}
 .recorded-chart-footer{display:flex;justify-content:space-between;flex-wrap:wrap;gap:7px;margin-top:10px;color:#a7b5c2;}.recorded-chart-footer small{font-size:12px;line-height:1.6;}
 .recorded-chart-nodes{display:flex;flex-wrap:wrap;gap:10px 16px;font-size:12px;margin:10px 0 2px;padding-top:10px;border-top:1px solid #293640;}.recorded-chart-nodes b{font-weight:500;}
-.price-node-history{min-width:0;flex:0 0 auto;}.price-node-history[data-open=true]{padding:14px!important;}
+.price-node-history{min-width:0;flex:0 0 auto;}.price-node-history[data-open=true]{padding:8px!important;}
 .price-history-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:10px 14px;margin-top:12px;}.price-history-toolbar strong{font-size:15px;font-weight:600;}.price-history-toolbar label{display:flex;align-items:center;gap:6px;font-size:12px;color:#bdcbd7;}.price-history-toolbar select{max-width:100%;}
 .price-history-coverage{margin:10px 0 4px;font-size:12px;line-height:1.6;color:#aebdcb;}.price-history-details{font-size:12px;margin:8px 0;color:#aebdcb;}.price-history-details summary{cursor:pointer;color:#cdd8e1;}.price-history-details p{margin:8px 0;line-height:1.6;}
 .price-history-replay{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding-top:10px;margin-top:10px;border-top:1px solid #293640;font-size:12px;}.price-history-replay input{flex:1;min-width:140px;accent-color:#8ebcae;}
@@ -37,6 +37,10 @@
 .recorded-chart-popover>summary::-webkit-details-marker{display:none;}
 .recorded-chart-popover-content{position:absolute;top:calc(100% + 6px);left:0;z-index:170;width:min(400px,100cqw);max-height:60dvh;overflow:auto;background:#121b25;border:1px solid #526473;border-radius:5px;padding:12px;box-shadow:0 8px 25px #0008;color:#cddae5;font-size:12px;line-height:1.6;}
 .recorded-chart-popover-content small{display:block;margin-top:10px;color:#aebfcb;font-size:12px;line-height:1.6;}
+/* S1: the Tools and Data-details popovers sit at the band's right side —
+   open LEFTWARD (right:0) so the panel stays inside the chart pane at
+   every desktop width instead of past the viewport edge. */
+.recorded-chart-tools .recorded-chart-popover .recorded-chart-popover-content{left:auto;right:0;}
 .recorded-chart-popover-content .recorded-chart-layers{display:grid;gap:8px;border:0;padding:8px 0;margin:8px 0;}
 .recorded-chart-popover-content .recorded-chart-layers legend{font-size:12px;color:#bbcad6;padding:0;}
 .recorded-chart-popover-content select{max-width:100%;font-size:12px;background:#16212b;border:1px solid #536676;color:#e3edf4;border-radius:4px;padding:6px;}
@@ -218,3 +222,40 @@
  .recorded-chart-readout strong{flex-basis:100%;}
  .recorded-chart-popover-content{grid-template-columns:1fr;}
 }
+/* B16 drawing geometry layer: projected logical anchors, touch-friendly. */
+.price-history-drawings .drawing-layer { display: block; max-width: 100%; margin: 6px 0; border-radius: 4px; touch-action: none; }
+.price-history-drawings .drawing-layer[data-arbitration="drawing-drag"] { outline: 1px solid #e3c16a; outline-offset: -1px; }
+.price-history-drawings .rail-tools { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0; }
+.price-history-drawings .rail-tools button { font: inherit; font-size: 11px; border: 1px solid #435260; border-radius: 4px; background: #16212b; color: #dce8f2; padding: 4px 10px; min-height: 28px; cursor: pointer; }
+.price-history-drawings .rail-tools button[aria-pressed="true"] { border-color: #e3c16a; color: #f2d795; }
+.price-history-drawings .rail-tools button:focus-visible { outline: 2px solid #e3c16a; outline-offset: 2px; }
+
+/* UI-03/04 control-band compaction: the readout keeps its NATURAL one-line
+   width (clock + OHLC + data-details popover in a single nowrap line, 34px)
+   and stops growing to squeeze beside the study actions — the actions wrap
+   to their own row instead, so the band collapses from five stacked rows to
+   two at 1470 and three tight rows at 1024. The replay row stays one row at
+   desktop widths. No control removed; no quote clock discarded. */
+.recorded-chart-tools .recorded-chart-readout{font-size:12px;line-height:1.35;flex:0 1 auto;min-width:0;flex-wrap:wrap;gap:2px 10px;max-width:none;}
+.recorded-chart-tools .recorded-chart-readout strong{white-space:nowrap;flex:0 0 auto;}
+.recorded-chart-tools .recorded-chart-readout > span{white-space:nowrap;flex:0 0 auto;}
+/* Squeezed readouts WRAP as units (clock line, OHLC line, data popover) —
+   never clip, so the interactive data-details summary stays reachable at
+   every desktop width. */
+.recorded-chart-replay-row{white-space:nowrap;}
+.recorded-chart-replay-row .price-history-replay{flex-wrap:nowrap;}
+.recorded-chart-replay-row .price-history-replay input{flex:1;min-width:120px;}
+
+/* One primary action row, then the owning candle readout. Wrapping is
+   based on the pane, so both desktop rails cannot squeeze/clamp OHLC. */
+.recorded-chart-tools { gap:6px; padding:4px 0 6px; }
+.recorded-chart-tools .recorded-chart-readout { order:6; flex:1 1 600px; width:auto; min-height:30px; display:flex; flex-wrap:wrap; justify-content:flex-start; gap:4px 14px; padding:0; }
+.recorded-chart-readout > span { overflow:visible; text-overflow:clip; white-space:normal; }
+.recorded-chart-readout strong { white-space:normal; }
+.recorded-chart-tools .recorded-chart-scale { order:2; }
+.recorded-chart-tools .recorded-chart-popover:not(.recorded-chart-data) { order:3; }
+.recorded-chart-tools .recorded-chart-actions { order:4; margin-left:auto; }
+
+.recorded-chart-tools button, .recorded-chart-tools summary, .recorded-chart-tools select { font-size:12px; min-height:30px; padding:4px 6px; }
+.recorded-chart-tools .recorded-chart-actions { gap:5px; }
+.recorded-chart-tools .price-history-summary { flex:0 0 auto; }

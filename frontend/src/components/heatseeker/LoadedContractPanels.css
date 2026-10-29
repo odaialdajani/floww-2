@@ -1,0 +1,11 @@
+.loaded-contract-details{margin:8px 0;padding:8px;border:1px solid #303030;background:#121212;color:#c7c7c7}
+.loaded-contract-window{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0}
+.loaded-contract-window button{border:1px solid #444;background:#202020;color:#ddd;border-radius:4px;padding:5px 9px}
+.loaded-contract-window button:disabled{opacity:.45}
+.loaded-contract-window button:focus-visible{outline:2px solid #c9a84c;outline-offset:2px}
+.loaded-contract-scroll{max-height:480px;overflow:auto}
+.loaded-contract-panel table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.loaded-contract-panel th,.loaded-contract-panel td{padding:8px;border-bottom:1px solid #303030;text-align:right}
+.loaded-contract-panel thead{position:sticky;top:0;background:#191919}
+.loaded-contract-panel td{position:relative;min-width:100px}
+.loaded-exposure-bar{display:block;height:3px;background:#a18e57;max-width:100%;margin-bottom:4px}

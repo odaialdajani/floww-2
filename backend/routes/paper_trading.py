@@ -6,6 +6,7 @@ Paper trading routes with Almgren-Chriss execution.
 from __future__ import annotations
 
 import logging
+import math
 from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, HTTPException, Query
@@ -27,6 +28,46 @@ def set_paper_engine(engine: PaperTradingEngine | None) -> None:
     _paper_engine = engine
 
 
+def _validated_order_fields(request: dict) -> tuple[str, str, int]:
+    """Route-level input validation (paper-recovery B6).
+
+    The engine previously ACCEPTED negative/zero quantities and nonsense
+    sides, and crashed with 5xx on non-numeric quantities. Refuse them here
+    with the router's existing 400 convention; success shapes are unchanged.
+    """
+    symbol = request.get("symbol", "")
+    side = request.get("side", "buy")
+    quantity = request.get("quantity", 0)
+    if not isinstance(symbol, str) or not symbol.strip():
+        raise HTTPException(400, "symbol must be a non-empty string")
+    if side not in ("buy", "sell"):
+        raise HTTPException(400, f"side must be 'buy' or 'sell', got {side!r}")
+    if isinstance(quantity, bool):
+        raise HTTPException(400, "quantity must be a positive whole number")
+    if isinstance(quantity, int):
+        qty = quantity
+    elif isinstance(quantity, float) and math.isfinite(quantity) and quantity.is_integer():
+        qty = int(quantity)  # JSON 2.0 stays accepted for compatibility
+    else:
+        raise HTTPException(400, f"quantity must be a positive whole number, got {quantity!r}")
+    if qty <= 0:
+        raise HTTPException(400, f"quantity must be a positive whole number, got {qty}")
+    return symbol.strip(), side, qty
+
+
+def _validated_market(request: dict) -> dict:
+    """A zero or nonfinite bid/ask previously crashed /execute with 5xx."""
+    market_data = request.get("market", {})
+    if not isinstance(market_data, dict):
+        raise HTTPException(400, "market must be an object")
+    for key in ("bid", "ask"):
+        value = market_data.get(key, 0)
+        if (isinstance(value, bool) or not isinstance(value, (int, float))
+                or not math.isfinite(value) or value <= 0):
+            raise HTTPException(400, f"market.{key} must be a positive finite number")
+    return market_data
+
+
 @router.post("/api/paper-trading/submit")
 async def submit_paper_order(request: dict):
     """Submit a paper trade order.
@@ -45,10 +86,11 @@ async def submit_paper_order(request: dict):
     if not _paper_engine:
         raise HTTPException(503, "Paper trading engine not initialized")
 
+    symbol, side, quantity = _validated_order_fields(request)
     result = _paper_engine.submit_order(
-        symbol=request.get("symbol", ""),
-        side=request.get("side", "buy"),
-        quantity=request.get("quantity", 0),
+        symbol=symbol,
+        side=side,
+        quantity=quantity,
         order_type=request.get("order_type", "almgren_chriss"),
         urgency=request.get("urgency", 0.5),
         limit_price=request.get("limit_price", 0.0),
@@ -70,7 +112,9 @@ async def execute_paper_order(request: dict):
     from services.execution_engine import MarketState
 
     order_id = request.get("order_id", "")
-    market_data = request.get("market", {})
+    if not isinstance(order_id, str) or not order_id.strip():
+        raise HTTPException(400, "order_id must be a non-empty string")
+    market_data = _validated_market(request)
     market = MarketState(
         symbol=market_data.get("symbol", "SPY"),
         bid=market_data.get("bid", 0),
@@ -82,7 +126,11 @@ async def execute_paper_order(request: dict):
         volatility=market_data.get("volatility", 0.15),
     )
 
-    result = _paper_engine.execute_order(order_id, market)
+    try:
+        result = _paper_engine.execute_order(order_id, market)
+    except ValueError as e:
+        # Missing order and duplicate execution both refuse honestly as 400.
+        raise HTTPException(400, str(e)) from None
     return {
         "order_id": result.order_id,
         "symbol": result.symbol,
@@ -158,9 +206,10 @@ async def estimate_execution_cost(request: dict):
 
     from services.execution_engine import MarketState, Order
 
-    market_data = request.get("market", {})
+    symbol, side, quantity = _validated_order_fields(request)
+    market_data = _validated_market(request)
     market = MarketState(
-        symbol=request.get("symbol", "SPY"),
+        symbol=symbol,
         bid=market_data.get("bid", 0),
         ask=market_data.get("ask", 0),
         last=market_data.get("last", 0),
@@ -172,9 +221,9 @@ async def estimate_execution_cost(request: dict):
     )
 
     order = Order(
-        symbol=request.get("symbol", "SPY"),
-        side=request.get("side", "buy"),
-        quantity=request.get("quantity", 0),
+        symbol=symbol,
+        side=side,
+        quantity=quantity,
     )
 
     estimate = _paper_engine.execution_engine.estimate_execution_cost(

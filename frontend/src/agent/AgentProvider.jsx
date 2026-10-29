@@ -174,7 +174,7 @@ export default function AgentProvider({children,onNavigate}){
   }catch{if(isCurrent())setError("This saved answer is unavailable. Your current answer is still shown.","saved-turn");return null;}
   finally{clearTimeout(read.timer);if(savedTurnRead.current===read){savedTurnRead.current=null;setOpeningTurnId(null);}}
  },[checkedCachedTurn,rememberFullTurn,setActiveTurn,setError]);
- const askQuestion=useCallback(async(question,{consumeDraft=true}={})=>{
+ const askQuestion=useCallback(async(question,{consumeDraft=true,chartContext=null}={})=>{
   if(busy.current || ending.current || !question.trim())return;
   const navigation=parseChatNavigation(question);
   if(navigation){
@@ -213,7 +213,10 @@ export default function AgentProvider({children,onNavigate}){
   submittedRequest.current={question,scope:market?"market":"selected",ticker:frozen.current.ticker,screen:frozen.current,created_at:new Date().toISOString()};
   const horizon=frozen.current.displayMode === 'range-replay'
    ? `range:${frozen.current.mapQuery.min_dte}:${frozen.current.mapQuery.max_dte}` : frozen.current.dte;
-  try {await ask({question,ticker:frozen.current.ticker,horizon,screen:frozen.current,...(market?{scope:"market"}:{}),...(conversationParent.current?{parent_turn_id:conversationParent.current.turn_id}:{})});}
+  try {await ask({question,ticker:frozen.current.ticker,horizon,screen:frozen.current,...(market?{scope:"market"}:{})
+  ,...(chartContext && typeof chartContext==="object" && !Array.isArray(chartContext)
+  ?{chart_context:JSON.parse(JSON.stringify(chartContext))} : {})
+  ,...(conversationParent.current?{parent_turn_id:conversationParent.current.turn_id}:{})});}
   finally{if(busy.current===requestOwner)busy.current=null;}
  },[ask,context,setError,onNavigate,pushTurn,setQuestion,loadHistory,stopSavedTurn]);
  const openChartAction=useCallback(async(action,turn)=>{

@@ -81,7 +81,19 @@ def deterministic_answer(snapshots, spec):
         summary = limits
     elif re.search(r"\bputs?\b", spec.get("question", ""), re.IGNORECASE):
         summary = "Put contract type alone does not establish trade direction; buyer versus seller activity and the wider position matter."
-    if spec.get("price_only"):
+    if spec.get("chart_context"):
+        walls = [f for f in facts
+                 if f["metric"] == "Focused chart recorded wall level" and finite(f["value"])]
+        known = next((f for f in facts if f["metric"] == "Focused chart node known-at"), None)
+        levels_text = ", ".join(f"{value:,.6g}" for value in dict.fromkeys(w["value"] for w in walls))
+        summary = (
+            f"Recorded focused-chart wall level(s) for {spec['chart_context']['focus']} at the asked cursor: "
+            f"{levels_text} USD" + (f" (known at {known['value']})." if known else ".")
+            if walls
+            else "The focused chart's recorded reading is unavailable at the asked cursor. "
+                 "Nothing was substituted and no provider read was started."
+        )
+    elif spec.get("price_only"):
         price = next((f for f in facts if f["metric"] == "Underlying price"), None)
         summary = (
             f"{price['ticker']} cached underlying price: {price['value']:,.6g} USD "
@@ -201,6 +213,7 @@ class ResearchService:
                                 selected_expiry=selected_expiry,
                                 screen=screen,
                                 **({"price_only": True} if spec.get("price_only") else {}),
+                                **({"chart_context": spec["chart_context"]} if spec.get("chart_context") else {}),
                             )
                         )
                         if not spec.get("price_only") and snapshots[-1].get("anchor_kind") not in {"display", "recorded"}:

@@ -102,8 +102,6 @@ class SingleLeg(BaseModel):
 
 Strategy = IronCondor | Straddle | Strangle | VerticalSpread | CalendarSpread | SingleLeg
 
-Strategy = IronCondor | Straddle | Strangle | VerticalSpread | CalendarSpread | SingleLeg
-
 
 def generate_client_order_id(intent: dict[str, Any], session_salt: str = "") -> str:
     """Generate deterministic client order ID. Same intent + salt = same ID."""
@@ -257,43 +255,23 @@ async def execute_paper_trade(
     order: dict[str, Any],
     qty: int = 1,
 ) -> dict[str, Any]:
-    """Execute a paper trade via Alpaca."""
+    """Refuse option-strategy dispatch explicitly (fail-closed).
+
+    Historical note (paper-recovery B20): this function used to dispatch to
+    AlpacaClient.get_options_chain / place_iron_condor / place_call_spread /
+    place_put_spread — methods that DO NOT EXIST on this repo's AlpacaClient —
+    so every auto_trade run failed and the broad except reported a confusing
+    AttributeError message instead of an explicit refusal. No venue path is
+    added here: multi-leg option strategy execution stays explicitly
+    unimplemented until a reviewed implementation is approved.
+    """
     client = get_alpaca_client()
     if not client:
         return {"status": "error", "message": "Alpaca client not available"}
-
-    try:
-        strategy = order.get("strategy", "")
-        ticker = order.get("ticker", "")
-
-        # Get options chain for the ticker
-        chain = await client.get_options_chain(ticker)
-        if not chain:
-            return {"status": "error", "message": f"No options chain for {ticker}"}
-
-        # Build the order based on strategy
-        if strategy == "iron_condor":
-            result = await client.place_iron_condor(ticker, chain, qty)
-        elif strategy == "call_spread":
-            result = await client.place_call_spread(ticker, chain, qty)
-        elif strategy == "put_spread":
-            result = await client.place_put_spread(ticker, chain, qty)
-        else:
-            return {"status": "error", "message": f"Unknown strategy: {strategy}"}
-
-        logger.info(f"Paper trade executed: {strategy} {ticker} x{qty}")
-        return {
-            "status": "executed",
-            "strategy": strategy,
-            "ticker": ticker,
-            "qty": qty,
-            "result": result,
-            "timestamp": datetime.now(UTC).isoformat(),
-        }
-
-    except Exception as e:
-        logger.error(f"Paper trade failed: {e}")
-        return {"status": "error", "message": str(e)}
+    return {
+        "status": "error",
+        "message": "option-strategy execution is not implemented in this client; no order was sent",
+    }
 
 
 async def process_signals_for_ticker(
@@ -438,7 +416,14 @@ async def _latest_feature_row(ticker: str, feature_names: list[str]) -> dict[str
 
 
 def _build_feature_vector(row: dict[str, Any], feature_names: list[str]):
-    """Project a Mongo feature doc into the model's expected feature order."""
+    """Project a Mongo feature doc into the model's expected feature order.
+
+    A DECLARED feature that is missing from the row or stored as null is
+    UNKNOWN data: it is refused with ValueError — never silently substituted
+    with 0.0 (repo data rule: unknown is never zero). Observed 0.0 values are
+    real data and are kept. Non-numeric values are refused the same way so
+    the caller can skip honestly instead of crashing.
+    """
     import numpy as np
 
     if not feature_names:
@@ -448,7 +433,13 @@ def _build_feature_vector(row: dict[str, Any], feature_names: list[str]):
             k for k, v in row.items()
             if k not in ignore and not k.startswith("target_") and isinstance(v, (int, float))
         )
-    values = [float(row.get(name, 0.0) or 0.0) for name in feature_names]
+    missing = [name for name in feature_names if name not in row or row[name] is None]
+    if missing:
+        raise ValueError(f"missing or null declared features: {sorted(missing)}")
+    try:
+        values = [float(row[name]) for name in feature_names]
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"non-numeric declared feature value: {exc}") from None
     return np.array([values], dtype=float), feature_names
 
 
@@ -456,7 +447,7 @@ def _nearest_weekly_expiry(today: datetime | None = None) -> str:
     """Return ISO date of the next Friday (or today if Friday). Weekly options proxy."""
     now = today or datetime.now(UTC)
     days_to_friday = (4 - now.weekday()) % 7  # Mon=0 ... Fri=4
-    target = now.date() if days_to_friday == 0 else now.date()
+    target = now.date()
     if days_to_friday > 0:
         from datetime import timedelta
         target = (now + timedelta(days=days_to_friday)).date()
@@ -504,7 +495,14 @@ async def daily_paper_trade_dry_run(ticker: str = "SPY") -> dict[str, Any]:
         return result
 
     feature_date = row.get("date")
-    X_raw, used_names = _build_feature_vector(row, feature_names)
+    try:
+        X_raw, used_names = _build_feature_vector(row, feature_names)
+    except ValueError as exc:
+        # Unknown (missing/null/non-numeric) declared features: skip honestly,
+        # never predict on substituted zeros (paper-recovery B12).
+        result.update({"action": "skip", "reason": f"incomplete_feature_row: {exc}"})
+        logger.warning(result["reason"])
+        return result
     try:
         X = scaler.transform(X_raw)
     except Exception as exc:  # noqa: BLE001 — scaler shape mismatch etc.

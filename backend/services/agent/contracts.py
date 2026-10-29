@@ -141,6 +141,36 @@ def validate_screen_context(screen):
             raise ValueError("Invalid exact contract context")
 
 
+def validate_chart_context(value):
+    """Admit only a complete, bound focused-chart descriptor for its screen.
+
+    A price-history ask without this descriptor keeps the existing display
+    refusal: there is no server-resolvable source for the display. Every
+    number the answer later shows is re-resolved by the server from the
+    recorded store at the descriptor's cursor; the descriptor itself carries
+    no evidence values.
+    """
+    message = "Research for this display is unavailable; unsupported surface or view"
+    if (not isinstance(value, dict)
+            or set(value) != {"status", "focus", "query", "scope", "cursor", "generation"}
+            or value.get("status") != "bound"
+            or value.get("query") != "focused-chart"
+            or not isinstance(value.get("focus"), str) or not value["focus"].strip() or len(value["focus"]) > 12
+            or not isinstance(value.get("scope"), str) or not value["scope"].strip() or len(value["scope"]) > 200
+            or not isinstance(value.get("generation"), str) or not value["generation"].strip()
+            or len(value["generation"]) > 128):
+        raise ValueError(message)
+    cursor = value.get("cursor")
+    if isinstance(cursor, bool) or not isinstance(cursor, (int, float)) or not 631152000 <= float(cursor) <= 4102444800:
+        raise ValueError(message)
+    try:
+        canonical(value)
+    except (TypeError, ValueError):
+        raise ValueError(message) from None
+    return {"status": "bound", "focus": value["focus"].strip().upper(), "query": "focused-chart",
+            "scope": value["scope"], "cursor": float(cursor), "generation": value["generation"]}
+
+
 def _specific_history_matches(question):
     """A named date/time cannot silently become the latest saved comparison."""
     dates = r"(?:\d{4}-\d{2}-\d{2}|\d{1,4}/\d{1,2}(?:/\d{1,4})?)"
@@ -312,10 +342,22 @@ def request_spec(body):
     if baseline is not None and mode in {"replay", "range-replay"}:
         raise ValueError("Dated saved history cannot substitute a different observation for the recorded chart")
     range_replay = mode == "range-replay"
+    focused = mode == "price-history"
     if range_replay:
         from services.agent.range_replay import validate_selection
 
         validate_selection(screen)
+    elif focused:
+        # A focused price-history ask needs a complete bound descriptor; the
+        # server re-resolves the reading from the recorded store and answers
+        # deterministically at the descriptor's cursor.
+        chart_context = validate_chart_context(body.get("chart_context"))
+        if baseline is not None:
+            raise ValueError("Dated saved history cannot substitute a different observation for the focused chart")
+        from services.agent.answer_sections import requests_history
+
+        if requests_history(question):
+            raise ValueError("Focused chart research answers its own recorded reading only; history comparisons are unavailable")
     elif mode not in (None, "live", "replay") or overlay not in {"raw", "delta", "activity", "session_delta_volume", "window"}:
         raise ValueError("Research for this display is unavailable; unsupported surface or view")
     if (mode == "replay" or overlay != "raw" or isinstance(screen.get("selectedContract"), dict)) and screen.get("contextVersion") != 2:
@@ -345,6 +387,8 @@ def request_spec(body):
     ]
     if len(tickers) > 3 or any(not re.fullmatch(r"[A-Z][A-Z0-9.-]{0,9}", t) for t in tickers):
         raise ValueError("Choose at most three valid tickers")
+    if focused and (screen.get("ticker") != chart_context["focus"] or tickers != [chart_context["focus"]]):
+        raise ValueError("Focused chart research must stay within its displayed symbol")
     horizon = (f"range:{screen['mapQuery']['min_dte']}:{screen['mapQuery']['max_dte']}" if range_replay else
                normalize_horizon(body.get("horizon") or screen.get("horizon") or screen.get("dte") or "all"))
     question_scope = None
@@ -371,6 +415,8 @@ def request_spec(body):
     )
     if len(named_scopes) + len(expiry_dates) > 1:
         raise ValueError("Choose one explicit expiry scope per question")
+    if focused and (named_scopes or expiry_dates):
+        raise ValueError("Focused chart research keeps its recorded scope; choose the saved chart context instead")
     if expiry_dates:
         expiry = date.fromisoformat(expiry_dates[0]).isoformat()
         horizon, question_scope = "all", {"selected_expiry": expiry}
@@ -413,7 +459,8 @@ def request_spec(body):
         screen=screen,
         context_conflict=bool(screen.get("ticker") and screen["ticker"] not in tickers),
         question_scope=question_scope,
-        price_only=baseline is None and mode not in {"replay", "range-replay"} and is_price_lookup(question, tickers),
+        price_only=True if focused else baseline is None and mode not in {"replay", "range-replay"} and is_price_lookup(question, tickers),
+        **({"chart_context": chart_context} if focused else {}),
         **parent_fields,
         **baseline_fields,
     )

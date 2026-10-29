@@ -99,7 +99,7 @@ EXCLUDED_FROM_CONTENT = ("record_id", "content_digest", "persistence")
 
 
 def canonical_content(envelope: dict[str, Any]) -> dict[str, Any]:
-    """Canonical content projection (rga-content.v2) — the digest subject."""
+    """Canonical content projection (rga-content.v3) — the digest subject."""
     if not isinstance(envelope, dict):
         return {}
     return {k: envelope.get(k) for k in _CONTENT_KEYS}
@@ -729,7 +729,7 @@ def build_range_envelope(
                               "reason": "RANGE_RECORD_REFERENCE_ONLY"},
     }
 
-    # Owning record identity (rga-content.v2): the digest covers the FULL
+    # Owning record identity (rga-content.v3): the digest covers the FULL
     # canonical evidence content — axes/cells/metric identity+populations/
     # clocks/coverage/provenance/synthetic/query/status — with transport and
     # storage fields explicitly excluded. Recomputed on write and replay.

@@ -1,5 +1,6 @@
 import React from 'react';
 import { act, render, screen } from '@testing-library/react';
+import { openStockPanel } from '../../../../testUtils/openStockPanel';
 import { createPanes, focusPane, shouldEcho, priceLinked, syncState, applyResult, LINK_DIMS, LAYOUT_PRESETS, invalidateAll, resizePanes, resolveSync, panesReducer } from '../chartReducer';
 
 // Bare factory + per-test re-arm (durable pattern for this CRA setup).
@@ -85,7 +86,8 @@ test('B11 mounted: the pane manager renders real panes, real layouts and real fo
   await act(async () => { screen.getByTestId('layout-three').click(); });
   expect(screen.getAllByTestId('price-node-history')).toHaveLength(3);
   expect(screen.getByTestId('pane-layout')).toHaveAttribute('data-layout', 'three');
-  // Each real pane keeps its own controls — three charts, three Reload buttons.
+  // Each real pane keeps its own controls — three charts, three Data tabs, three Reload buttons.
+  await act(async () => { document.querySelectorAll("[data-testid='price-node-history']").forEach(pane => openStockPanel('data', pane)); });
   expect(screen.getAllByRole('button', { name: 'Reload history' })).toHaveLength(3);
   expect(screen.getByTestId('pane-count').textContent).toContain('3 panes');
   // Focus moves between real panes.
@@ -102,4 +104,42 @@ test('B11 mounted: the pane manager renders real panes, real layouts and real fo
   const css = fs.readFileSync(path.join(__dirname, '..', 'ChartWorkspace.css'), 'utf8');
   expect(css).toMatch(/@media \(max-width: 620px\)/);
   expect(css).toMatch(/pane-count-2, \.pane-layout\.pane-count-3 \{ grid-template-columns: minmax\(0, 1fr\); \}/);
+});
+
+test('R21-06: the FOCUSED pane requests and renders its OWN symbol, not the global ticker', async () => {
+  const axios = require('axios');
+  const requested = [];
+  axios.get.mockImplementation(async url => {
+    const ticker = String(url).match(/price-history\/([A-Z]+)/)?.[1] ?? 'SPY';
+    requested.push(ticker);
+    return { data: { ticker, query_key: '', frames: [{ time: '2026-10-06T14:00:00Z', open: 100, high: 102, low: 99, close: 101 }], candles_with_recorded_nodes: 1, node_status: 'available' } };
+  });
+  const { act: act2, render: render2, screen: screen2 } = require('@testing-library/react');
+  const React2 = require('react');
+  const W2 = require('../ChartWorkspace').default;
+  window.__FLOWW_CHART_WORKSPACE__ = true;
+  try {
+    // Seed a durable split composition SPY+QQQ (B12 restore path).
+    window.localStorage.setItem('floww.chart.layout.workspace-current', JSON.stringify({
+      schema_version: 1, showGrid: false, opacity: 0, drawings: [],
+      layoutId: 'split', symbols: ['SPY', 'QQQ'], focusedIndex: 0,
+    }));
+    render2(<W2 ticker="SPY" open useNew />);
+    await act2(async () => { await new Promise(r => setTimeout(r, 300)); });
+    const before = requested.length;
+    // Focus the QQQ pane: the FOCUSED pane must render and REQUEST QQQ — the
+    // old code rendered the global SPY ticker on every focused pane.
+    await act2(async () => { screen2.getByTestId('focus-pane-1').click(); });
+    await act2(async () => { await new Promise(r => setTimeout(r, 300)); });
+    const afterFocus = requested.slice(before);
+    // The focused pane KEEPS its own symbol: no SPY refetch fires when a
+    // foreign-symbol pane gains focus (the old code re-rendered the focused
+    // pane with the GLOBAL ticker and refetched SPY onto it).
+    expect(afterFocus).not.toContain('SPY');
+    // Both panes still render their own symbols.
+    const panes = screen2.getAllByTestId('price-node-history');
+    expect(panes).toHaveLength(2);
+    const symbols = panes.map(p => p.querySelector('.price-chart-symbol')?.textContent);
+    expect(symbols.filter(Boolean).sort()).toEqual(['QQQ', 'SPY']);
+  } finally { window.__FLOWW_CHART_WORKSPACE__ = false; }
 });
