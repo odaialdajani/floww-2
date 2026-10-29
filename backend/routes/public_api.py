@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import asdict, is_dataclass
+from datetime import date
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
@@ -49,6 +50,7 @@ from services.public_api_adapter import (
     compute_technical_from_bars,
     fetch_bars_by_interval,
     fetch_bars_from_public_api,
+    fetch_chain_for_expiries,
     fetch_chain_from_public_api,
     fetch_history_from_public_api,
     fetch_quotes_from_public_api,
@@ -73,6 +75,20 @@ def _jsonable(value: Any) -> Any:
     return value
 
 
+async def _chain_for_scope(ticker: str, expiration: str | None, expirations: int):
+    if expiration is None:
+        return await fetch_chain_from_public_api(ticker.upper(), max_expiries=expirations)
+    try:
+        parsed = date.fromisoformat(expiration)
+        if parsed.isoformat() != expiration:
+            raise ValueError("Noncanonical date")
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="expiration must be an actual YYYY-MM-DD date") from exc
+    # An explicit selected date owns its fetch and cache identity. Fetching a
+    # first-N slice before filtering can silently omit a date we just listed.
+    return await fetch_chain_for_expiries(ticker.upper(), [expiration])
+
+
 @router.get("/chain/{ticker}/exposure-by-strike")
 async def get_chain_exposure_by_strike(
     ticker: str,
@@ -87,7 +103,7 @@ async def get_chain_exposure_by_strike(
     partial stays labeled — a consumer must not treat a partial subtotal
     as complete. No order, approval, or execution surface anywhere here.
     """
-    result = await fetch_chain_from_public_api(ticker.upper(), max_expiries=expirations)
+    result = await _chain_for_scope(ticker, expiration, expirations)
     if result is None:
         raise HTTPException(
             status_code=502,
@@ -115,7 +131,7 @@ async def get_public_chain(
     Uses PUBLIC_API_KEY to authenticate against the Public.com Trading API.
     Returns the same shape as /api/chain but with data_source="public_api".
     """
-    result = await fetch_chain_from_public_api(ticker.upper(), max_expiries=expirations)
+    result = await _chain_for_scope(ticker, expiration, expirations)
     if result is None:
         raise HTTPException(
             status_code=502,
@@ -158,6 +174,7 @@ async def get_public_chain(
         "stale": result.get("stale", False),
         "contracts": result.get("contracts", []),
         "exposure_by_strike": series,
+        **{key: exposure_payload.get(key) for key in ("requested_expiries", "skipped")},
         **{key: result.get(key) for key in ("event_time", "fetched_at", "spot_source", "spot_event_time", "spot_fetched_at", "cache_age_s")},
     }
 

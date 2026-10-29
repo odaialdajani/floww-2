@@ -17979,6 +17979,18 @@
               "title": "Expirations",
               "type": "integer"
             }
+          },
+          {
+            "description": "Read vendor expiry dates without fetching contract chains",
+            "in": "query",
+            "name": "listing_only",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Read vendor expiry dates without fetching contract chains",
+              "title": "Listing Only",
+              "type": "boolean"
+            }
           }
         ],
         "responses": {

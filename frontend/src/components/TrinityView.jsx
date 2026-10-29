@@ -239,6 +239,7 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
   };
   const genRef = useRef(0);
   const mountedRef = useRef(true);
+  const lastReadKey = useRef(null);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -249,12 +250,17 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
   useEffect(() => {
     const myGen = ++genRef.current;
     const ctrl = new AbortController();
+    const readKey = JSON.stringify([ticker, scope, replayId]);
+    const keepPrevious = !replayId && lastReadKey.current === readKey;
+    lastReadKey.current = readKey;
     setLoading(true);
     setError(null);
-    setPayload(null);
-    setWallId(ticker === handoff?.ticker ? handoff.wall_id || null : null);
-    setCell(null);
-    setDrawerOpen(false);
+    if (!keepPrevious) {
+      setPayload(null);
+      setWallId(ticker === handoff?.ticker ? handoff.wall_id || null : null);
+      setCell(null);
+      setDrawerOpen(false);
+    }
     const dteQuery = scope === "0dte" ? "&dte=0" : scope === "week" ? "&dte=7" : scope === "next" ? "&expiry_scope=next" : "";
     const url = replayId ? `${API}/solstice/replay/${encodeURIComponent(replayId)}` : `${API}/heatmap/${encodeURIComponent(ticker)}?mode=day&expiries=4${dteQuery}`;
     axios
@@ -465,7 +471,7 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
       </div></div>
     );
   }
-  if ((error || !payload) && !loading) {
+  if (!payload && !loading) {
     return (
       <div className="trinity-layout">{replayControls}<div className="trinity-error" data-testid="triad-error">
         <span>⚠</span> {isSPX
@@ -535,6 +541,11 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
             </details>
           </div>
           <div className="tdk-head-group">
+            <button type="button" className="tdk-head-toggle" aria-label="Refresh Market reading"
+              disabled={loading || isReplay} onClick={() => setLiveReload(value => value + 1)}
+              title={isReplay ? "Recorded observations stay fixed. Leave replay before requesting a current reading." : "Read this stock and expiry scope again. No automatic provider polling."}>
+              {loading ? "Refreshing…" : "Refresh"}
+            </button>
             <button type="button" className="tdk-head-toggle" data-testid="triad-pair-center"
               onClick={centerPair} title="Center both maps on the current price (synchronized)">
               Center
@@ -565,6 +576,8 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
           <div className="triad-mobile-switch"><button onClick={() => setMobilePane("raw")}>Raw</button><button onClick={() => setMobilePane("adjusted")}>Adjusted</button></div>
         </div>
         <div className="tdk-head-sub">
+          {loading && payload && <span role="status" aria-label="Market refresh status">Refreshing reading · previous snapshot remains displayed.</span>}
+          {error && payload && <span role="alert">Refresh failed: {error}. Previous snapshot remains displayed; use Refresh to retry.</span>}
           {/* Actual loaded expiry dates (2026-10-18): the displayed raw axis,
               validated display-only. Missing or unreadable dates stay honest;
               an excluded invalid value is declared, never claimed complete. */}

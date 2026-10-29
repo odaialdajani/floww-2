@@ -6,7 +6,7 @@ import TriadChainTable, { admitContracts, ContractClocks } from "./TriadChainTab
 import './WallDesk.css';
 
 const expiriesUrl = ticker =>
-  `${API}/solstice/price-paths/expiries?ticker=${encodeURIComponent(ticker)}&min_dte=0&max_dte=7&expirations=12`;
+  `${API}/solstice/price-paths/expiries?ticker=${encodeURIComponent(ticker)}&min_dte=0&max_dte=7&expirations=12&listing_only=true`;
 const chainUrl = (ticker, expiry) =>
   `${API}/public/chain/${encodeURIComponent(ticker)}?expiration=${encodeURIComponent(expiry)}&expirations=4`;
 const finite = value => typeof value === 'number' && Number.isFinite(value);
@@ -74,6 +74,9 @@ export default function TriadDesk({ ticker }) {
         && (scope === '0dte' ? row.dte === 0 : row.dte > 0))
         .sort((a, b) => a.dte - b.dte || a.expiry.localeCompare(b.expiry));
       const picked = candidates[0];
+      if (!picked && listed.expiries.some(row => row?.reason === 'UNPARSEABLE_EXPIRY')) {
+        throw new Error('Expiry listing contains invalid dates; this scope cannot be verified.');
+      }
       if (!picked) return { status: 'empty', note: scope === '0dte'
         ? ticker.startsWith('^') ? 'Index-option entitlement and the actual listed series need verification.'
           : 'No same-day series listed for this symbol in this window.'
@@ -84,6 +87,8 @@ export default function TriadDesk({ ticker }) {
         || !Array.isArray(body.expiries) || body.expiries.some(date => date !== picked.expiry)) {
         throw new Error('Chain response does not identify the requested symbol and expiry.');
       }
+      if (body.contracts.length === 0) return { status: 'empty', expiry: picked.expiry, dte: picked.dte,
+        note: `The selected ${picked.expiry} series returned no usable contracts. A listed date does not prove chain availability.` };
       return { status: 'ready', expiry: picked.expiry, dte: picked.dte, chain: body };
     };
     Promise.race([load(), deadline]).then(value => {
@@ -133,6 +138,7 @@ export default function TriadDesk({ ticker }) {
       <strong>{ticker}</strong><span className="mono">{spot != null ? `Spot ${spot.toFixed(2)}` : 'Spot unknown'}</span>
       <button type="button" aria-pressed={scope === '0dte'} onClick={() => switchScope('0dte')}>0DTE</button>
       <button type="button" aria-pressed={scope === 'next'} onClick={() => switchScope('next')}>Next listed</button>
+      <button type="button" onClick={() => setAttempt(n => n + 1)} disabled={!reading || reading.status === 'loading-chain'}>Refresh wall desk</button>
       <small>{expiry ? `${expiry} · ${reading.dte} DTE · ${reading.status === 'ready' ? 'loaded scope' : 'chain pending'}` : 'no expiry selected'}</small>
     </div>
     <p className="chart-caption">Listed window: 0–7 days · next listed means the earliest admitted future date returned in this window. Listing coverage may be limited.</p>

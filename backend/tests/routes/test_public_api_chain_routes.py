@@ -23,9 +23,9 @@ CHAIN = {
 
 def test_public_chain_filters_requested_expiration() -> None:
     with patch(
-        "routes.public_api.fetch_chain_from_public_api",
+        "routes.public_api.fetch_chain_for_expiries",
         new=AsyncMock(return_value=CHAIN.copy()),
-    ):
+    ) as exact:
         response = client.get("/api/public/chain/SPY?expiration=2026-09-18")
 
     assert response.status_code == 200
@@ -33,6 +33,25 @@ def test_public_chain_filters_requested_expiration() -> None:
     assert body["expiries"] == ["2026-09-18"]
     assert body["n_contracts"] == 1
     assert body["contracts"][0]["expiry"] == "2026-09-18"
+    exact.assert_awaited_once_with("SPY", ["2026-09-18"])
+
+
+def test_public_chain_exact_date_does_not_walk_first_four() -> None:
+    with patch("routes.public_api.fetch_chain_for_expiries", create=True,
+               new=AsyncMock(return_value=CHAIN.copy())) as exact, \
+         patch("routes.public_api.fetch_chain_from_public_api",
+               new=AsyncMock(side_effect=AssertionError("first-N fetch"))):
+        response = client.get("/api/public/chain/SPY?expiration=2026-10-16&expirations=4")
+    assert response.status_code == 200
+    exact.assert_awaited_once_with("SPY", ["2026-10-16"])
+    assert response.json()["expiries"] == ["2026-10-16"]
+
+
+def test_public_chain_invalid_calendar_date_refuses_before_provider() -> None:
+    with patch("routes.public_api.fetch_chain_from_public_api", new=AsyncMock()) as first:
+        response = client.get("/api/public/chain/SPY?expiration=2026-02-30")
+    assert response.status_code == 422
+    first.assert_not_awaited()
 
 
 def test_public_chain_rejects_invalid_expiration_count() -> None:

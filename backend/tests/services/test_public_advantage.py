@@ -917,6 +917,25 @@ async def test_public_sweep_loop_kill_switch_and_shutdown():
 
 # ── B4 honest budget: acquire_n + per-ticker debit + adaptive trim ──
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("configured", [None, "malformed"])
+async def test_public_sweep_default_gives_interactive_reads_room(monkeypatch, caplog, configured):
+    import server as srv
+
+    monkeypatch.setenv("FLOWW_PUBLIC_SWEEP", "1")
+    if configured is None:
+        monkeypatch.delenv("FLOWW_PUBLIC_SWEEP_RTH_S", raising=False)
+    else:
+        monkeypatch.setenv("FLOWW_PUBLIC_SWEEP_RTH_S", configured)
+    srv._shutdown_event.set()
+    try:
+        with caplog.at_level("INFO"):
+            await srv._public_sweep_loop()
+    finally:
+        srv._shutdown_event.clear()
+    assert "rth=45.0s" in caplog.text
+
+
 def test_acquire_n_atomic_no_partial_spend():
     from services.public_budget import BudgetExhausted, PublicBudget
 
