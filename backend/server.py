@@ -3638,12 +3638,12 @@ async def _public_sweep_loop():
         log.info("public sweep disabled (FLOWW_PUBLIC_SWEEP=0)")
         return
     try:
-        rth_s = float(os.environ.get("FLOWW_PUBLIC_SWEEP_RTH_S", "1"))
+        rth_s = float(os.environ.get("FLOWW_PUBLIC_SWEEP_RTH_S", "45"))
         off_s = float(os.environ.get("FLOWW_PUBLIC_SWEEP_OFFH_S", "600"))
         sl = int(os.environ.get("FLOWW_PUBLIC_SWEEP_SLICE", "12"))
         mx = int(os.environ.get("FLOWW_PUBLIC_SWEEP_MAX_EXPIRES", "2"))
     except (TypeError, ValueError):
-        rth_s, off_s, sl, mx = 1.0, 600.0, 12, 2
+        rth_s, off_s, sl, mx = 45.0, 600.0, 12, 2
     log.info("public sweep loop started (rth=%ss offh=%ss slice=%d expiries=%d)",
              rth_s, off_s, sl, mx)
     # U1 provenance: every future sweep/alert mystery resolves to a process.

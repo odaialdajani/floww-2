@@ -11,6 +11,21 @@ protected Screener implementation. Desktop is the active product scope.
 
 ## Source and delivery
 
+PR141 merged the preserved candidate and repairs into main at
+`657fc1590d3b92223ff217e5f526e7968251727f`. Its four hosted gates passed;
+the strict local offline backend run passed 8,826 tests with 38 skips.
+The normal port-3000 build was independently found to target missing port8002.
+The current continuation repairs Wall desk discovery/exact-date reads and
+Market refresh/age display, then installs an immutable local release with a
+durable separate store. Read `FLOWW-INTEGRATION-STATUS.md` and
+`LOCAL-RUNTIME-INSTALL.json` in the consolidation outputs for actual delivery
+and recovery identity; preparation is not evidence of a running service.
+
+The paragraphs below retain the earlier preview chronology. The Mac rebooted
+again at 14:25 EDT, removing the manual preview; original services came back
+through their existing launcher. Never restart original memory-backed8000
+merely to reconcile a version stamp.
+
 The preserved integration candidate is
 `967ac23b8244d66a971190fefac1e34788b36a4c`, with the current chat's integrated
 repairs on top. Read the current Git HEAD and integration receipt for final
@@ -60,6 +75,16 @@ The launcher is manual and is not a recurring job or login item.
   remain distinct. Counts and coverage are identity-bound and persisted for
   replay; older observations remain unavailable. Leg bars use one magnitude
   scale and never turn a missing leg into zero.
+- Wall desk can list dates without fetching twelve full expiry chains, then
+  fetches the exact selected date. Invalid dates and empty chains remain
+  explicit; legacy expiry-coverage queries keep their existing default.
+- Healthy Market readings have an explicit bounded Refresh action. Pending
+  or failed same-scope refresh retains the identified previous snapshot;
+  replay never substitutes a current read. Snapshot age advances locally
+  without provider requests and is separate from the observation clock.
+- The regular-session sweep default matches its documented45-second cadence,
+  including malformed-setting fallback. This does not alter a running process
+  or activate collection in the separate read workspace.
 
 The earlier repair receipt records 270 frontend suites / 2,748 tests and
 102 affected backend tests. The integration pass adds count/ladder views and

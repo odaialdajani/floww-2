@@ -148,6 +148,33 @@ test('no same-day series renders the empty panel with next-listed action', async
  orderSurfacesUntouched();
 });
 
+test('desk discovers dates without chains and can refresh a healthy exact scope', async () => {
+ mockRoutes();
+ render(<TriadDesk ticker="SPY" />);
+ await screen.findByRole('group', { name: /Signed exposure by strike/ });
+ expect(global.fetch.mock.calls.some(([u]) => String(u).includes('listing_only=true'))).toBe(true);
+ const before = global.fetch.mock.calls.filter(([u]) => String(u).includes('/public/chain/')).length;
+ fireEvent.click(screen.getByRole('button', { name: 'Refresh wall desk' }));
+ await screen.findByRole('group', { name: /Signed exposure by strike/ });
+ expect(global.fetch.mock.calls.filter(([u]) => String(u).includes('/public/chain/'))).toHaveLength(before + 1);
+});
+
+test('an empty selected chain is unavailable instead of ready', async () => {
+ mockRoutes(EXPIRIES, { ...CHAIN, contracts: [], expiries: [] });
+ render(<TriadDesk ticker="SPY" />);
+ await screen.findByText(/returned no usable contracts/);
+ expect(screen.queryByRole('table')).not.toBeInTheDocument();
+});
+
+test('invalid listed dates cannot prove absence of a same-day series', async () => {
+ mockRoutes({ ...EXPIRIES, expiries: [{ expiry: '2026-10-07garbage', admitted: false,
+  dte: null, reason: 'UNPARSEABLE_EXPIRY' }] });
+ render(<TriadDesk ticker="SPY" />);
+ await screen.findByText(/Expiry listing contains invalid dates/);
+ expect(screen.queryByText(/No same-day series listed/)).not.toBeInTheDocument();
+ expect(global.fetch.mock.calls.some(([u]) => String(u).includes('/public/chain/'))).toBe(false);
+});
+
 test('SPX without same-day names the entitlement check explicitly', async () => {
  const no0dte = { ...EXPIRIES, ticker: '^SPX', expiries: [{ expiry: '2026-10-26', dte: 21, admitted: true, reason: null }],
   range_map: { admitted_expiries: ['2026-10-26'] } };

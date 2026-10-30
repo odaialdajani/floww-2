@@ -65,6 +65,7 @@ beforeEach(() => {
   });
   axios.post.mockImplementation(async () => ({ data: { durability: "durable" } }));
 });
+afterEach(() => { jest.useRealTimers(); });
 
 test("shared stock choice removes only the duplicate input, retaining comparison and source limits", async () => {
   await act(async()=>render(<TrinityView ticker="SPY" onFocusTicker={jest.fn()}/>));
@@ -82,6 +83,47 @@ test("standalone market view retains its stock control", async () => {
   await act(async()=>render(<TrinityView/>));
   fireEvent.click(screen.getByRole("button", { name: "Market context" }));
   expect(screen.getByLabelText("Focused symbol")).toBeVisible();
+});
+
+test('a healthy Market reading has a deliberate scope-preserving refresh and no idle provider polling', async () => {
+  jest.useFakeTimers('modern');
+  await act(async () => { render(<TrinityView ticker="SPY" onFocusTicker={jest.fn()} />); });
+  await act(async () => { fireEvent.change(screen.getByLabelText('Market view expiry scope'), { target: { value: 'week' } }); });
+  const previous = axios.get.getMockImplementation();
+  let complete;
+  axios.get.mockImplementation((url, options) => String(url).includes('/heatmap/')
+    ? new Promise(resolve => { complete = resolve; }) : previous(url, options));
+  axios.get.mockClear();
+  const refresh = screen.getByRole('button', { name: 'Refresh Market reading' });
+  await act(async () => { fireEvent.click(refresh); });
+  expect(axios.get.mock.calls.filter(([url]) => String(url).includes('/heatmap/'))).toEqual([
+    ['/api/heatmap/SPY?mode=day&expiries=4&dte=7', expect.objectContaining({ timeout: 45000 })],
+  ]);
+  expect(screen.getByRole('status', { name: 'Market refresh status' })).toHaveTextContent('Refreshing');
+  expect(screen.getByRole('button', { name: 'Refresh Market reading' })).toBeDisabled();
+  // Keep the previous reading on screen while its successor is pending.
+  expect(screen.getByTestId('triad-source')).toHaveTextContent('snap-triad-1');
+  await act(async () => { complete({ data: { ...heatmapFixture(), snapshotId: 'snap-triad-refreshed' } }); });
+  expect(screen.getByTestId('triad-source')).toHaveTextContent('snap-triad-refreshed');
+  expect(screen.getByLabelText('Market view expiry scope')).toHaveValue('week');
+  expect(screen.getByRole('button', { name: 'Refresh Market reading' })).toBeEnabled();
+  const calls = axios.get.mock.calls.length;
+  try {
+    await act(async () => { jest.advanceTimersByTime(60000); });
+    expect(axios.get.mock.calls.length).toBe(calls);
+  } finally { jest.useRealTimers(); }
+});
+
+test('a failed explicit refresh keeps its previous identified reading and offers retry', async () => {
+  await act(async () => { render(<TrinityView ticker="SPY" onFocusTicker={jest.fn()} />); });
+  const previous = axios.get.getMockImplementation();
+  axios.get.mockImplementation((url, options) => String(url).includes('/heatmap/')
+    ? Promise.reject(new Error('Provider read timed out')) : previous(url, options));
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Refresh Market reading' })); });
+  expect(screen.getByTestId('triad-source')).toHaveTextContent('snap-triad-1');
+  expect(screen.getByRole('alert')).toHaveTextContent('Provider read timed out');
+  expect(screen.getByRole('alert')).toHaveTextContent('Previous snapshot remains displayed');
+  expect(screen.getByRole('button', { name: 'Refresh Market reading' })).toBeEnabled();
 });
 
 test('comparison maps precede optional exposure profile in the desktop reading order', async () => {
@@ -235,6 +277,7 @@ test("loaded dates follow the recorded snapshot during replay, never live", asyn
   expect(line).not.toContain("2026-10-02"); // the live axis is never substituted
   // Replaying a stored snapshot must not read live providers.
   expect(axios.get.mock.calls.filter(([url]) => String(url).includes("/heatmap/")).length).toBe(1);
+  expect(screen.getByRole('button', { name: 'Refresh Market reading' })).toBeDisabled();
 });
 
 // Loaded-expiry honesty (2026-10-18): the line mirrors the displayed raw

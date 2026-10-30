@@ -6,7 +6,7 @@
 // only LIVE/REPLAY, quality, and the honest observation age. Every exact
 // field stays reachable; freshness is NEVER invented.
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import MarketObservationLine from '../../../triad/MarketObservationLine';
 
@@ -77,4 +77,30 @@ test('age formatting is honest at the boundaries; replay keeps its identity', ()
 test('an unparseable asof renders no age either — the same honesty rule', () => {
   render(<MarketObservationLine replay={false} data={{ asof: 'not-a-clock' }} quality={{ state: 'verified' }} now={() => NOW} />);
   expect(screen.getByTestId('triad-observation-line').textContent).not.toMatch(/ago/);
+});
+
+test('an idle displayed reading ages without a parent render or a provider request', () => {
+  jest.useFakeTimers('modern');
+  jest.setSystemTime(NOW);
+  const view = render(<MarketObservationLine replay={false}
+    data={{ snapshotId: 'snap-idle', asof: '2026-10-26T13:59:40Z' }} quality={{ state: 'usable' }} />);
+  try {
+    expect(screen.getByTestId('triad-observation-line')).toHaveTextContent('20s ago');
+    act(() => { jest.advanceTimersByTime(45000); });
+    expect(screen.getByTestId('triad-observation-line')).toHaveTextContent('1m ago');
+    expect(screen.getByTestId('triad-observation-line')).toHaveTextContent('snapshot age');
+    expect(screen.getByTestId('triad-observation-line').textContent).not.toMatch(/observed/);
+    view.unmount();
+    expect(jest.getTimerCount()).toBe(0);
+  } finally {
+    view.unmount();
+    jest.useRealTimers();
+  }
+});
+
+test('a future generation clock is disclosed rather than presented as a fresh zero-second observation', () => {
+  render(<MarketObservationLine replay={false}
+    data={{ snapshotId: 'snap-future', asof: '2026-10-26T14:01:00Z' }} quality={{ state: 'usable' }} now={() => NOW} />);
+  expect(screen.getByTestId('triad-observation-line')).toHaveTextContent('snapshot clock ahead');
+  expect(screen.getByTestId('triad-observation-line').textContent).not.toMatch(/0s ago/);
 });

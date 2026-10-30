@@ -209,6 +209,7 @@ async def price_path_expiries(
     min_dte: int = Query(14, ge=0, le=730, description="Admitted window lower bound (DTE)"),
     max_dte: int = Query(60, ge=0, le=730, description="Admitted window upper bound (DTE)"),
     expirations: int = Query(12, ge=1, le=16, description="Listed expirations requested"),
+    listing_only: bool = Query(False, description="Read vendor expiry dates without fetching contract chains"),
 ) -> dict[str, Any]:
     """Admitted expiry-range query over listed expirations (R17-2).
 
@@ -227,7 +228,7 @@ async def price_path_expiries(
     admit; anything else names its reason. 0DTE is kept by the chain with
     exact T but falls BELOW_WINDOW here (the display envelope keeps it).
     """
-    from services.public_api_adapter import fetch_chain_from_public_api
+    from services.public_api_adapter import fetch_chain_from_public_api, fetch_option_expiry_listing
 
     if min_dte > max_dte:
         # Structured JSONResponse, not HTTPException: the app's global handler
@@ -239,7 +240,10 @@ async def price_path_expiries(
                        "no expiry can satisfy a reversed window.",
             "version": COVERAGE_VERSION,
         })
-    result = await fetch_chain_from_public_api(ticker.upper(), max_expiries=expirations)
+    if listing_only is True:
+        result = await fetch_option_expiry_listing(ticker.upper())
+    else:
+        result = await fetch_chain_from_public_api(ticker.upper(), max_expiries=expirations)
     if result is None:
         # Structured JSONResponse (same reason as the reversed refusal): the
         # global handler stringifies dict details; the 502 body stays
@@ -255,6 +259,8 @@ async def price_path_expiries(
     for exp in result.get("expiries", []) or []:
         try:
             exp_date = datetime.strptime(str(exp)[:10], "%Y-%m-%d").date()
+            if listing_only is True and exp_date.isoformat() != exp:
+                raise ValueError("Noncanonical listed date")
         except (TypeError, ValueError):
             rows.append({"expiry": str(exp), "dte": None, "admitted": False,
                          "reason": "UNPARSEABLE_EXPIRY", "display_envelope": False})
@@ -278,8 +284,9 @@ async def price_path_expiries(
         r["dte"] is not None and r["dte"] < min_dte for r in rows)
     upper_observed = any(
         r["dte"] is not None and r["dte"] > max_dte for r in rows)
-    capped = len(rows) >= expirations
-    complete = (not capped) or (lower_observed and upper_observed)
+    capped = bool(result.get("listing_capped", True)) if listing_only is True else len(rows) >= expirations
+    invalid_listing = listing_only is True and any(r["reason"] == "UNPARSEABLE_EXPIRY" for r in rows)
+    complete = not invalid_listing and ((not capped) or (lower_observed and upper_observed))
     return {"version": COVERAGE_VERSION, "ticker": ticker.upper(),
             "window": {"min_dte": min_dte, "max_dte": max_dte},
             "expiries": rows, "n_admitted": len(admitted),
@@ -299,7 +306,7 @@ async def price_path_expiries(
                 "min_admitted_dte": admitted[0]["dte"] if admitted else None,
                 "max_admitted_dte": admitted[-1]["dte"] if admitted else None,
                 "complete": complete,
-                "reason": None if complete else "LISTING_CAPPED_WINDOW_MAY_EXTEND",
+                "reason": "INVALID_LISTED_DATES" if invalid_listing else None if complete else "LISTING_CAPPED_WINDOW_MAY_EXTEND",
             },
             "spot": result.get("spot"), "fetched_at": result.get("fetched_at"),
             "stale": bool(result.get("stale", False)), "data_source": "public_api"}

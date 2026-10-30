@@ -74,8 +74,10 @@ async def test_public_chain_enriches_without_mutating_cache(monkeypatch):
     from routes import public_api
     raw = {'spot': 100, 'contracts': [dict(type='call',strike=102.5,expiry='2026-10-16',T=30/365,iv=.2,gamma=.01,oi=10)], 'expiries':['2026-10-16']}
     before = deepcopy(raw)
-    monkeypatch.setattr(public_api,'fetch_chain_from_public_api', AsyncMock(return_value=raw))
+    exact = AsyncMock(return_value=raw)
+    monkeypatch.setattr(public_api,'fetch_chain_for_expiries', exact)
     result = await public_api.get_public_chain('SPY', expiration='2026-10-16', expirations=4)
+    exact.assert_awaited_once_with('SPY', ['2026-10-16'])
     row = result['contracts'][0]
     assert row['gex'] == 1000
     assert row['vanna'] != 0 and row['charm'] != 0
