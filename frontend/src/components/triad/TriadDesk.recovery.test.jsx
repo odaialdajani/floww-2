@@ -111,7 +111,7 @@ test('strike focus requires a separate explicit exact-side contract choice; miss
   routes(); render(<TriadDesk ticker="SPY" />);
   await screen.findByRole('table');
   fireEvent.click(screen.getByRole('button', { name: 'Review strike 100' }));
-  const review = screen.getByRole('complementary', { name: 'Triad wall review' });
+  const review = screen.getByRole('complementary', { name: 'Strike focus and contract review' });
   expect(within(review).getByText(/No contract selected/)).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Review put SPY261019P00100000' }));
   expect(within(review).getByText(/SPY261019P00100000/)).toBeInTheDocument();

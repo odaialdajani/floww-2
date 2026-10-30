@@ -2,8 +2,8 @@ import React, { useState, useEffect } from "react";
 
 const SHORTCUTS = [
   { category: "Navigation", items: [
-    { key: "1", desc: "Triad view" },
-    { key: "2", desc: "Solstice" },
+    { key: "1", desc: "Market view" },
+    { key: "2", desc: "Stock chart" },
     { key: "3", desc: "Portfolio" },
     { key: "4 / J", desc: "Trade Journal" },
     { key: "↑/↓", desc: "Cycle tickers" },

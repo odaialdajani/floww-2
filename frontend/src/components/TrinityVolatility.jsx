@@ -43,7 +43,7 @@ class ErrorBoundary extends React.Component {
   render() {
     if (this.state.hasError) return (
       <div style={{color:'#ff6b6b', padding:'20px', fontFamily:'monospace'}}>
-        Triad component error: {this.state.error?.message}
+        Market view component error: {this.state.error?.message}
       </div>
     );
     return this.props.children;

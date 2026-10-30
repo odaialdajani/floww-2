@@ -169,7 +169,7 @@ test('handoff trace attaches wall context and declares the owner unselected',asy
  await screen.findByRole('grid');
  expect(screen.getByText(/No cell selected — nothing attached/)).toBeInTheDocument();
  fireEvent.click(screen.getByRole('button',{name:/^590 · 2026-10-26/}));
- expect(screen.getByText(/Wall context attached · SPY · 590 USD · 2026-10-26/)).toBeInTheDocument();
+ expect(screen.getByText(/Range cell attached · SPY · 590 USD · 2026-10-26/)).toBeInTheDocument();
  expect(screen.getByText(new RegExp(`Record ${complete.record_id}.*received`))).toBeInTheDocument();
  expect(screen.getByText(/Execution owner: unselected/)).toBeInTheDocument();
 });

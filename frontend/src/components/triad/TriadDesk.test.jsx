@@ -120,6 +120,8 @@ test.each(['missing', 'version', 'ticker', 'receipt', 'expiry'])(
   render(<TriadDesk ticker="SPY" />);
   await screen.findByText(/Admitted exposure unavailable/);
   expect(screen.queryByRole('group', { name: /Signed exposure by strike/ })).not.toBeInTheDocument();
+  // A colour legend without an admitted series implies a chart that is not there.
+  expect(screen.queryByText(/Gold positive/)).not.toBeInTheDocument();
   expect(screen.getByRole('table')).toBeInTheDocument();
   orderSurfacesUntouched();
   await act(drain);
@@ -130,10 +132,22 @@ test('0DTE desk renders exposure, chain and rail with zero order-surface calls',
  const { container } = render(<TriadDesk ticker="SPY" />);
  await screen.findByRole('group', { name: /Signed exposure by strike/ });
  expect(screen.getAllByText('Spot 779.09')).toHaveLength(2);
+ expect(screen.getByText(/Gold positive/)).toBeInTheDocument();
  expect(screen.getByRole('table')).toBeInTheDocument();
  expect(screen.getByText(/Contract: RANGE_CONTRACT_UNAVAILABLE|Selected contract/)).toBeInTheDocument();
  expect(container.querySelectorAll('g[data-action="cell"]').length).toBeGreaterThan(0);
  orderSurfacesUntouched();
+});
+
+test('wall desk exposes no legacy codenames in user-facing text or accessible names', async () => {
+ mockRoutes();
+ const { container } = render(<TriadDesk ticker="SPY" />);
+ await screen.findByRole('group', { name: /Signed exposure by strike/ });
+ expect(container.textContent).not.toMatch(/Triad|Solstice/);
+ expect(screen.getByRole('region', { name: 'Wall desk' })).toBeInTheDocument();
+ expect(screen.getByRole('complementary', { name: 'Strike focus and contract review' })).toBeInTheDocument();
+ expect(screen.getByRole('button', { name: 'Copy wall desk context' })).toBeInTheDocument();
+ await act(drain);
 });
 
 test('no same-day series renders the empty panel with next-listed action', async () => {
@@ -187,7 +201,7 @@ test('SPX without same-day names the entitlement check explicitly', async () => 
 test('chain failure is an honest error, never a crash or fabrication', async () => {
  global.fetch = jest.fn(async url => String(url).includes('expiries') ? ok(EXPIRIES) : Promise.reject(new Error('down')));
  render(<TriadDesk ticker="SPY" />);
- await screen.findByText(/Triad scope unavailable/);
+ await screen.findByText(/Wall desk scope unavailable/);
  expect(screen.queryByRole('group', { name: /Signed exposure/ })).not.toBeInTheDocument();
  orderSurfacesUntouched();
  await act(drain);
@@ -198,8 +212,8 @@ test('chain Review selects the strike and the rail shows measured vs unknown tru
  render(<TriadDesk ticker="SPY" />);
  await screen.findByRole('group', { name: /Signed exposure by strike/ });
  fireEvent.click(screen.getByRole('button', { name: 'Review strike 780' }));
- expect(await screen.findByText(/Wall context attached · SPY · 780 · 2026-10-07/)).toBeInTheDocument();
- const review = screen.getByRole('complementary', { name: 'Triad wall review' });
+ expect(await screen.findByText(/Strike focus attached · SPY · 780 · 2026-10-07/)).toBeInTheDocument();
+ const review = screen.getByRole('complementary', { name: 'Strike focus and contract review' });
  expect(within(review).getByText(/No contract selected/)).toBeInTheDocument();
  fireEvent.click(screen.getByRole('button', { name: 'Review call SPY261007C00780000' }));
  expect(within(review).getByText(/SPY261007C00780000/)).toBeInTheDocument();
@@ -215,7 +229,7 @@ test('copy triad context writes the frozen scope and failure surfaces status', a
  mockRoutes();
  render(<TriadDesk ticker="SPY" />);
  await screen.findByRole('group', { name: /Signed exposure by strike/ });
- fireEvent.click(screen.getByRole('button', { name: 'Copy Triad context' }));
+ fireEvent.click(screen.getByRole('button', { name: 'Copy wall desk context' }));
  await screen.findByText('Context copied.');
  const payload = JSON.parse(written[0]);
  expect(payload).toMatchObject({ kind: 'triad-context', ticker: 'SPY', scope: '0dte', expiry: '2026-10-07' });
