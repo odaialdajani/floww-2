@@ -72,3 +72,34 @@ async def test_reports_stay_local_when_the_research_agent_is_not_deployed(monkey
                                   (b"x-forwarded-for", b"127.0.0.1")]))
     assert proxied.value.status_code == 403
     store.close()
+
+
+@pytest.mark.asyncio
+async def test_mutating_report_passes_the_shared_auth_dependency_without_the_agent(monkeypatch):
+    """The live app gates POSTs in verify_api_key; that gate must not need the agent."""
+    from fastapi import HTTPException
+    from starlette.requests import Request
+
+    from auth import verify_api_key
+
+    monkeypatch.delenv("FLOWW_AGENT_DEPLOYMENT", raising=False)
+    monkeypatch.delenv("FLOWW_AGENT_ORIGINS", raising=False)
+
+    def request(headers=None):
+        return Request({
+            "type": "http", "method": "POST", "path": "/api/diagnostics/events",
+            "headers": headers or [(b"host", b"127.0.0.1:8213"),
+                                   (b"origin", b"http://127.0.0.1:3000")],
+            "client": ("127.0.0.1", 1234), "query_string": b"",
+        })
+
+    assert await verify_api_key(request()) is True
+    for headers in (
+        [(b"host", b"127.0.0.1:8213")],
+        [(b"host", b"127.0.0.1:8213"), (b"origin", b"http://other.example")],
+        [(b"host", b"127.0.0.1:8213"), (b"origin", b"http://127.0.0.1:3000"),
+         (b"x-forwarded-for", b"127.0.0.1")],
+    ):
+        with pytest.raises(HTTPException) as refused:
+            await verify_api_key(request(headers))
+        assert refused.value.status_code == 403

@@ -99,8 +99,11 @@ async def verify_api_key(request: Request):
         return True
 
     if request.method == "POST" and request.url.path == "/api/diagnostics/events":
-        from services.agent.local_access import require_local
-        require_local(request)
+        # Problem reporting is local reporting, not research: it must work in a
+        # read-only workspace where the agent is switched off. The same-origin
+        # and loopback rules are unchanged.
+        from services.agent.local_access import require_loopback
+        require_loopback(request)
         return True
 
     if request.method == "POST" and re.fullmatch(r"/api/related/[A-Z][A-Z0-9.\-]{0,11}/warm", request.url.path):
