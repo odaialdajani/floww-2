@@ -133,15 +133,15 @@ def test_chain_carries_series_from_same_raw_snapshot_before_row_filtering(monkey
               "fetched_at": "2026-10-07T14:00:00Z", "expiries": [EXP]}
     calls = []
 
-    async def fake_fetch(ticker, max_expiries=4):
-        calls.append(ticker)
+    async def fake_fetch(ticker, expiry_dates):
+        calls.append((ticker, expiry_dates))
         return source
 
-    monkeypatch.setattr(api, "fetch_chain_from_public_api", fake_fetch)
+    monkeypatch.setattr(api, "fetch_chain_for_expiries", fake_fetch)
     app = FastAPI()
     app.include_router(api.router)
     body = TestClient(app).get(f"/api/public/chain/SPY?expiration={EXP}").json()
-    assert calls == ["SPY"]
+    assert calls == [("SPY", [EXP])]
     series = body["exposure_by_strike"]
     assert series["fetched_at"] == body["fetched_at"] == source["fetched_at"]
     assert by_strike(series)[780]["n_total"] == 2

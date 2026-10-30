@@ -918,8 +918,8 @@ export default function App() {
                   </div>
                 </div>
 
-                {!heatmapReplay && !analyticalRangeOpen && <Movers onPick={(t) => setTicker(t)} />}
-                {!heatmapReplay && !analyticalRangeOpen && <SolsticeLeaderboard onPick={setTicker} dte={dte} />}
+                {showLeftSidebar && !heatmapReplay && !analyticalRangeOpen && <Movers onPick={(t) => setTicker(t)} />}
+                {showLeftSidebar && !heatmapReplay && !analyticalRangeOpen && <SolsticeLeaderboard onPick={setTicker} dte={dte} />}
                 <HistoryPanel ticker={ticker} />
                 <SettingsPanel
                   refreshMs={refreshMs}
