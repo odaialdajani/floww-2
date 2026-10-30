@@ -445,7 +445,7 @@ async def related_ticker_snapshot(
 
 @router.post("/{ticker}/warm")
 async def related_ticker_warm(ticker: str, body: WarmRequest, request: Request):
-    from services.agent.local_access import require_local
+    from services.agent.local_access import require_loopback
 
-    require_local(request)
+    require_loopback(request)
     return await warm_snapshot(ticker, **body.model_dump(), disconnected=request.is_disconnected)
