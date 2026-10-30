@@ -31,7 +31,7 @@ test.each(['Movers', 'SolsticeLeaderboard'])('%s starts only when its owning rai
   const startRead = jest.fn();
   const stopRead = jest.fn();
   function Reader() { useEffect(() => { startRead(); return stopRead; }, []); return null; }
-  const env = { [name]: Reader, showLeftSidebar: false, heatmapReplay: false,
+  const env = { [name]: Reader, showLeftSidebar: false, tabletRail: false, heatmapReplay: false,
     analyticalRangeOpen: false, setTicker: jest.fn(), dte: null };
   const { rerender } = render(actualReader(name, env));
   expect(startRead).not.toHaveBeenCalled();
@@ -39,4 +39,12 @@ test.each(['Movers', 'SolsticeLeaderboard'])('%s starts only when its owning rai
   expect(startRead).toHaveBeenCalledTimes(1);
   rerender(actualReader(name, env));
   expect(stopRead).toHaveBeenCalledTimes(1);
+});
+
+test.each(['Movers', 'SolsticeLeaderboard'])('%s starts when the tablet column is the open rail', name => {
+  const startRead = jest.fn();
+  function Reader() { useEffect(() => { startRead(); }, []); return null; }
+  render(actualReader(name, { [name]: Reader, showLeftSidebar: false, tabletRail: true,
+    heatmapReplay: false, analyticalRangeOpen: false, setTicker: jest.fn(), dte: null }));
+  expect(startRead).toHaveBeenCalledTimes(1);
 });
