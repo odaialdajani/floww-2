@@ -39,9 +39,13 @@ def trusted_origins():
     }
 
 
-def require_local(request):
-    if os.getenv("FLOWW_AGENT_DEPLOYMENT") != "local":
-        raise HTTPException(503, "Local research mode must be explicitly configured")
+def require_loopback(request):
+    """Loopback-only, same-origin guard for local reporting surfaces.
+
+    Deliberately separate from the agent deployment flag: local problem
+    reporting must work in a read-only workspace where the research agent
+    stays switched off. This gate never enables an agent route.
+    """
     if request.client is None or request.client.host not in {"127.0.0.1", "::1"}:
         raise HTTPException(403, "Direct local access required")
     if any(h in request.headers for h in ("forwarded", "x-forwarded-for", "x-forwarded-host", "x-real-ip")):
@@ -54,6 +58,12 @@ def require_local(request):
         raise HTTPException(403, "Untrusted origin")
     if request.method in {"POST", "PUT", "DELETE", "PATCH"} and origin not in trusted_origins():
         raise HTTPException(403, "A trusted browser origin is required")
+
+
+def require_local(request):
+    if os.getenv("FLOWW_AGENT_DEPLOYMENT") != "local":
+        raise HTTPException(503, "Local research mode must be explicitly configured")
+    require_loopback(request)
 
 
 class AgentCORSMiddleware(BaseHTTPMiddleware):

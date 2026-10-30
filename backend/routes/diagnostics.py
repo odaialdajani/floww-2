@@ -3,7 +3,7 @@ import json
 
 from fastapi import APIRouter, HTTPException, Request
 
-from services.agent.local_access import require_local
+from services.agent.local_access import require_loopback
 from services.problem_journal import KINDS, journal, record_problem
 
 router = APIRouter(prefix="/api/diagnostics", tags=["diagnostics"])
@@ -13,7 +13,7 @@ CLIENT_KINDS = KINDS - {"server_log", "failed_request", "slow_request"}
 
 @router.post("/events")
 async def events(request: Request):
-    require_local(request)
+    require_loopback(request)
     body = bytearray()
     async for chunk in request.stream():
         body.extend(chunk)
@@ -37,7 +37,7 @@ async def events(request: Request):
 
 @router.get("/summary")
 async def summary(request: Request):
-    require_local(request)
+    require_loopback(request)
     try:
         return journal().summary()
     except Exception:
