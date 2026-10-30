@@ -43,7 +43,7 @@ export default function SolsticeLeaderboard({ onPick, limit = 12, dte = null, ma
     return () => { generation.current++; controller.current?.abort(); clearInterval(timer); };
   }, [load]);
   const rows = (body?.leaderboard || []).filter(r => typeof r.conviction === "number" && Number.isFinite(r.conviction));
-  return <section className="panel p-3" data-testid="solstice-leaderboard" aria-label="Solstice research leaderboard">
+  return <section className="panel p-3" data-testid="solstice-leaderboard" aria-label="Research leaderboard">
     <header className="flex items-center justify-between mb-2"><span className="label">Research leaderboard</span>
       <button className="btn" disabled={scanning} onClick={() => load(true)}>{scanning ? "Scanning…" : "Scan"}</button></header>
     <p role="status" className="text-[11px] text-slate-400">{status}</p>

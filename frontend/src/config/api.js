@@ -20,11 +20,28 @@ try {
 } catch (e) {
   computedOrigin = "";
 }
+
+// The managed desktop build is opened from loopback, but the same build is
+// also opened from a phone on the Mac's LAN address. Deriving the API host
+// from the page host keeps one build working on both without baking a LAN IP:
+// 127.0.0.1/localhost -> the managed loopback backend, any other host -> the
+// same host on the managed backend port. An explicit REACT_APP_* origin still
+// wins (dev/proxy deployments, tests).
+export function backendBaseFor(origin) {
+  if (!origin || !/^https?:\/\//i.test(origin)) return "http://localhost:8000";
+  let host;
+  try { host = new URL(origin).hostname; } catch (e) { return "http://localhost:8000"; }
+  if (host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "[::1]") {
+    return "http://127.0.0.1:8213";
+  }
+  return `http://${host}:8213`;
+}
+
 export const BACKEND_BASE =
   process.env.REACT_APP_BACKEND_URL ||
   process.env.REACT_APP_STEAL_THREE_BASE ||
   process.env.REACT_APP_API_BASE ||
-  (computedOrigin && computedOrigin.indexOf("http") === 0 ? computedOrigin : "http://localhost:8000");
+  backendBaseFor(computedOrigin);
 
 export const BACKEND_URL = BACKEND_BASE;
 export const API = `${BACKEND_BASE}/api`;

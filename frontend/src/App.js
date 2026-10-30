@@ -403,6 +403,10 @@ export default function App() {
     try { return localStorage.getItem("floww_settings") ? JSON.parse(localStorage.getItem("floww_settings")).refreshMs || 25000 : 25000; } catch { return 25000; }
   });
   const [showLeftSidebar, setShowLeftSidebar] = useState(false);
+  // At 768–1023px the left rail is permanently open by CSS and the mobile
+  // toggle is hidden, so the rail's readers must mount without the drawer
+  // state ever becoming true.
+  const [tabletRail, setTabletRail] = useState(false);
   const [relatedOpen,setRelatedOpen]=useState(false);
   const [showRightSidebar, setShowRightSidebar] = useState(false);
   const [viewMode, setViewMode] = useState("gex");
@@ -425,6 +429,19 @@ export default function App() {
   // Use auth context for user info
   const userEmail = user?.email || null;
   const userTier = user?.tier || null;
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return undefined;
+    const media = window.matchMedia("(min-width: 768px) and (max-width: 1023px)");
+    const sync = () => setTabletRail(media.matches);
+    sync();
+    if (typeof media.addEventListener === "function") media.addEventListener("change", sync);
+    else if (typeof media.addListener === "function") media.addListener(sync);
+    return () => {
+      if (typeof media.removeEventListener === "function") media.removeEventListener("change", sync);
+      else if (typeof media.removeListener === "function") media.removeListener(sync);
+    };
+  }, []);
 
   // Debounced filter values to prevent API spam
   const debouncedMode = useDebounce(mode, 300);
@@ -918,8 +935,8 @@ export default function App() {
                   </div>
                 </div>
 
-                {showLeftSidebar && !heatmapReplay && !analyticalRangeOpen && <Movers onPick={(t) => setTicker(t)} />}
-                {showLeftSidebar && !heatmapReplay && !analyticalRangeOpen && <SolsticeLeaderboard onPick={setTicker} dte={dte} />}
+                {(showLeftSidebar || tabletRail) && !heatmapReplay && !analyticalRangeOpen && <Movers onPick={(t) => setTicker(t)} />}
+                {(showLeftSidebar || tabletRail) && !heatmapReplay && !analyticalRangeOpen && <SolsticeLeaderboard onPick={setTicker} dte={dte} />}
                 <HistoryPanel ticker={ticker} />
                 <SettingsPanel
                   refreshMs={refreshMs}

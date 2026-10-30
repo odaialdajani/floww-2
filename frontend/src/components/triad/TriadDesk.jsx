@@ -116,6 +116,8 @@ export default function TriadDesk({ ticker }) {
   const switchScope = next => { if (next !== scope) setScope(next); };
 
   const copyTriadContext = async () => {
+    // `kind` stays 'triad-context': it is a persisted consumer contract for the
+    // clipboard handoff, not user-facing copy. Renaming it would break readers.
     const payload = {
       kind: 'triad-context', version: 1, ticker, scope, expiry, selection, spot,
       contract: selectedRow ? { osi: selectedRow.osi, type: selectedRow.type, expiry, strike: selectedRow.strike } : null,
@@ -133,7 +135,7 @@ export default function TriadDesk({ ticker }) {
     }
   };
 
-  return <section className="wall-desk" aria-label="Triad same-day wall desk">
+  return <section className="wall-desk" aria-label="Wall desk">
     <div className="context-mini wall-desk-scope">
       <strong>{ticker}</strong><span className="mono">{spot != null ? `Spot ${spot.toFixed(2)}` : 'Spot unknown'}</span>
       <button type="button" aria-pressed={scope === '0dte'} onClick={() => switchScope('0dte')}>0DTE</button>
@@ -150,12 +152,12 @@ export default function TriadDesk({ ticker }) {
       <button type="button" onClick={() => setAttempt(n => n + 1)}>Retry scope</button>
       <p>Next listed remains a dated, separate scope.</p>
     </div>}
-    {reading?.status === 'error' && <div className="wall-desk-error"><p role="alert">Triad scope unavailable · {reading.message}</p>
+    {reading?.status === 'error' && <div className="wall-desk-error"><p role="alert">Wall desk scope unavailable · {reading.message}</p>
       <button type="button" onClick={() => setAttempt(n => n + 1)}>Retry scope</button></div>}
     {chain && <>
       <p className="chart-caption">Source {chain.data_source || 'unknown'} · Receipt {chain.fetched_at || 'unknown'} · chain observation {chain.event_time || 'unknown'} · {chain.stale === true ? 'stale snapshot' : chain.stale === false ? 'producer reports not stale' : 'freshness unknown'}. Quote observations are listed separately.</p>
       <div className="panel exposure"><div className="panelhead"><strong>Exposure by strike</strong>
-        <div className="chart-legend"><span>Gold positive · purple negative</span><span>Negative hatched · partial outlined</span><span>Unknown gray</span></div>
+        {series && <div className="chart-legend"><span>Gold positive · purple negative</span><span>Negative hatched · partial outlined</span><span>Unknown gray</span></div>}
       </div>
         {series ? <TriadExposure key={`${ticker}:${expiry}:${chain.fetched_at}`} series={series} spot={spot}
           selectedStrike={selection?.strike ?? null} onSelect={strike => focusStrike({ strike, expiry })} />
@@ -170,14 +172,14 @@ export default function TriadDesk({ ticker }) {
       </div>
       <TriadChainTable rows={contracts} ticker={ticker} expiry={expiry} spot={spot} selectedStrike={selection?.strike ?? null}
         onReview={focusStrike} onSelectContract={selectContract} />
-      <aside aria-label="Triad wall review">
-        <h3>Wall read</h3><p>{selection ? `Selected ${selection.strike} · ${selection.expiry} · ${ticker}. A selection is a zone focus, not a classified structural wall.` : 'Select a strike to focus review; nothing is selected.'}</p>
+      <aside aria-label="Strike focus and contract review">
+        <h3>Strike focus</h3><p>{selection ? `Selected ${selection.strike} · ${selection.expiry} · ${ticker}. A selection is a zone focus, not a classified structural wall.` : 'Select a strike to focus review; nothing is selected.'}</p>
         <h3>Selected contract</h3>
         {selectedRow ? <><p>{selectedRow.osi} · {selectedRow.type} · {selectedRow.expiry} · bid {finite(selectedRow.bid) ? selectedRow.bid : 'unknown'} / ask {finite(selectedRow.ask) ? selectedRow.ask : 'unknown'} · exposure {finite(selectedRow.gex) ? `${selectedRow.gex} (${selectedRow.gex_basis || 'basis unknown'})` : 'unknown (not zero)'}</p><ContractClocks row={selectedRow} /></>
           : <p>No contract selected — choose an explicit call or put contract ID in the table.</p>}
         <h3>Entry and protection</h3><p>Entry only after your price confirmation, in whole contracts at broker increments. Exact supported contract plus commissioned policy required; this desk grants neither.</p>
-        <h3>Flow context</h3><button type="button" onClick={copyTriadContext}>Copy Triad context</button>{copyStatus && <p role="status">{copyStatus}</p>}
-        <h3>Handoff trace</h3><p>{selection ? `Wall context attached · ${ticker} · ${selection.strike} · ${selection.expiry} · chain ${chain.fetched_at || 'time unknown'}` : 'No selection attached.'} Execution owner: unselected — choosing an owner labels a future draft only and never authorizes entry.</p>
+        <h3>Flow context</h3><button type="button" onClick={copyTriadContext}>Copy wall desk context</button>{copyStatus && <p role="status">{copyStatus}</p>}
+        <h3>Handoff trace</h3><p>{selection ? `Strike focus attached · ${ticker} · ${selection.strike} · ${selection.expiry} · chain ${chain.fetched_at || 'time unknown'}` : 'No selection attached.'} Execution owner: unselected — choosing an owner labels a future draft only and never authorizes entry.</p>
       </aside>
     </>}
   </section>;

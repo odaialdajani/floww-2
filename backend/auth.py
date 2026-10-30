@@ -99,14 +99,19 @@ async def verify_api_key(request: Request):
         return True
 
     if request.method == "POST" and request.url.path == "/api/diagnostics/events":
-        from services.agent.local_access import require_local
-        require_local(request)
+        # Problem reporting is local reporting, not research: it must work in a
+        # read-only workspace where the agent is switched off. The same-origin
+        # and loopback rules are unchanged.
+        from services.agent.local_access import require_loopback
+        require_loopback(request)
         return True
 
     if request.method == "POST" and re.fullmatch(r"/api/related/[A-Z][A-Z0-9.\-]{0,11}/warm", request.url.path):
-        from services.agent.local_access import require_local
-        require_local(request)
-        return True  # Bounded local market-price cache reads; no broker mutation.
+        # Bounded local market-price cache reads; no broker mutation. This is a
+        # local read, not research, so it must not require the agent deployment.
+        from services.agent.local_access import require_loopback
+        require_loopback(request)
+        return True
 
     from services.agent.local_access import research_path
     if research_path(request.method, request.url.path):

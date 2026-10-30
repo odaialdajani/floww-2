@@ -3,6 +3,11 @@ const KEY="floww.problemQueue";
 const SAFE_READS=new Set(["/api/flowseeker/scan","/api/flowseeker/scan/history","/api/flowseeker/alerts/feed","/api/agent/models","/api/agent/prefs","/api/health"]);
 const NAMES=new Set(["Error","TypeError","ReferenceError","RangeError","SyntaxError","AbortError","NetworkError"]);
 let queue=[],installed=false,nativeFetch=null,flushing=false;
+// Problem reports are a loopback-only surface: the managed backend refuses
+// them from LAN clients by design. A phone opening the app on the Mac's LAN
+// address therefore must not queue and retry reports that can only fail; the
+// App health panel stays read-only there.
+function localPage(){try{const h=window.location.hostname;return h==="localhost"||h==="127.0.0.1"||h==="::1"||h==="[::1]";}catch{return true;}}
 try {const saved=JSON.parse(localStorage.getItem(KEY)||"[]");if(Array.isArray(saved))queue=saved.slice(-30).map(clean);}catch{}
 function clean(event) {
  const row={kind:event.kind};
@@ -15,6 +20,7 @@ function clean(event) {
  return row;
 }
 export function reportProblem(event) {
+ if(!localPage())return;
  try {queue.push(clean(event));queue=queue.slice(-30);localStorage.setItem(KEY,JSON.stringify(queue));}catch{}
 }
 export async function flushProblems() {
@@ -28,7 +34,7 @@ export async function flushProblems() {
  }catch{}finally{clearTimeout(timeout);flushing=false;}
 }
 export function startProblemTracking() {
- if(installed || typeof window.fetch!=="function")return ()=>{};
+ if(installed || typeof window.fetch!=="function" || !localPage())return ()=>{};
  installed=true;nativeFetch=window.fetch.bind(window);
  const prior=window.fetch,retried=new Map();
  const wrapped=async(input,options={})=>{

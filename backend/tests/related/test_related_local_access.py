@@ -38,3 +38,30 @@ async def test_router_itself_rejects_remote_before_provider_work(monkeypatch):
     monkeypatch.setattr('routes.related_tickers.warm_snapshot',work)
     with pytest.raises(HTTPException): await related_ticker_warm('NVDA',WarmRequest(),request(host='192.0.2.1'))
     work.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_price_cache_check_runs_without_the_research_agent(monkeypatch):
+    """The read workspace has no agent; checking related prices must still work."""
+    from services.agent.local_access import require_local
+
+    monkeypatch.delenv('FLOWW_AGENT_DEPLOYMENT', raising=False)
+    assert await verify_api_key(request()) is True
+
+    work = AsyncMock(return_value={'batch': {'done': True}})
+    monkeypatch.setattr('routes.related_tickers.warm_snapshot', work)
+    result = await related_ticker_warm('NVDA', WarmRequest(), request())
+    assert result == {'batch': {'done': True}}
+    work.assert_awaited_once()
+
+    # Dropping the deployment flag must not relax the boundary.
+    with pytest.raises(HTTPException) as no_origin:
+        await verify_api_key(request(origin=''))
+    assert no_origin.value.status_code == 403
+    with pytest.raises(HTTPException) as foreign:
+        await verify_api_key(request(origin='https://foreign.example'))
+    assert foreign.value.status_code == 403
+    # The agent surface still requires the explicit deployment.
+    with pytest.raises(HTTPException) as gated:
+        require_local(request(path='/api/agent/ask'))
+    assert gated.value.status_code == 503

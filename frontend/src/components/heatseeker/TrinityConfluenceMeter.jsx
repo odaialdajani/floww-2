@@ -23,7 +23,7 @@ export default function TrinityConfluenceMeter() {
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <span className="text-sm">🔱</span>
-          <span className="text-xs font-semibold text-slate-200">Triad Meridian</span>
+          <span className="text-xs font-semibold text-slate-200">Meridian alignment</span>
         </div>
         <span className="text-[10px] text-slate-500">SPY · QQQ · SPX</span>
       </div>

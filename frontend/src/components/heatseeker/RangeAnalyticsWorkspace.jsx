@@ -118,7 +118,7 @@ export default function RangeAnalyticsWorkspace({ticker,onReplayModeChange}) {
   const d=r-l;return `Raw ${fmtK(l)} · Adjusted ${fmtK(r)} · display-derived delta ${d<0?'-':''}${fmtK(Math.abs(d))} (not a metric).`;
  };
  const selectedRaw=selection?envelope?.grids.raw_oi.cells[selection.expiry]?.[selection.strike]:null;
- return <section className={`range-workspace${expanded?' range-workspace-expanded':''}`} aria-label="Solstice analytical range">
+ return <section className={`range-workspace${expanded?' range-workspace-expanded':''}`} aria-label="Analytical range">
   <header className="range-toolbar">
    <h2>{ticker} · Analytical range</h2>
    <label>Minimum DTE<input aria-label="Minimum DTE" type="number" min="0" max="365" value={minDte} onChange={e=>queryChange(setMinDte,e.target.value)}/></label>
@@ -170,7 +170,7 @@ export default function RangeAnalyticsWorkspace({ticker,onReplayModeChange}) {
       </select></label>
       <p>{scenarioText()}</p>
       <h3>Handoff trace</h3>
-      <p>{selection?`Wall context attached · ${ticker} · ${selection.strike} USD · ${selection.expiry}`:'No cell selected — nothing attached.'}</p>
+      <p>{selection?`Range cell attached · ${ticker} · ${selection.strike} USD · ${selection.expiry}`:'No cell selected — nothing attached.'}</p>
       <p>{envelope?`Record ${envelope.record_id||'unidentified'} · digest ${envelope.content_digest||'unknown'} · received ${envelope.clocks?.received_at||'unknown'} · ${replayMode?'stored replay':'live read'} · ${synthetic===null?'source status unknown':synthetic?'synthetic fixture':'producer reports observed source'}`:'No envelope loaded.'}</p>
       <p>Execution owner: unselected — choosing an owner labels a future draft only and never authorizes entry.</p>
       <h3>Review trade</h3>
