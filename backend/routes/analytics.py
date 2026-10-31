@@ -36,7 +36,19 @@ async def _fetch_chain(ticker: str, expiries: int):
 
 
 def _check_chain(raw: dict, ticker: str):
-    """Validate chain data exists."""
+    """Validate chain data exists.
+
+    A provider failure arrives as a structured ``status == "error"`` payload
+    from ``FetchCoordinator`` (spot ``None``, no contracts). That is "the
+    provider could not be asked", not "this ticker has no options" — return
+    a retryable 503 instead of a 404 misreporting an empty universe. A 404
+    is reserved for a genuinely non-error response with no contracts.
+    """
+    if isinstance(raw, dict) and raw.get("status") == "error":
+        raise HTTPException(
+            503,
+            f"Options data provider unavailable for {ticker}",
+        )
     spot = raw.get("spot")
     if not spot or not raw.get("contracts"):
         raise HTTPException(404, f"No options data for {ticker}")
