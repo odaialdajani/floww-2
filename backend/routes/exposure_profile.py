@@ -25,7 +25,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 
 logger = logging.getLogger(__name__)
 
@@ -118,18 +118,18 @@ def exposure_profile_endpoint(
 
         return out
 
-    except Exception as exc:    # pragma: no cover (defensive degrade)
+    except HTTPException:
+        # A provider refusal (e.g. HTTP 503 for the public-only market-data
+        # policy) is the honest answer. Do not repackage it as a 200 with a
+        # fabricated zero spot/profile — that renders "unavailable" as a
+        # measured empty universe.
+        raise
+    except Exception as exc:
         logger.warning("exposure_profile endpoint exception: %s", exc)
-        return {
-            "ticker": ticker.upper(),
-            "spot": 0.0,
-            "shifts_pct": parsed_shifts,
-            "current_total_exposure": 0.0,
-            "profile": [],
-            "warnings": [f"engine exception: {type(exc).__name__}: {exc}"],
-            "method": "bs_reprice_then_dollar_gex",
-            "computed_at": datetime.now(UTC).isoformat(),
-        }
+        raise HTTPException(
+            status_code=503,
+            detail="Exposure profile is unavailable from the market data provider",
+        ) from exc
 
 
 __all__ = ["router"]

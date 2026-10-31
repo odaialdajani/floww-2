@@ -59,15 +59,19 @@ async def _fetch_instruments() -> list[dict]:
     from services.public_api_adapter import _get_broker, _note_public_429
     from services.public_budget import budget
 
-    broker = await _get_broker()
-    if broker is None:
-        raise RuntimeError("Stock directory unavailable: connect the market data provider")
+    # Admission is the single owner and must precede the cold broker path:
+    # _get_broker authenticates and reads accounts on first use. A refused
+    # catalogue read must spend no auth/provider work.
     await budget.acquire("api.public.com")
     try:
-        return await broker.get_all_instruments(type_filter=["EQUITY"])
-    except Exception as exc:
-        _note_public_429(exc)
-        raise
+        broker = await _get_broker()
+        if broker is None:
+            raise RuntimeError("Stock directory unavailable: connect the market data provider")
+        try:
+            return await broker.get_all_instruments(type_filter=["EQUITY"])
+        except Exception as exc:
+            _note_public_429(exc)
+            raise
     finally:
         budget.release()
 
