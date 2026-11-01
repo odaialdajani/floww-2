@@ -50,7 +50,8 @@
     .assistant-settings-dialog header, .related-ticker-panel, .related-product-list li,
     .range-workspace, .range-matrix th, .skylit-info-popover, .saved-stock-activity,
     .saved-stock-activity tbody tr:nth-child(even), .tv-root, .tv-header,
-    .tv-cell, .tv-legend, .tidehunter-public-bridge,
+    .tv-cell, .tv-legend, .tv-cell-h-notes, .tv-status,
+    .tv-error-panel, .tv-renderer-panel, .wall-desk .panelhead, .tidehunter-public-bridge,
     .heatmap-landmarks, .replay-readout, .profiles-panel,
     .workspace-layouts, .triad-scenario, .floww-account-menu-content
   ) {
@@ -72,7 +73,7 @@
     .range-replay-controls button, .range-replay-controls input, .range-replay-controls select,
     .range-inspector button, .range-inspector input, .range-inspector select,
     .saved-stock-activity button, .saved-stock-activity th,
-    .tv-controls select, .tv-subtab:not(.on), .public-handoff-review button,
+    .tv-controls select, .tv-subtab:not(.on), .tv-retry, .public-handoff-review button,
     .tidehunter-public-bridge > button
   ) {
     background: var(--floww-control);
@@ -125,6 +126,17 @@
   html:not([data-theme="light"]) :is(.tv-subtab:not(.on), .indicators-panel .ind-chip) {
     color: var(--text-secondary);
   }
+  html:not([data-theme="light"]) :is(
+    .tv-root, .tv-title, .tv-cell-h, .tv-renderer-title, .tv-error-title, .tv-retry,
+    .wall-desk
+  ) { color: var(--text-primary); }
+  html:not([data-theme="light"]) :is(
+    .tv-sub, .tv-controls, .tv-cell-h small, .tv-legend,
+    .tv-cell-h-notes, .tv-status, .tv-renderer-msg, .tv-error-msg, .tv-error-note,
+    .tv-source-details > summary, .tv-source-details > summary::before,
+    .wall-desk details, .wall-desk .chart-caption, .wall-desk-clocks, .wall-desk .contract-table th
+  ) { color: var(--text-secondary); }
+  html:not([data-theme="light"]) .tv-retry:hover { background: #303030; }
   html:not([data-theme="light"]) :is(.lodestar-ask-item:hover, .assistant-panel .assistant-starters button:hover,
     .saved-stock-activity button:hover:enabled, .saved-stock-activity tbody tr:hover) {
     background: #303030;

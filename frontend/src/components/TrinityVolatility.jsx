@@ -52,10 +52,10 @@ class ErrorBoundary extends React.Component {
 
 const PLOT = { responsive: true, displayModeBar: false };
 
-// ---- color palette (matches decoder dark theme) ----
+// Neutral chart chrome matches the shared Screener surfaces; series colors
+// retain their call/put, spot and skew meanings.
 const C = {
-  bg: "#0b0d12", panel: "#11141a", border: "rgba(255,255,255,.06)",
-  text: "#b0b8c4", muted: "#7a8599", grid: "#1e293b",
+  text: "rgba(255,255,255,.95)", muted: "rgba(255,255,255,.65)", grid: "#282828",
   call: "#34d399", put: "#f43f5e", spot: "#38bdf8", mauve: "#a855f7",
   amber: "#fbbf24", faint1: "#7dd3fc", faint2: "#c4b5fd",
 };
@@ -353,10 +353,11 @@ export default function TrinityVolatility({ ticker = "SPY", expiries = 8, loader
       });
       const layout = {
         paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
+        font: { color: C.text },
         margin: { l: 40, r: 8, t: 6, b: 28 },
         xaxis: { color: C.muted, tickfont: { color: C.muted, size: 11 }, gridcolor: C.grid },
         yaxis: { title: { text: "IV %", font: { size: 10 } }, color: C.muted, tickfont: { color: C.muted, size: 11 }, gridcolor: C.grid },
-        legend: { orientation: "h", y: 1.12, font: { size: 10 } },
+        legend: { orientation: "h", y: 1.12, font: { size: 10, color: C.muted } },
         hovermode: "x unified",
         shapes: spot ? [{ type: "line", x0: spot, x1: spot, y0: 0, y1: 1, yref: "paper",
           line: { color: C.spot, width: 1, dash: "dot" } }] : [],
@@ -379,8 +380,9 @@ export default function TrinityVolatility({ ticker = "SPY", expiries = 8, loader
       };
       const layout = {
         paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
+        font: { color: C.text },
         margin: { l: 38, r: 8, t: 6, b: 64 },
-        xaxis: { color: C.muted, tickfont: { color: C.muted, size: 11 }, tickangle: -40, type: "category" },
+        xaxis: { color: C.muted, tickfont: { color: C.muted, size: 11 }, tickangle: -40, type: "category", gridcolor: C.grid },
         yaxis: { title: { text: "ATM IV %", font: { size: 10 } }, color: C.muted, tickfont: { color: C.muted, size: 11 }, gridcolor: C.grid },
         uirevision: "term",
       };
@@ -401,10 +403,11 @@ export default function TrinityVolatility({ ticker = "SPY", expiries = 8, loader
       };
       const layout = {
         paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
+        font: { color: C.text },
         margin: { l: 36, r: 8, t: 6, b: 64 },
-        xaxis: { color: C.muted, tickfont: { color: C.muted, size: 11 }, tickangle: -40, type: "category" },
+        xaxis: { color: C.muted, tickfont: { color: C.muted, size: 11 }, tickangle: -40, type: "category", gridcolor: C.grid },
         yaxis: { title: { text: "vol pts", font: { size: 10 } }, color: C.muted, tickfont: { color: C.muted, size: 11 },
-          zeroline: true, zerolinecolor: "#475569", gridcolor: C.grid },
+          zeroline: true, zerolinecolor: "#454545", gridcolor: C.grid },
         uirevision: "rr",
       };
       await window.Plotly.react(el, [trace], layout, PLOT);
