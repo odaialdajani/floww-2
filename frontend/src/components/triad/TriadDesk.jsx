@@ -141,7 +141,7 @@ export default function TriadDesk({ ticker }) {
       <button type="button" aria-pressed={scope === '0dte'} onClick={() => switchScope('0dte')}>0DTE</button>
       <button type="button" aria-pressed={scope === 'next'} onClick={() => switchScope('next')}>Next listed</button>
       <button type="button" onClick={() => setAttempt(n => n + 1)} disabled={!reading || reading.status === 'loading-chain'}>Refresh wall desk</button>
-      <small>{expiry ? `${expiry} · ${reading.dte} DTE · ${reading.status === 'ready' ? 'loaded scope' : 'chain pending'}` : 'no expiry selected'}</small>
+      <small>{expiry ? `${expiry} · ${reading.dte} DTE · ${reading.status === 'ready' ? 'loaded scope' : reading.status === 'empty' ? 'chain unavailable' : 'chain pending'}` : 'no expiry selected'}</small>
     </div>
     <p className="chart-caption">Listed window: 0–7 days · next listed means the earliest admitted future date returned in this window. Listing coverage may be limited.</p>
     {(!reading || reading.status === 'loading-chain') && <p role="status">Loading {reading?.expiry ? `chain for ${ticker} · ${reading.expiry}` : `listed expiries for ${ticker} · ${scope === '0dte' ? '0DTE' : 'next listed'}`}…</p>}
