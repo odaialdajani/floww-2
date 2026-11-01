@@ -254,3 +254,32 @@ test('B16 MOUNTED: persisted drawings survive a real remount through the layer',
   fireEvent.click(document.querySelector('[data-testid="stock-dock-open-drawings"]') || screen.getByTestId('stock-inspector-tab-drawings'));
   expect(screen.getByTestId('rail-drawing')).toHaveTextContent('rectangle');
 });
+
+test('single-primitive drawings keep distinct identities when a sibling is deleted', async () => {
+  const axios = require('axios');
+  axios.get.mockImplementation(async () => ({ data: { ticker: 'SPY', frames: frames2, candles_with_recorded_nodes: 0, scopes: [] } }));
+  const anchors = [{ t: Date.parse(frames2[0].time), p: 100 }, { t: Date.parse(frames2[1].time), p: 102 }];
+  window.localStorage.setItem('floww.drawings.SPY', JSON.stringify([
+    { ...geom.createDrawing('trend', anchors), id: 'first-line' },
+    { ...geom.createDrawing('trend', anchors.map(a => ({ ...a, p: a.p + 0.25 }))), id: 'second-line' },
+  ]));
+  const { waitFor } = require('@testing-library/react');
+  const { default: PriceNodeHistory } = require('../../PriceNodeHistory');
+  const originalError = console.error;
+  const errors = jest.spyOn(console, 'error').mockImplementation((...args) => {
+    if (!String(args[0]).includes('same key')) originalError(...args);
+  });
+  const chart = render(<PriceNodeHistory ticker="SPY" open />);
+  try {
+    await waitFor(() => expect(screen.getAllByTestId('drawing-shape')).toHaveLength(2));
+    expect(errors.mock.calls.filter(([message]) => String(message).includes('same key'))).toEqual([]);
+    fireEvent.click(document.querySelector('[data-testid="stock-dock-open-drawings"]') || screen.getByTestId('stock-inspector-tab-drawings'));
+    fireEvent.click(screen.getByTestId('rail-delete-first-line'));
+    expect(screen.getByTestId('drawing-shape')).toHaveAttribute('data-drawing-id', 'second-line');
+    expect(JSON.parse(window.localStorage.getItem('floww.drawings.SPY')).map(d => d.id)).toEqual(['second-line']);
+  } finally {
+    chart.unmount();
+    errors.mockRestore();
+    window.localStorage.removeItem('floww.drawings.SPY');
+  }
+});

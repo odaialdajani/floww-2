@@ -1079,13 +1079,42 @@ def compare_snapshots(conn, ticker: str, day: str = "", *,
                 v1[float(s["strike"])] = s.get("total_volume", s.get("volume"))
         volume_deltas = []
         volume_rebased = []
+        volume_comparisons = []
+        volume_coverage = dict.fromkeys(
+            ("comparable", "missing", "invalid", "rebased", "increased", "unchanged"), 0)
         for k in sorted(set(v0) | set(v1)):
             chk = check_volume_window(v0.get(k), v1.get(k))
+            before_volume, after_volume = v0.get(k), v1.get(k)
+            volume_comparisons.append({
+                "strike": k,
+                "membership": "retained" if k in v0 and k in v1 else "removed" if k in v0 else "added",
+                "before_volume": float(before_volume)
+                if check_volume_window(before_volume, before_volume)["valid"] else None,
+                "after_volume": float(after_volume)
+                if check_volume_window(after_volume, after_volume)["valid"] else None,
+                "status": "ok" if chk["valid"] else "unavailable",
+                "reason": chk["reason"],
+                "delta_volume": chk["delta"] if chk["valid"] else None,
+            })
             if chk["valid"]:
-                if chk["delta"] and chk["delta"] > 0:
+                volume_coverage["comparable"] += 1
+                if chk["delta"] > 0:
                     volume_deltas.append({"strike": k, "delta_volume": chk["delta"]})
-            elif chk["reason"] == "VOLUME_REBASE":
-                volume_rebased.append(k)
+                    volume_coverage["increased"] += 1
+                else:
+                    volume_coverage["unchanged"] += 1
+            else:
+                refusal = {"NO_BASELINE": "missing", "INVALID": "invalid", "VOLUME_REBASE": "rebased"}
+                if chk["reason"] in refusal:
+                    volume_coverage[refusal[chk["reason"]]] += 1
+                if chk["reason"] == "VOLUME_REBASE":
+                    volume_rebased.append(k)
+        requested = len(volume_comparisons)
+        comparable = volume_coverage["comparable"]
+        volume_coverage.update(
+            requested=requested, units="contracts",
+            status="complete" if requested and comparable == requested
+            else "partial" if comparable else "unavailable")
         volume_deltas.sort(key=lambda d: d["delta_volume"], reverse=True)
         w0 = {w.get("wall_id") for w in (_parse(wj0) or []) if isinstance(w, dict)}
         w1 = {w.get("wall_id") for w in (_parse(wj1) or []) if isinstance(w, dict)}
@@ -1110,6 +1139,10 @@ def compare_snapshots(conn, ticker: str, day: str = "", *,
                 "strike_deltas": sorted(deltas, key=lambda d: abs(d["delta"]), reverse=True)[:20],
                 "volume_deltas": volume_deltas[:20],
                 "volume_rebased": volume_rebased,
+                "volume_comparisons": volume_comparisons,
+                "volume_coverage": volume_coverage,
+                "volume_note": "Stored cumulative-volume differences, not positioning or adjusted wall activity; "
+                               "missing, invalid and decreased readings are excluded from comparable counts.",
                 "walls_added": sorted(w1 - w0), "walls_removed": sorted(w0 - w1),
                 "walls_retained": sorted(w0 & w1),
                 "note": "coarse wall-level comparison; use attribute_change for "
