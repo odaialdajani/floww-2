@@ -3480,10 +3480,16 @@ async def dash_auth_middleware(request: Request, call_next):
             if not expected:
                 log.critical("DASH_SESSION_TOKEN not set — /dashboard/ is INSECURE")
                 from fastapi.responses import JSONResponse
-                return JSONResponse(status_code=503, detail="Dashboard auth not configured")
+                return JSONResponse(
+                    {"detail": "Dashboard auth not configured"},
+                    status_code=503,
+                )
             if token != expected:
                 from fastapi.responses import JSONResponse
-                return JSONResponse(status_code=401, detail="Unauthorized")
+                return JSONResponse(
+                    {"detail": "Unauthorized"},
+                    status_code=401,
+                )
     response = await call_next(request)
     return response
 
