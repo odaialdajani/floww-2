@@ -30,7 +30,10 @@
   }
   html:not([data-theme="light"]) :is(.skylit-full-dashboard, .trinity-layout) {
     --desk-bg: #111111; --desk-panel: #191919; --desk-border: #454545;
+    --text: var(--text-primary);
+    --text-dim: var(--text-secondary);
     background: var(--floww-surface);
+    color: var(--text-primary);
   }
   html:not([data-theme="light"]) :is(
     .skylit-control-bar, .skylit-col-bar, .skylit-selection-strip,
@@ -47,7 +50,9 @@
     .assistant-settings-dialog header, .related-ticker-panel, .related-product-list li,
     .range-workspace, .range-matrix th, .skylit-info-popover, .saved-stock-activity,
     .saved-stock-activity tbody tr:nth-child(even), .tv-root, .tv-header,
-    .tv-cell, .tv-legend, .tidehunter-public-bridge
+    .tv-cell, .tv-legend, .tidehunter-public-bridge,
+    .heatmap-landmarks, .replay-readout, .profiles-panel,
+    .workspace-layouts, .triad-scenario, .floww-account-menu-content
   ) {
     background: var(--floww-raised);
     border-color: var(--floww-line);
@@ -77,11 +82,39 @@
     .recorded-chart-surface, .assistant-panel .assistant-composer textarea,
     .assistant-history-date input, .assistant-settings-dialog .lodestar-model-settings select,
     .public-handoff-review input, .public-handoff-review select, .public-handoff-review textarea,
-    .saved-stock-details pre
+    .saved-stock-details pre,
+    .skylit-heatmap-container, .skylit-compare-pane, .skylit-sidebar-area,
+    .skylit-bottom-bar, .triad-pane, .heatmap-view-controls
   ) {
     background: var(--floww-surface);
     border-color: var(--floww-line);
   }
+  /* Inner chart/map chrome predates the shared theme. Target neutral controls
+     explicitly so signed cells, plotted series and state accents retain meaning. */
+  html:not([data-theme="light"]) :is(
+    .heatmap-view-controls button, .heatmap-landmarks-zones > summary,
+    .pane-layout-picker button, .pane-focus-btn, .workspace-layouts > summary,
+    .workspace-layouts-row button, .touch-replay, .shortcut-row button,
+    .workspace-controls [data-testid="atlas-toggle"]
+  ) { background: var(--floww-control); }
+  html:not([data-theme="light"]) :is(
+    .heatmap-view-controls button, .heatmap-landmarks-zones:not([open]) > summary,
+    .pane-layout-picker button:not([aria-pressed="true"]),
+    .pane-focus-btn:not([aria-pressed="true"]), .workspace-layouts > summary,
+    .workspace-layouts-row button:not([aria-pressed="true"]),
+    .touch-replay:not([aria-pressed="true"]), .shortcut-row button:not([aria-pressed="true"]),
+    .workspace-controls [data-testid="atlas-toggle"]:not([aria-pressed="true"])
+  ) { border-color: var(--floww-line); color: var(--text-primary); }
+  html:not([data-theme="light"]) :is(
+    .heatmap-landmarks, .heatmap-landmarks summary,
+    .skylit-col-bar, .skylit-drawer, .triad-pane-header
+  ) { color: var(--text-primary); }
+  html:not([data-theme="light"]) :is(
+    .heatmap-landmarks-heading > span, .heatmap-landmarks-levels dt,
+    .heatmap-landmarks p, .chart-map-level-note,
+    .replay-readout span, .profiles-panel span, .pane-layout-note,
+    .chart-watermark, .workspace-shortcuts
+  ) { color: var(--text-secondary); }
   html:not([data-theme="light"]) :is(.lodestar-ask-item:hover, .assistant-panel .assistant-starters button:hover,
     .saved-stock-activity button:hover:enabled, .saved-stock-activity tbody tr:hover) {
     background: #303030;
