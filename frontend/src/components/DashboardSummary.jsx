@@ -1,7 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect } from "react";
 import { fmtAbs } from "../lib/helpers";
-import { BACKEND_URL, API } from "../config/api";
+import { API } from "../config/api";
 
 // API imported from config/api.js
 
@@ -12,18 +12,28 @@ export function DashboardSummary({ ticker, spot }) {
   useEffect(() => {
     if (!ticker) return;
     let cancelled = false;
+    let pending = false, controller = null;
+    setSummary(null);
     const fetchSummary = async () => {
+      if (pending) return;
+      pending = true;
+      controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 45000);
       setLoading(true);
       try {
-        const r = await fetch(`${API}/heatmap/${ticker}?expiries=4&mode=day`);
-        if (!cancelled && r.ok) {
+        const r = await fetch(`${API}/heatmap/${ticker}?expiries=4&mode=day`, {signal:controller.signal});
+        if (!r.ok) throw new Error("Summary unavailable");
+        if (!cancelled) {
           const data = await r.json();
+          if (cancelled) return;
+          const rawRegime = data.nodes?.regime;
+          const rawNetGex = data.nodes?.total_gex;
           setSummary({
             ticker: data.ticker,
             spot: data.spot,
-            regime: data.nodes?.regime?.toUpperCase() || "UNKNOWN",
+            regime: typeof rawRegime === "string" && rawRegime.trim() ? rawRegime.trim().toUpperCase() : "UNKNOWN",
             gamma_flip: data.gamma_flip?.gamma_flip || data.nodes?.gamma_flip,
-            net_gex: data.nodes?.total_gex || 0,
+            net_gex: Number.isFinite(rawNetGex) ? rawNetGex : null,
             call_wall: data.gamma_flip?.call_wall,
             put_wall: data.gamma_flip?.put_wall,
             max_pain: data.nodes?.max_pain,
@@ -34,12 +44,15 @@ export function DashboardSummary({ ticker, spot }) {
         }
       } catch (e) {
         if (!cancelled) setSummary(null);
+      } finally {
+        clearTimeout(timeout);
+        pending = false;
+        if (!cancelled) setLoading(false);
       }
-      if (!cancelled) setLoading(false);
     };
     fetchSummary();
     const id = setInterval(fetchSummary, 30000);
-    return () => { cancelled = true; clearInterval(id); };
+    return () => { cancelled = true; controller?.abort(); clearInterval(id); };
   }, [ticker]);
 
   if (loading && !summary) {
@@ -62,12 +75,16 @@ export function DashboardSummary({ ticker, spot }) {
   );
 
   const safeTimestamp = summary?.timestamp != null ? new Date(summary.timestamp).toLocaleTimeString() : "—";
-  const regime = summary?.regime || "unknown";
+  const regime = String(summary?.regime || "UNKNOWN").toUpperCase();
   const isPositive = regime === "POSITIVE";
-  const regimeColor = isPositive ? "text-emerald-400" : "text-rose-400";
-  const regimeBg = isPositive ? "bg-emerald-500/10 border-emerald-500/20" : "bg-rose-500/10 border-rose-500/20";
-  const regimeIcon = isPositive ? "🟢" : "🔴";
-  const netGex = summary?.net_gex || 0;
+  const isNegative = regime === "NEGATIVE";
+  const regimeColor = isPositive ? "text-emerald-400" : isNegative ? "text-rose-400" : "text-slate-400";
+  const regimeBg = isPositive ? "bg-emerald-500/10 border-emerald-500/20" : isNegative ? "bg-rose-500/10 border-rose-500/20" : "bg-slate-800/50 border-slate-700/50";
+  const regimeIcon = isPositive ? "🟢" : isNegative ? "🔴" : "⚪";
+  const regimeLabel = isPositive ? "POSITIVE GAMMA" : isNegative ? "NEGATIVE GAMMA" : regime === "UNKNOWN" ? "UNKNOWN" : `${regime} GAMMA`;
+  const netGex = summary?.net_gex;
+  const hasNetGex = Number.isFinite(netGex);
+  const netGexColor = hasNetGex ? (netGex >= 0 ? "text-emerald-400" : "text-rose-400") : "text-slate-400";
   const alertCount = summary?.alert_count || 0;
   const highPriority = summary?.high_priority || 0;
 
@@ -78,7 +95,7 @@ export function DashboardSummary({ ticker, spot }) {
       <div className={`rounded px-2 py-1.5 border mb-1.5 ${regimeBg}`}>
         <div className="flex justify-between items-center">
           <div className="text-[10px] font-bold">
-            {regimeIcon} <span className={regimeColor}>{regime} GAMMA</span>
+            {regimeIcon} <span className={regimeColor}>{regimeLabel}</span>
           </div>
           <div className="text-[9px] text-slate-400">
             Spot: {fmtAbs(spot || summary?.spot)}
@@ -93,8 +110,8 @@ export function DashboardSummary({ ticker, spot }) {
         </div>
         <div className="bg-slate-800/50 rounded px-2 py-1">
           <div className="text-[8px] text-slate-500">Net GEX</div>
-          <div className={`text-[10px] font-bold ${netGex >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-            {netGex >= 0 ? "+" : ""}{fmtAbs(netGex)}
+          <div className={`text-[10px] font-bold ${netGexColor}`} title={hasNetGex ? undefined : "Net GEX unavailable"}>
+            {hasNetGex ? `${netGex >= 0 ? "+" : ""}${fmtAbs(netGex)}` : "—"}
           </div>
         </div>
         <div className="bg-slate-800/50 rounded px-2 py-1">

@@ -57,8 +57,15 @@ jest.mock("./SkylitHeatmapGrid",     () => ({ onCellClick, onStrikeClick, window
   </div>
 ));
 jest.mock("./SkylitMetricsSidebar",  () => (props) => <div data-testid="mock-metrics" data-spot={JSON.stringify(props.spot ?? null)} data-regime={JSON.stringify(props.regime ?? null)} />);
-jest.mock("./ExposureStrip", () => () => null);
-jest.mock("../flowseeker/AlertEngineStrip", () => () => null);
+var mockRealStrips=false;
+jest.mock("./ExposureStrip", () => {
+  const React=require("react"),Strip=jest.requireActual("./ExposureStrip").default;
+  return props=>mockRealStrips?<Strip {...props}/>:null;
+});
+jest.mock("../flowseeker/AlertEngineStrip", () => {
+  const React=require("react"),Strip=jest.requireActual("../flowseeker/AlertEngineStrip").default;
+  return props=>mockRealStrips?<Strip {...props}/>:null;
+});
 
 // Mock the steal-list top-3 components (they fetch from :8000 which is not
 // running in tests). Use the same data-testids the components expose in
@@ -88,6 +95,24 @@ function SkylitDashboard(props) { return <SkylitDashboardView defaultStudy="opti
 import useScreenContext from "../../agent/useScreenContext";
 import coverageFixture from "../../fixtures/integration/coverage-read.v1.json";
 import {skylitViewScope,readSkylitView,writeSkylitView} from "./skylitViewPreferences";
+
+test('the closed options desk makes no badge reads and reopening retains its layout',async()=>{
+  mockRealStrips=true;sessionStorage.clear();
+  const reads=()=>axios.get.mock.calls.filter(([url])=>/\/alerts\/SPY|\/flowseeker\/alerts\/feed\?ticker=SPY/.test(String(url)));
+  try{
+    await act(async()=>render(<SkylitDashboardView ticker="SPY" data={selectionMap()} spot={650} defaultStudy="price"/>));
+    expect(reads()).toHaveLength(0);
+    await act(async()=>fireEvent.click(screen.getByRole('button',{name:'Options desk'})));
+    expect(reads()).toHaveLength(2);
+    fireEvent.change(screen.getByRole('combobox',{name:'Canvas layout'}),{target:{value:'profile'}});
+    const initialSignals=reads().map(([,options])=>options.signal);
+    await act(async()=>fireEvent.click(screen.getByRole('button',{name:'Price chart'})));
+    expect(initialSignals.every(signal=>signal.aborted)).toBe(true);
+    await act(async()=>fireEvent.click(screen.getByRole('button',{name:'Options desk'})));
+    expect(reads()).toHaveLength(4);
+    expect(screen.getByRole('combobox',{name:'Canvas layout'})).toHaveValue('profile');
+  }finally{cleanup();mockRealStrips=false;}
+});
 
 test('chart layouts are reachable from the normal Stock chart without a hidden browser flag', async () => {
   window.__FLOWW_CHART_WORKSPACE__=false;

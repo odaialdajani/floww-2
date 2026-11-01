@@ -1,6 +1,6 @@
 # Project working rules — FLOWW
 
-> **Current ownership (2026-10-28):** the owner confirmed direct implementation
+> **Current ownership (2026-11-01):** the owner confirmed direct implementation
 > in this chat and ended the former worker handoffs. Read `.planning/CURRENT.md`
 > for the current source and queue. Dated worker assignments below are history,
 > not launch instructions. The old concurrent-work freeze on `frontend/src/App.js`
@@ -36,26 +36,9 @@
 
 ---
 
-## Canonical paths (BURN THESE IN)
+## Current checkout and runtime
 
-- **THE ONLY clone (production-tracked):** `C:/Users/DARK HERO/Desktop/FLOWW2.0` — Windows 11.
-  Remote is `origin` → `https://github.com/odaialdajani/floww-2.git`.
-- If `pwd` doesn't end in `Desktop/FLOWW2.0` → STOP and re-cd. Never work out of a copy or a second
-  clone — stale-clone confusion is what caused 3+ historical incidents.
-- **The macOS-era paths are DEAD on this machine** and must never be `cd`'d into or re-created:
-  `/Users/nav/Documents/GitHub/floww`, `/Users/nav/GitHub/floww`, `/Users/nav/floww`. Any doc,
-  script, or agent prompt still naming them is stale — correct it or ignore it, do not obey it.
-- **The UI is React on :3000** (→ backend :8000). There is no separate terminal codebase — edits to
-  `frontend/` + `backend/` here ARE the terminal. Open `http://localhost:3000` after starting both
-  servers (see "Common command snippets").
-
-**macOS launch machinery does NOT work here.** `scripts/launch_decoder.sh` and
-`scripts/stop_decoder.sh` still exist in the repo but hardcode `$HOME/Documents/GitHub/floww` and
-`open -a`; the `decoder` zsh alias, the `Chrome Apps.localized/Confluence Decoder.app` PWA, and the
-`~/Library/LaunchAgents/com.confluence-decoder.plist` auto-start are all macOS-only leftovers.
-There is no auto-startup on this box — start MongoDB, backend, and frontend yourself.
-
----
+Read `.planning/CURRENT.md` and `docs/FLOWW-CURRENT-PLAN.md`. Verify the current checkout and source identity; dated machine paths and old launch commands are historical. The normal Mac app is port3000 with a managed read backend on8213. Preserve original services/stores and use the guarded update/recovery procedure for a tested release. Never kill a service to make a version stamp match.
 
 ## Forbidden files (architect-frozen)
 
@@ -184,73 +167,9 @@ match — read the live pin before using new syntax:
 
 ---
 
-## Current state (as of 2026-09-04)
+## Current state
 
-- **Phase tracking is NOT duplicated here — on purpose.** `.planning/STATE.md` (current phase +
-  log) and `.planning/ROADMAP.md` (phase and ticket list) are authoritative. Read both at session
-  start. Copying phase details into this file is exactly what made it go stale before.
-- **Deploy-ready:** full Oracle Always Free runbook at `deploy/free/README.md`. Bootstrap via
-  `deploy/free/oracle-setup.sh` + read-only deploy key `oracle-vm-deploy`.
-  Awaiting Nav's VM provisioning. (The old Obsidian cross-link is dropped — no Obsidian vault
-  exists on this machine.)
-- **Test suite — reproduce, don't trust a remembered number:**
-  - Backend: **4640 tests collect, 0 collection errors** —
-    From the repo: `cd backend && .venv/bin/python -m pytest --collect-only -q`.
-    POSIX: `cd backend && .venv/bin/python -m pytest --collect-only -q`.
-    A *pass* count is deliberately not asserted here — see the MongoDB note below.
-  - Frontend: **280 passed / 280 total across 44 suites** —
-    `cd frontend && CI=true npx craco test --watchAll=false`
-  - pytest config: **`backend/pytest.ini` is the single source of truth** (`asyncio_mode = auto`,
-    `flaky_env` marker registered). pytest reports `configfile: pytest.ini`. A duplicate
-    `[tool.pytest.ini_options]` block used to sit in `backend/pyproject.toml`; pytest **ignored it**
-    and warned about it, so it was deleted. Do not re-add pytest settings to `pyproject.toml` —
-    they will silently do nothing.
-- **MongoDB is a prerequisite for a real pass count, not for the suite to start.**
-  `backend/tests/conftest.py` builds a Motor client against `MONGO_URL`
-  (default `mongodb://localhost:27017`) per test. Client construction is **lazy and does not raise**,
-  so with Mongo down the suite still collects and most tests still pass — what you actually get is a
-  ~2 s server-selection timeout on each DB-touching test (a slow run) plus failures confined to the
-  DB-dependent tests. It does **not** error out at startup. Start `mongod`, then:
-  From the repo: `cd backend && .venv/bin/python -m pytest -q --tb=no`.
-- **The backend SHIPS ON PYTHON 3.12 — local dev is 3.13. All backend code must compile on 3.12.**
-  `Dockerfile.backend` is `python:3.12-slim`; `.github/workflows/ci.yml` and `deploy.yml` pin 3.12.
-  (Corrected 2026-09-27: this line used to say 3.11, but the Dockerfile, deploy
-  workflow, and requirements closure have been 3.12.)
-  A 3.12-only nested-quote f-string in `routes/quant.py` once made a 3.11 CI gate fail at
-  `import server` (fixed at `d29ae3f`; CI now pins 3.12 to match ship). Syntax oracle before
-  you commit new backend code (must parse on the ship runtime AND the 3.11 floor):
-  `cd backend && .venv/bin/python -c "import py_compile;py_compile.compile('<file>',doraise=True)"`
-  `backend/.venv` is the working interpreter for this checkout (Python 3.14.6).
-  It is newer than the shipped 3.12 pin, so it can accept syntax the image would
-  not; use a separate older environment only for a deliberately labelled
-  compatibility check, and treat the ship pins as the authority.
-- **Architecture decisions are binding:** `docs/adr/` holds 7 **Accepted** ADRs (model promotion
-  policy, data-source policy, backtest equity, deploy CORS, test discipline, coupling, alert
-  persistence). Read the
-  relevant one before touching ML promotion, data-source routing, or test assertions — ADR-0005 in
-  particular makes the broad `data_source` taxonomy assertion in the heatmap tests deliberate.
-- **Codebase intel:** `.planning/codebase/` — 7 GSD map documents
-  (STACK/INTEGRATIONS/ARCHITECTURE/STRUCTURE/CONVENTIONS/TESTING/CONCERNS).
-- **Learnings:** `.planning/LEARNINGS.md` — decisions/lessons/patterns/surprises
-  extracted from the 2026-08-23/24 deploy-prep + test-infra session.
-- Historical round notes (9/10) preserved below and in docs/.
-
-<details>
-<summary>Historical: Round 9/10 state</summary>
-
-- **Round 9: CLOSED** at `4e1c1b8`. 50+ commits across 10 Owl Alphas + DS Pro v1 + DS Pro v2 closure.
-- **Round 10 plan:** `docs/ROUND10_PLAN.md`. P0 tickets:
-  - P0.1: conftest waiver + apply (drops 23 collection errors → 0)
-  - P0.2: restore `fetch_spot_and_chains` (heatseeker flip-zones returns degraded)
-  - P0.3: A9 STALE_IMPORT cleanup</details>
-- **Phase 6 Task 10 (silent-failure audit): CLOSED** at `654a377`. Audit doc: `docs/superpowers/research/2026-06-20-decoder-endpoint-silent-failure-audit.md` (initial `ebd5f77`). All 4 Decision Queue fixes shipped on `origin/main`:
-  - DQ #1 `routes/ml_api.py` 5× silent excepts → `5f0dec5` (observability contract; partial-data preserved over audit's `HTTPException(500)` recommendation)
-  - DQ #2 `routes/gemini.py` 9× silent error returns → `23baf34` (`JSONResponse(503)` shim)
-  - DQ #3 `routes/alerts.py` 2× silent error returns → `2b3af45` (`JSONResponse(503)` shim)
-  - DQ #4 `routes/admin.py` 2× silent excepts → `72b00c8` (observability contract)
-- **Active backlog summary:** `docs/ROUND10_PLAN.md` is the source of truth. `docs/ROUND9_FINAL_CLOSURE.md` for retrospective.
-
----
+Use the consolidated current plan and dated delivery receipts. Test counts, source identities, active work and provider availability must be rechecked; historical rosters are not dispatch authority.
 
 ## Tech stack quick reference
 
@@ -300,46 +219,32 @@ work here. Check with `ruff --version` (0.15.22, from Homebrew at
 
 ## Common command snippets
 
-Windows 11. PowerShell is the primary shell; Git Bash is available for POSIX scripts.
-Interpreter paths were checked on this machine. Launch examples below are not a
-claim that either server was started or that a live endpoint was verified.
+macOS. Use the current worktree from `.planning/CURRENT.md`; the examples below
+assume the integration worktree. They do not claim that a service was launched
+or that a live endpoint was verified.
 
-```powershell
-# Inspect an existing listener before deciding whether a launch is needed.
-Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue
+```bash
+# Identify the checkout and inspect existing listeners before deciding whether
+# a launch is needed. Never kill an existing process to free a port.
+pwd
+git rev-parse --show-toplevel
+git status --short
+lsof -nP -iTCP:3000 -sTCP:LISTEN
+lsof -nP -iTCP:8213 -sTCP:LISTEN
+lsof -nP -iTCP:8000 -sTCP:LISTEN
 
-# Launch only when requested and the port is free; keep existing sessions running.
-Start-Process -FilePath "backend/.venv/bin/python" `
-  -ArgumentList "-m","uvicorn","server:app","--port","8000" `
-  -WorkingDirectory "C:\Users\DARK HERO\Desktop\FLOWW2.0\backend" `
-  -WindowStyle Hidden -RedirectStandardError "$env:TEMP\floww-uvicorn.err"
-Invoke-WebRequest -Uri "http://127.0.0.1:8000/api/health" -UseBasicParsing | Select-Object StatusCode
-
-# See what's holding a port
-netstat -ano | Select-String ":8000\s.*LISTENING"
-# Do not kill an existing process to free a port without explicit authorization.
-```
-
-```powershell
 # From the repository root: backend checks (full tests need their configured services).
-Push-Location backend
-cd backend && .venv/bin/python -m pytest --collect-only -q
-cd backend && .venv/bin/python -m pytest tests/services/ -k "keyword" -v
-cd backend && .venv/bin/python -m ruff check .
-Pop-Location
+cd backend
+.venv/bin/python -m pytest --collect-only -q
+.venv/bin/python -m pytest tests/services/ -k "keyword" -v
+ruff check .
+cd ..
 
 # Frontend tests: CI prevents an interactive watcher from keeping the command open.
-Push-Location frontend
-$env:CI = "true"
-npx craco test --watchAll=false
-Pop-Location
-
-# Optional frontend launch, only when requested and no existing UI uses the port.
-# For a separate dev server, see frontend/.env.example for the backend address.
-Push-Location frontend
-$env:BROWSER = "none"
-npm start
-Pop-Location
+cd frontend
+CI=true npx craco test --watchAll=false
+CI=true npm run build
+cd ..
 
 # Verify remote history without inventing a commit identifier.
 git fetch origin
@@ -347,18 +252,16 @@ git log origin/main --oneline -1
 ```
 
 **MongoDB prerequisite:** inspect the configured `MONGO_URL` before database-dependent tests.
-For a local instance, `netstat -ano | Select-String ":27017\s.*LISTENING"` checks the listener.
+For a local instance, `lsof -nP -iTCP:27017 -sTCP:LISTEN` checks the listener.
 No listener does not prevent collection; tests that access Mongo can fail or time out.
 
 ---
 
 ## Where the durable knowledge lives
 
-- **Project memory:** `~/.claude/projects/C--Users-DARK-HERO-Desktop-FLOWW2-0/memory/` — the
-  Windows-side memory directory for this repo. It is currently **empty**; there is no `MEMORY.md`
-  and none of the `session_2026-05-*_round9/round8` notes exist here. The macOS index
-  `~/.claude/projects/-Users-nav-Documents-GitHub-floww/` does **not** exist on this machine — treat
-  the repo's own `docs/` + `.planning/` as the durable record instead.
+- **Current work:** `.planning/CURRENT.md` and `docs/FLOWW-CURRENT-PLAN.md` are the
+  source of truth for the active checkout, execution order and obligation crosswalk.
+  Dated delivery receipts and archived reports remain evidence, not dispatch authority.
 - **Architecture decisions:** `docs/adr/` — 7 ADRs, all **Accepted**, index at `docs/adr/README.md`.
   They bind future work: 0001 model promotion policy (4 gates), 0002 data-source policy & priority
   chain, 0003 backtest equity model, 0004 deploy CORS headers, 0005 test discipline &
@@ -367,14 +270,12 @@ No listener does not prevent collection; tests that access Mongo can fail or tim
   one BEFORE changing anything in its area; supersede, never rewrite.
 - **GSD phase tracking:** `.planning/STATE.md` (current phase) + `.planning/ROADMAP.md` (tickets) —
   authoritative, checked in, and the only place phase status should be read from.
-- **Active plans in repo:**
-  - `docs/ROUND10_PLAN.md` — current backlog (P0/P1/P2)
-  - `docs/ROUND9_FINAL_CLOSURE.md` — retrospective
-  - `docs/ROUND10_A9_DELETION_VERIFICATION.md` — 433-name per-name audit
-  - `docs/ROUND10_CONFTEST_WAIVER_TRIAGE.md` — pytest collection error analysis
-  - `docs/ROUND10_LEAK_PREVENTION.md` — 3-pattern playbook
-- **Kanban:** `kanban/cards/*.md` (per-agent pulses), `kanban/board.yaml`
-- **Round 9 v2 launch pack:** `round9_followup_v2/` (10-agent prompts + preamble + launcher)
+- **Historical plans and reports:** `docs/ROUND*.md`, `docs/reports/`, `kanban/` and
+  `round9_followup_v2/` are dated evidence. They do not authorize another worker roster,
+  launch controller or concurrent writer.
+- **Recovery evidence:** the current consolidation workspace remains the home of
+  runtime receipts, archived worktrees and preservation manifests. Historical records
+  stay dated and grant no current source ownership.
 
 ---
 
@@ -458,7 +359,7 @@ This is what catches Round 7's fake-completion pattern in real time.
 
 ---
 
-## What Nav drives (not Claude)
+## Owner decisions
 
 - PyCharm, DataGrip, WebStorm — Nav's IDE work
 - Anything that involves clicking a button in an IDE

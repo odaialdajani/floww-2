@@ -194,6 +194,30 @@ describe("HeatseekerDashboard", () => {
     expect(screen.getByRole("button", {name:"Call income"})).toBeVisible();
   });
 
+  test("hidden studies pause their effects and resume with the same controls", async () => {
+    jest.useFakeTimers();
+    let starts=0,stops=0,ticks=0;
+    function Reading() {
+      const [value,setValue]=React.useState("Saved choice");
+      React.useEffect(()=>{starts++;const timer=setInterval(()=>{ticks++;},1000);
+        return()=>{stops++;clearInterval(timer);};},[]);
+      return <input aria-label="Retained choice" value={value} onChange={e=>setValue(e.target.value)}/>;
+    }
+    const view=render(<HeatseekerDashboard ticker="SPY" extraStudies={{income:<Reading/>}}/>);
+    try {
+    await act(async()=>fireEvent.change(screen.getByRole("combobox",{name:"Study"}),{target:{value:"income"}}));
+    const control=screen.getByRole("textbox",{name:"Retained choice"});
+    fireEvent.change(control,{target:{value:"My choice"}});
+    await act(async()=>fireEvent.change(screen.getByRole("combobox",{name:"Study"}),{target:{value:"patterns"}}));
+    await act(async()=>jest.advanceTimersByTime(5000));
+    expect(stops).toBe(1);expect(ticks).toBe(0);
+    await act(async()=>fireEvent.change(screen.getByRole("combobox",{name:"Study"}),{target:{value:"income"}}));
+    expect(screen.getByRole("textbox",{name:"Retained choice"})).toBe(control);
+    expect(control).toHaveValue("My choice");expect(starts).toBe(2);
+    await act(async()=>jest.advanceTimersByTime(1000));expect(ticks).toBe(1);
+    } finally { view.unmount();jest.useRealTimers(); }
+  });
+
   test("supplied studies stay in their matching family and preserve control state", async () => {
     function Extra({family}) {
       const [choice,setChoice] = React.useState("First choice");
