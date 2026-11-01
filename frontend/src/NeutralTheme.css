@@ -95,7 +95,10 @@
     .heatmap-view-controls button, .heatmap-landmarks-zones > summary,
     .pane-layout-picker button, .pane-focus-btn, .workspace-layouts > summary,
     .workspace-layouts-row button, .touch-replay, .shortcut-row button,
-    .workspace-controls [data-testid="atlas-toggle"]
+    .workspace-controls [data-testid="atlas-toggle"],
+    .indicators-panel button, .indicators-panel select,
+    .indicators-panel input:not([type="checkbox"]):not([type="range"]),
+    .price-history-summary, .stock-inspector-tab, .triad-pane-header button
   ) { background: var(--floww-control); }
   html:not([data-theme="light"]) :is(
     .heatmap-view-controls button, .heatmap-landmarks-zones:not([open]) > summary,
@@ -103,7 +106,11 @@
     .pane-focus-btn:not([aria-pressed="true"]), .workspace-layouts > summary,
     .workspace-layouts-row button:not([aria-pressed="true"]),
     .touch-replay:not([aria-pressed="true"]), .shortcut-row button:not([aria-pressed="true"]),
-    .workspace-controls [data-testid="atlas-toggle"]:not([aria-pressed="true"])
+    .workspace-controls [data-testid="atlas-toggle"]:not([aria-pressed="true"]),
+    .indicators-panel button:not([aria-pressed="true"]), .indicators-panel select,
+    .indicators-panel input:not([type="checkbox"]):not([type="range"]),
+    .price-history-summary, .stock-inspector-tab:not([aria-selected="true"]),
+    .triad-pane-header button:not([aria-expanded="true"])
   ) { border-color: var(--floww-line); color: var(--text-primary); }
   html:not([data-theme="light"]) :is(
     .heatmap-landmarks, .heatmap-landmarks summary,
@@ -115,6 +122,9 @@
     .replay-readout span, .profiles-panel span, .pane-layout-note,
     .chart-watermark, .workspace-shortcuts
   ) { color: var(--text-secondary); }
+  html:not([data-theme="light"]) :is(.tv-subtab:not(.on), .indicators-panel .ind-chip) {
+    color: var(--text-secondary);
+  }
   html:not([data-theme="light"]) :is(.lodestar-ask-item:hover, .assistant-panel .assistant-starters button:hover,
     .saved-stock-activity button:hover:enabled, .saved-stock-activity tbody tr:hover) {
     background: #303030;
