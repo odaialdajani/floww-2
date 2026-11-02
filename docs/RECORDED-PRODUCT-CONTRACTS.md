@@ -1,7 +1,7 @@
 # Recorded wall curves and second-order displays
 
 Numeric/display baseline reviewed November 1, 2026 against backend tree `65950f82bb4794cb3bffe067c8849315064e33e8`.
-Status: the raw stored same-wall curve is implemented and mounted; the adjusted/window curve and the DUO/DVO displays remain display/read contract design. Producer/storage/consumer implementation for those remains unclaimed. Capture and commissioning remain off.
+Status: a stored wall-exposure API is implemented and mounted. It reads the recorded DADGEX, volume-gamma and Greek-delta-weighted session-volume aggregates by raw structural-wall identity. Raw-GEX history, the contract-level window-change product, frontend curve mounting and DUO/DVO displays are not claimed. Producer/storage/consumer implementation for those remains unclaimed. Capture and commissioning remain off.
 
 ## Existing engineering and the remaining gap
 
@@ -78,9 +78,9 @@ Before any implementation can be marked delivered, independently verify:
 
 The November1 focused run passed15 existing derivative/registry checks. It confirms the current numerical oracle/registry behavior, including the legacy labels pinned by those tests; it does not certify the future display descriptor or wall-curve implementation above.
 
-## Verified raw same-wall curve slice (November 2, 2026)
+## Stored adjusted exposure on raw structural walls (November 2, 2026)
 
-The raw stored same-wall curve above is implemented as `recorded-wall-curve.v1` in `backend/services/solstice_wall_curve.py` and mounted at `GET /api/solstice/wall-curve/{ticker}` (commit `97f89dbb`). It reads stored observations only.
+A bounded stored-exposure slice of the same-wall contract is implemented as `recorded-wall-curve.v1` in `backend/services/solstice_wall_curve.py` and mounted at `GET /api/solstice/wall-curve/{ticker}` (commit `97f89dbb`). It reads stored observations only.
 
 What the implementation does:
 
@@ -91,9 +91,13 @@ What the implementation does:
 - Enforces event ≤ receipt ≤ availability. A later receipt is not retroactive knowledge: an observation outside the cutoff is excluded.
 - Breaks the line and records an explicit gap for wall creation/removal, definition change, session roll, scope change and provider change. A removed wall is never forward-filled and a neighbouring wall is never joined.
 - Keeps missing, invalid, unavailable, partial and a measured zero apart. An unusable population is `VALUE_UNAVAILABLE`, never a zero; a truncated snapshot is `COVERAGE_TRUNCATED`; an unstored metric is `METRIC_NOT_STORED`.
-- Serves only the stored raw families (`dadgex_net_v1`, `dadgex_gross_v1`, `volume_gamma_v1`, `session_delta_volume_gamma_v1`). The registry IDs are `dadgex_*` while the stored field names are `daddex_*`; the mapping is explicit and an unsupported ID is refused rather than approximated.
-- Keeps a negative cumulative change as a retraction. It is never clamped to zero.
+- Serves only four stored adjusted-exposure families (`dadgex_net_v1`, `dadgex_gross_v1`, `volume_gamma_v1`, `session_delta_volume_gamma_v1`). The registry IDs are `dadgex_*` while the stored field names are `daddex_*`; the mapping is explicit and an unsupported ID is refused rather than approximated.
+- Preserves signed exposure. In session_delta_volume_gamma_v1, delta is option delta and V is session volume: a negative net exposure is not a cumulative-volume retraction. The curve reports retraction as unknown/not inferred. Recorded window retraction policy remains a separate contract.
 
-Verification run on November 2, 2026: 21 service checks in `backend/tests/services/test_recorded_wall_curve.py` and 4 mounted-route checks in `backend/tests/solstice/test_wall_curve_route.py` pass, together with the API-doc freshness checks (33 checks in that run); `ruff` is clean on the changed files.
+November2 source verification: the isolated affected-backend run passes 176 checks, including 41 wall-service cases four mounted-route checks and three request-loop responsiveness regressions. API documentation matches 397 paths; changed Python passes Ruff. This is source-level proof; the backend was still d5cd2691 at that verification. Read the delivery receipt for the installed version.
 
-Still unclaimed: the adjusted/window curve, the DUO/DVO displays and their display descriptor, and any second-order display admission. Items 5 and 6 of the acceptance boundary above remain design-only. The window point identity, comparison identity and retraction policy in this document are not implemented by the raw slice.
+Still unclaimed: raw-GEX history, interval/window curves, the DUO/DVO displays and their display descriptor, and any second-order display admission. Items 5 and 6 of the acceptance boundary above remain design-only. The window point identity, comparison identity and retraction policy in this document are not implemented by this stored-exposure slice.
+
+November2 integration review: malformed or missing population counters return COVERAGE_UNVERIFIED; malformed metric entries return METRIC_INVALID. Partial/unavailable points break both adjacent segments, and a failed current/legacy storage read returns STORE_UNAVAILABLE. Result limits disclose available/returned counts and truncation. These are reader/admission fixes, with no change to frozen metric formulas, inputs or values.
+
+The Market selected-wall inspector mounts an on-demand recorded-adjusted-exposure disclosure. It resolves the exact stored snapshot scope/cutoff first; hidden, closed and superseded reads cancel without polling. Fourteen frontend regressions pass; the 278-suite/2,809-test frontend run passes. Chrome visual acceptance for this new disclosure remains pending. Capability, snapshot replay and wall-curve storage reads now run off the API loop; connection-wide query/fetch serialization is preserved.

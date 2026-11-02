@@ -3,7 +3,7 @@
 One series owns one raw structural wall inside one declared scope. Every
 point is a stored observation of that wall. Nothing is recomputed from a live
 chain, nothing is forward-filled, no neighbouring wall is borrowed and a
-retraction is never clamped to zero.
+signed exposure is never mistaken for a cumulative-volume correction.
 
 These checks pin the refusals from `docs/RECORDED-PRODUCT-CONTRACTS.md`:
 wall creation/removal, definition changes, session/scope/provider changes and
@@ -427,7 +427,7 @@ def test_session_day_uses_the_new_york_date(conn):
     assert utc_day["status"] == "history_unavailable"
 
 
-def test_negative_session_volume_stays_a_retraction(conn):
+def test_negative_delta_weighted_session_exposure_is_not_a_volume_retraction(conn):
     wall = _wall()
     _save(conn, "obs-1", asof="2030-01-02T15:00:00+00:00", walls=[wall],
           wall_metrics={wall["wall_id"]: _metric_entry(
@@ -437,8 +437,97 @@ def test_negative_session_volume_stays_a_retraction(conn):
     result = _curve(conn, wall["wall_id"], metric_id="session_delta_volume_gamma_v1")
     point = result["points"][0]
     assert point["value"] == pytest.approx(-250.0)
-    assert point["retraction"] is True
+    assert point["metric"]["units"] == "USD/1% move"
+    assert point["retraction"] is None
+    assert point["retraction_reason"] == "NOT_A_VOLUME_CHANGE_METRIC"
     assert point["value"] != 0.0
+
+
+@pytest.mark.parametrize("field,value", [
+    ("daddex_missing", None), ("daddex_missing", False),
+    ("daddex_invalid", -1), ("daddex_usable", 0.5),
+    ("n_contracts", "unknown"), ("n_contracts", float("inf")),
+    ("unreadable_strike", float("nan")), ("not_a_member", -1),
+])
+def test_unknown_or_invalid_coverage_never_becomes_complete_or_raises(conn, field, value):
+    wall = _wall()
+    _save(conn, "obs-1", asof="2030-01-02T15:00:00+00:00", walls=[wall],
+          wall_metrics={wall["wall_id"]: _metric_entry(**{field: value})})
+    point = _curve(conn, wall["wall_id"])["points"][0]
+    assert point["status"] == "unavailable"
+    assert point["reason"] == "COVERAGE_UNVERIFIED"
+    assert point["value"] is None
+    json.dumps(point, allow_nan=False)
+
+
+def test_malformed_stored_metric_entry_is_a_typed_gap(conn):
+    wall = _wall()
+    _save(conn, "obs-1", asof="2030-01-02T15:00:00+00:00", walls=[wall],
+          wall_metrics={wall["wall_id"]: [123]})
+    point = _curve(conn, wall["wall_id"])["points"][0]
+    assert point["status"] == "unavailable"
+    assert point["reason"] == "METRIC_INVALID"
+    assert point["value"] is None
+
+
+def test_partial_population_breaks_both_adjacent_curve_segments(conn):
+    wall = _wall()
+    for number, entry in enumerate([
+        _metric_entry(), _metric_entry(daddex_usable=2, daddex_missing=1), _metric_entry(),
+    ]):
+        _save(conn, f"obs-{number}", asof=f"2030-01-02T15:{number * 5:02d}:00+00:00",
+              walls=[wall], wall_metrics={wall["wall_id"]: entry})
+    points = _curve(conn, wall["wall_id"])["points"]
+    assert points[0]["line"]["status"] == "continuous"
+    assert points[1]["status"] == "partial"
+    assert points[1]["line"]["status"] == "broken"
+    assert points[2]["line"]["status"] == "broken"
+    assert points[1]["line"]["break_reason"] == "POPULATION_INCOMPLETE"
+    assert points[2]["line"]["break_reason"] == "POPULATION_INCOMPLETE"
+
+
+def test_unreadable_store_is_not_reported_as_empty_history():
+    closed = duckdb.connect(":memory:")
+    closed.close()
+    result = _curve(closed, "recorded-wall")
+    assert result["status"] == "history_unavailable"
+    assert result["reason"] == "STORE_UNAVAILABLE"
+
+
+def test_point_limit_discloses_omitted_recorded_observations(conn):
+    wall = _wall()
+    for number in range(2):
+        _save(conn, f"obs-{number}", asof=f"2030-01-02T15:0{number}:00+00:00",
+              walls=[wall], wall_metrics={wall["wall_id"]: _metric_entry()})
+    result = _curve(conn, wall["wall_id"], limit=1)
+    assert len(result["points"]) == 1
+    assert result["status"] == "partial"
+    assert result["reason"] == "RESULT_TRUNCATED"
+    assert result["coverage"]["n_points_available"] == 2
+    assert result["coverage"]["truncated"] is True
+
+
+@pytest.mark.parametrize("scope", [{"provider": None}, {"formula": None}, {"basis": None}, {"expiries": []}])
+def test_undeclared_stored_scope_cannot_produce_usable_curve_points(conn, scope):
+    wall = _wall()
+    _save(conn, "obs-1", asof="2030-01-02T15:00:00+00:00", walls=[wall],
+          wall_metrics={wall["wall_id"]: _metric_entry()}, **scope)
+    point = _curve(conn, wall["wall_id"])["points"][0]
+    assert point["status"] == "unavailable"
+    assert point["reason"] == "SCOPE_UNVERIFIED"
+    assert point["value"] is None
+
+
+@pytest.mark.parametrize("change", [{"members": []}, {"low": None}, {"high": float("inf")}, {"members": [float("nan")]}])
+def test_unverifiable_wall_definition_stays_unavailable_and_serializable(conn, change):
+    wall = {**_wall(), **change}
+    _save(conn, "obs-1", asof="2030-01-02T15:00:00+00:00", walls=[wall],
+          wall_metrics={wall["wall_id"]: _metric_entry()})
+    point = _curve(conn, wall["wall_id"])["points"][0]
+    assert point["status"] == "unavailable"
+    assert point["reason"] == "WALL_DEFINITION_UNVERIFIED"
+    assert point["value"] is None
+    json.dumps(point, allow_nan=False)
 
 
 def test_unknown_event_clock_is_an_unavailable_point(conn):

@@ -7,6 +7,7 @@ import AskFlow from "../heatseeker/AskFlow";
 import WallInspector from "../heatseeker/WallInspector";
 import { chartTime } from "../heatseeker/recordedPriceChartData";
 import { GroundedPublicReview } from "../public/PublicHandoffReview";
+import RecordedWallExposure from "./RecordedWallExposure";
 
 // Market selected-object inspector (OpenCode market-desktop-20261025).
 // Root pixel critique 22:40 refinement — the Wall/Contract/Flow/Public tab
@@ -292,6 +293,8 @@ export default function MarketInspectorDock({
       <ScenarioCard wall={wall} scenarios={scenarios} spot={spot} quality={quality}
         onContracts={startReview} ticker={ticker} read={read} replay={replay} />
       <ProvenanceLine data={data} replay={replay} quality={quality} />
+      <RecordedWallExposure key={`${ticker}|${data?.snapshotId || ""}|${wall.wall_id}`}
+        ticker={ticker} snapshotId={data?.snapshotId} wallId={wall.wall_id} visible={active === "wall"} />
     </>
   );
   const contractPanel = drawerOpen

@@ -9,6 +9,7 @@ store as the UI. Execution stays disarmed elsewhere.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -199,7 +200,7 @@ async def capability() -> dict[str, Any]:
         conn = eng.conn if hasattr(eng, "conn") else None
         if conn is not None:
             from services.connection_guard import query_rows
-            rows = query_rows(conn,
+            rows = await asyncio.to_thread(query_rows, conn,
                 "SELECT at_ts, ticker, operation, requested, returned, usable, truncated "
                 "FROM capability_observations_v1 ORDER BY at_ts DESC LIMIT 50")
             for r in rows or []:
@@ -222,7 +223,7 @@ async def replay(snapshot_id: str) -> dict[str, Any]:
     conn = eng.conn if hasattr(eng, "conn") else None
     if conn is None:
         return {"snapshot_id": snapshot_id, "error": "recorder_unavailable"}
-    return replay_snapshot(conn, snapshot_id) or {"snapshot_id": snapshot_id, "error": "not_found"}
+    return await asyncio.to_thread(replay_snapshot, conn, snapshot_id) or {"snapshot_id": snapshot_id, "error": "not_found"}
 
 
 @router.get("/manifest/{ticker}")
@@ -291,8 +292,8 @@ async def wall_curve_route(ticker: str,
         return {"version": CURVE_VERSION, "status": "error",
                 "error": "recorder_unavailable", "reason": "recorder_unavailable",
                 "points": [], "gaps": []}
-    return read_wall_curve(conn, ticker, wall_id=wall_id, metric_id=metric_id,
-                            query_key=query_key, as_of=as_of, day=day, limit=limit)
+    return await asyncio.to_thread(read_wall_curve, conn, ticker, wall_id=wall_id, metric_id=metric_id,
+                                   query_key=query_key, as_of=as_of, day=day, limit=limit)
 
 
 @router.get("/recorder_health")

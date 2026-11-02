@@ -141,13 +141,13 @@ def test_index_skips_answers_without_evidence():
 async def test_index_is_owner_scoped(repo):
     price = _fact()
     await _saved_turn(repo, owner="alice", facts=[price], sections=_sections(price))
-    await _saved_turn(repo, owner="bob", facts=[_fact(value=101.0)],
-                      sections=_sections(_fact(value=101.0)))
+    bob = await _saved_turn(repo, owner="bob", facts=[_fact(value=101.0)],
+                            sections=_sections(_fact(value=101.0)))
     docs = await repo.citation_documents("alice")
     index = build_index(docs)
     assert index["n_turns"] == 1
     assert {row["value"] for row in index["citations"]} == {100.0}
-    assert all(row["turn_id"] != index["turns"][0] or True for row in index["citations"])
+    assert bob["turn_id"] not in index["turns"]
     assert "bob" not in str(index["citations"])
 
 
@@ -208,3 +208,49 @@ def _app(repo):
     app.state.research_service = ResearchService(repo, _Reads())
     app.include_router(router)
     return app
+
+
+@pytest.mark.asyncio
+async def test_indexed_citation_resolves_beyond_the_default_thirty_turn_window(repo, monkeypatch):
+    from httpx import ASGITransport, AsyncClient
+
+    monkeypatch.setenv("FLOWW_AGENT_DEPLOYMENT", "local")
+    identity, token = await repo.session()
+    old = await _saved_turn(repo, owner=identity, facts=[_fact(value=91)])
+    for _ in range(30):
+        await _saved_turn(repo, owner=identity, facts=[_fact()])
+    assert len(await repo.citation_documents(identity, limit=1)) == 1
+    old = (await repo.citation_documents(identity, limit=200))[-1]
+    async with AsyncClient(transport=ASGITransport(app=_app(repo)),
+                           base_url="http://127.0.0.1:8000",
+                           headers={"cookie": f"floww_research={token}"}) as client:
+        listing = (await client.get("/api/agent/citations?limit=200")).json()
+        row = next(r for r in listing["citations"] if r["turn_id"] == old["turn_id"])
+        one = await client.get(f"/api/agent/citations/{row['citation_id']}")
+        assert one.status_code == 200, one.text
+        # An explicit saved-answer lookup is independent of the rolling window.
+        exact = await client.get("/api/agent/citations", params={"turn_id": old["turn_id"], "limit": 1})
+        assert exact.json()["n_citations"] == 1
+        linked = await client.get(row["detail_path"] + "&limit=1")
+        assert linked.status_code == 200, linked.text
+        assert linked.json()["citation"]["value"] == row["value"]
+
+
+@pytest.mark.asyncio
+async def test_exact_citation_lookup_cannot_read_another_owner_or_unfinished_turn(repo, monkeypatch):
+    from httpx import ASGITransport, AsyncClient
+
+    monkeypatch.setenv("FLOWW_AGENT_DEPLOYMENT", "local")
+    identity, token = await repo.session()
+    foreign = await _saved_turn(repo, owner="someone-else", facts=[_fact()])
+    pending, _ = await repo.admit(identity, _identity(), {"ticker": "SPY", "question": "Price?", "horizon": "all"})
+    await repo.turns.update_one({"turn_id": pending["turn_id"]}, {"$set": {"answer": {"facts": [_fact()]}}})
+    async with AsyncClient(transport=ASGITransport(app=_app(repo)),
+                           base_url="http://127.0.0.1:8000",
+                           headers={"cookie": f"floww_research={token}"}) as client:
+        for turn, owner_id in [(foreign, "someone-else"), (pending, identity)]:
+            listing = await client.get("/api/agent/citations", params={"turn_id": turn["turn_id"]})
+            assert listing.json()["citations"] == []
+            cid = citation_id(owner_id, turn["turn_id"], _fact()["id"])
+            one = await client.get(f"/api/agent/citations/{cid}", params={"turn_id": turn["turn_id"]})
+            assert one.status_code == 404, one.text

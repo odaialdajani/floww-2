@@ -23,7 +23,7 @@ WALL = {"wall_id": "w_route_curve", "low": 500.0, "high": 510.0, "mid": 505.0,
 def _entry(**overrides):
     entry = {"daddex_net": 1500.0, "daddex_gross": 3000.0,
              "daddex_usable": 3, "daddex_missing": 0, "daddex_invalid": 0,
-             "n_contracts": 3}
+             "n_contracts": 3, "unreadable_strike": 0, "not_a_member": 0}
     entry.update(overrides)
     return entry
 

@@ -97,8 +97,9 @@ new provider spend occurred.
 
 The route now declares `Depends(require_api_key)` and the regression file
 covers missing key (401), wrong key (401) and unset server key (503). Seven
-focused route checks pass; Ruff is clean. The running managed release still
-predates this fix until a controlled install.
+focused route checks pass; Ruff is clean. The managed backend was independently identified as d5cd2691 on November2,
+which includes this authentication fix. No second unauthenticated account read
+was made. This version check does not establish account-wide commissioning.
 
 ## Entitlement and observed evidence
 

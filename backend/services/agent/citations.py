@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import hashlib
 from typing import Any
+from urllib.parse import quote
 
 CITATION_INDEX_VERSION = "agent-citation-index.v1"
 
@@ -78,6 +79,8 @@ def citations_from_turn(doc: dict[str, Any]) -> list[dict[str, Any]]:
             "turn_id": turn_id,
             "fact_id": fact_id,
         }
+        row["detail_path"] = (f"/api/agent/citations/{row['citation_id']}"
+                              f"?turn_id={quote(str(turn_id), safe='')}")
         for field in _CITATION_FIELDS:
             row[field] = item.get(field)
         row["cited"] = fact_id in referenced

@@ -13,13 +13,13 @@ The rules come from `docs/RECORDED-PRODUCT-CONTRACTS.md`:
 * wall creation/removal, definition changes and session/scope/provider
   changes break the line and leave an explicit gap;
 * missing, invalid, unavailable and a measured zero stay distinct;
-* a negative cumulative change stays a retraction — never clamped to zero;
+* signed exposure is not interpreted as a cumulative-volume retraction;
 * a point is read only from stored values: there is no provider call, no
   capture and no write in this module.
 
-Only the raw stored families are served. The adjusted/window curve and the
-DUO/DVO displays stay design-only: their per-point exclusions and eligible
-populations are not stored.
+Four stored adjusted-exposure families are served on raw structural-wall
+identity. This is neither raw-GEX history nor interval/window activity.
+Interval/window curves and DUO/DVO displays require additional stored inputs.
 """
 
 from __future__ import annotations
@@ -31,6 +31,7 @@ from datetime import datetime
 from typing import Any
 
 from domain.exposure_metrics import METRIC_REGISTRY
+from services.connection_guard import guarded_connection
 from services.market_provenance import timestamp
 from services.price_node_history import scope_id as recorder_scope_id
 
@@ -51,9 +52,9 @@ WALL_METRIC_FIELDS: dict[str, tuple[str, str, str, str]] = {
     ),
 }
 
-# Families whose stored value is a cumulative change: a negative reading is a
-# retraction of activity, not a signed exposure and never a clamped zero.
-CUMULATIVE_CHANGE_METRICS = frozenset({"session_delta_volume_gamma_v1"})
+# These are exposure metrics, not cumulative-contract differences. In
+# session_delta_volume_gamma_v1, delta means option delta: V * |delta|.
+# A negative net exposure does not establish a volume retraction.
 
 # Reason codes. Every one of them is a refusal or an explicit break, never a
 # zero.
@@ -62,16 +63,19 @@ REASON_SESSION_NOT_FOUND = "SESSION_NOT_FOUND"
 REASON_SCOPE_UNVERIFIED = "SCOPE_UNVERIFIED"
 REASON_WALL_NOT_RECORDED = "WALL_NOT_RECORDED"
 REASON_METRIC_NOT_STORED = "METRIC_NOT_STORED"
+REASON_METRIC_INVALID = "METRIC_INVALID"
 REASON_METRIC_UNSUPPORTED = "METRIC_UNSUPPORTED"
 REASON_VALUE_UNAVAILABLE = "VALUE_UNAVAILABLE"
 REASON_SOURCE_CLOCK_UNKNOWN = "SOURCE_CLOCK_UNKNOWN"
 REASON_SOURCE_CLOCK_INVALID = "SOURCE_CLOCK_INVALID"
 REASON_WALL_NOT_PRESENT = "WALL_NOT_PRESENT"
 REASON_WALL_DEFINITION_CHANGED = "WALL_DEFINITION_CHANGED"
+REASON_WALL_DEFINITION_UNVERIFIED = "WALL_DEFINITION_UNVERIFIED"
 REASON_PROVIDER_CHANGED = "PROVIDER_CHANGED"
 REASON_SCOPE_CHANGED = "SCOPE_CHANGED"
 REASON_SESSION_ROLL = "SESSION_ROLL"
 REASON_COVERAGE_TRUNCATED = "COVERAGE_TRUNCATED"
+REASON_COVERAGE_UNVERIFIED = "COVERAGE_UNVERIFIED"
 REASON_POPULATION_INCOMPLETE = "POPULATION_INCOMPLETE"
 REASON_STORE_UNAVAILABLE = "STORE_UNAVAILABLE"
 REASON_DAY_INVALID = "DAY_INVALID"
@@ -106,9 +110,29 @@ def _num(value: Any) -> float | None:
         return None
     try:
         out = float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return None
     return out if math.isfinite(out) else None
+
+
+def _count(value: Any) -> int | None:
+    """Recorded population counts must be exact, nonnegative JSON-safe integers."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    number = _num(value)
+    if number is None or not 0 <= number <= 2**53 - 1 or not number.is_integer():
+        return None
+    return int(number)
+
+
+def _wall_definition_known(wall: dict[str, Any]) -> bool:
+    low, high = _num(wall.get("low")), _num(wall.get("high"))
+    members = wall.get("members")
+    if low is None or high is None or low > high or not isinstance(members, list) or not members:
+        return False
+    values = [_num(member) for member in members]
+    return all(value is not None and low <= value <= high for value in values) \
+        and len(set(values)) == len(values)
 
 
 def _session_date(clock: datetime | None) -> str | None:
@@ -177,12 +201,17 @@ def _unavailable(reason: str, **extra: Any) -> dict[str, Any]:
     return out
 
 
-def _fetch_rows(conn, ticker: str) -> list[dict[str, Any]]:
+class _StoreUnavailable(RuntimeError):
+    """Neither the current nor the legacy stored-history schema could be read."""
+
+
+@guarded_connection
+def _fetch_rows(conn, ticker: str, query_key: str) -> list[dict[str, Any]]:
     """Stored observations for one ticker, oldest first. Read-only."""
-    sql = (f"SELECT {_COLUMNS} FROM heatmap_snapshots_v2 WHERE ticker = ?"
+    sql = (f"SELECT {_COLUMNS} FROM heatmap_snapshots_v2 WHERE ticker = ? AND query_key = ?"
            " ORDER BY asof_ts, received_at, snapshot_id")
     try:
-        rows = conn.execute(sql, [ticker]).fetchall()
+        rows = conn.execute(sql, [ticker, query_key]).fetchall()
         names = [name.strip() for name in _COLUMNS.split(",")]
         return [dict(zip(names, row, strict=True)) for row in rows or []]
     except Exception:
@@ -190,10 +219,10 @@ def _fetch_rows(conn, ticker: str) -> list[dict[str, Any]]:
         # base identity; the metric then reads as not stored, never guessed.
         try:
             rows = conn.execute(
-                f"SELECT {_FALLBACK_COLUMNS} FROM heatmap_snapshots_v2 WHERE ticker = ?"
-                " ORDER BY asof_ts, received_at, snapshot_id", [ticker]).fetchall()
-        except Exception:
-            return []
+                f"SELECT {_FALLBACK_COLUMNS} FROM heatmap_snapshots_v2 WHERE ticker = ? AND query_key = ?"
+                " ORDER BY asof_ts, received_at, snapshot_id", [ticker, query_key]).fetchall()
+        except Exception as exc:
+            raise _StoreUnavailable from exc
         names = [name.strip() for name in _FALLBACK_COLUMNS.split(",")]
         return [dict(zip(names, row, strict=True)) for row in rows or []]
 
@@ -228,7 +257,11 @@ def wall_curve(conn, ticker: str, *, wall_id: str, metric_id: str = "dadgex_net_
     value_field, usable_field, missing_field, invalid_field = WALL_METRIC_FIELDS[metric_id]
     registry = METRIC_REGISTRY.get(metric_id) or {}
 
-    rows = [row for row in _fetch_rows(conn, ticker)
+    try:
+        stored_rows = _fetch_rows(conn, ticker, str(query_key))
+    except _StoreUnavailable:
+        return _unavailable(REASON_STORE_UNAVAILABLE, metric_id=metric_id)
+    rows = [row for row in stored_rows
             if str(row.get("query_key") or "") == str(query_key)]
     if not rows:
         return _unavailable(REASON_NO_MATCHING_OBSERVATIONS, metric_id=metric_id)
@@ -278,7 +311,8 @@ def wall_curve(conn, ticker: str, *, wall_id: str, metric_id: str = "dadgex_net_
             previous = {"observation_id": observation_id, "scope": scope, "wall": None}
             continue
 
-        definition_version = _definition_version(wall)
+        definition_known = _wall_definition_known(wall)
+        definition_version = _definition_version(wall) if definition_known else None
         break_reason: str | None = None
         break_detail: str | None = None
         if previous is not None and previous.get("wall") is not None:
@@ -309,20 +343,39 @@ def wall_curve(conn, ticker: str, *, wall_id: str, metric_id: str = "dadgex_net_
 
         metrics = _loads(row.get("metrics_full_json"))
         wall_metrics = metrics.get("wall_metrics") if isinstance(metrics, dict) else None
-        entry = wall_metrics.get(str(wall_id)) if isinstance(wall_metrics, dict) else None
+        stored_entry = wall_metrics.get(str(wall_id)) if isinstance(wall_metrics, dict) else None
+        entry = stored_entry if isinstance(stored_entry, dict) else {}
         coverage_json = _loads(row.get("coverage_json"))
         coverage_json = coverage_json if isinstance(coverage_json, dict) else {}
         quality = _loads(row.get("quality_json"))
         quality = quality if isinstance(quality, dict) else {}
 
-        usable = _num((entry or {}).get(usable_field))
-        missing = _num((entry or {}).get(missing_field))
-        invalid = _num((entry or {}).get(invalid_field))
-        value = _num((entry or {}).get(value_field))
+        counts = {name: _count(entry.get(field)) for name, field in {
+            "usable": usable_field, "missing": missing_field, "invalid": invalid_field,
+            "n_contracts": "n_contracts", "unreadable_strike": "unreadable_strike",
+            "not_a_member": "not_a_member",
+        }.items()}
+        usable, missing, invalid = (counts[key] for key in ("usable", "missing", "invalid"))
+        value = _num(entry.get(value_field))
+        expiries = _loads(row.get("expiries"))
+        expiries = expiries if isinstance(expiries, list) else []
+        declared_scope = all(
+            isinstance(scope[key], str) and scope[key].strip().lower()
+            not in {"", "unknown", "unavailable", "unset", "none", "null"}
+            for key in ("provider", "exposure_basis", "formula_version")) \
+            and bool(expiries) and all(isinstance(e, str) and e and _valid_day(e) for e in expiries)
 
         reason: str | None = None
-        if entry is None:
+        if not declared_scope:
+            reason = REASON_SCOPE_UNVERIFIED
+        elif not definition_known:
+            reason = REASON_WALL_DEFINITION_UNVERIFIED
+        elif stored_entry is None:
             reason = REASON_METRIC_NOT_STORED
+        elif not isinstance(stored_entry, dict):
+            reason = REASON_METRIC_INVALID
+        elif any(count is None for count in counts.values()):
+            reason = REASON_COVERAGE_UNVERIFIED
         elif not usable or value is None:
             reason = REASON_VALUE_UNAVAILABLE
         elif event is None:
@@ -342,11 +395,20 @@ def wall_curve(conn, ticker: str, *, wall_id: str, metric_id: str = "dadgex_net_
             status = "partial"
             reason = REASON_COVERAGE_TRUNCATED
 
-        expiries = _loads(row.get("expiries"))
-        if not isinstance(expiries, list):
-            expiries = []
-        retraction = bool(
-            metric_id in CUMULATIVE_CHANGE_METRICS and value is not None and value < 0)
+        if break_reason is None:
+            if previous is not None and previous.get("wall") is None:
+                break_reason = REASON_WALL_NOT_PRESENT
+            elif status != "ok":
+                break_reason = reason
+            elif previous is not None and previous.get("status") in {"partial", "unavailable"}:
+                break_reason = previous.get("reason") or REASON_VALUE_UNAVAILABLE
+            if break_reason:
+                gaps.append({
+                    "after_observation_id": previous["observation_id"] if previous else None,
+                    "before_observation_id": observation_id,
+                    "reason": break_reason,
+                    "detail": "an incomplete or unavailable stored observation breaks the curve",
+                })
 
         point = {
             "observation_id": observation_id,
@@ -360,10 +422,11 @@ def wall_curve(conn, ticker: str, *, wall_id: str, metric_id: str = "dadgex_net_
             "scope": scope,
             "wall": {
                 "wall_id": str(wall.get("wall_id")),
-                "low": wall.get("low"),
-                "high": wall.get("high"),
-                "mid": wall.get("mid"),
-                "members": wall.get("members") or [],
+                "low": _num(wall.get("low")),
+                "high": _num(wall.get("high")),
+                "mid": _num(wall.get("mid")),
+                "members": [_num(m) for m in wall["members"]]
+                if isinstance(wall.get("members"), list) else [],
                 "definition_version": definition_version,
             },
             "metric": {
@@ -376,17 +439,13 @@ def wall_curve(conn, ticker: str, *, wall_id: str, metric_id: str = "dadgex_net_
             "value": value if status != "unavailable" else None,
             "status": status,
             "reason": reason,
-            "retraction": retraction,
+            "retraction": None,
+            "retraction_reason": "NOT_A_VOLUME_CHANGE_METRIC",
             "source": row.get("data_source"),
             "quality": quality,
             "coverage": {
-                "usable": int(usable or 0),
-                "missing": int(missing or 0),
-                "invalid": int(invalid or 0),
-                "n_contracts": int((entry or {}).get("n_contracts") or 0),
-                "unreadable_strike": int((entry or {}).get("unreadable_strike") or 0),
-                "not_a_member": int((entry or {}).get("not_a_member") or 0),
-                "expiries": (entry or {}).get("expiries") or [],
+                **counts,
+                "expiries": entry.get("expiries") or [],
                 "snapshot_requested": coverage_json.get("requested"),
                 "snapshot_returned": coverage_json.get("returned"),
                 "snapshot_truncated": bool(coverage_json.get("truncated", False)),
@@ -413,7 +472,7 @@ def wall_curve(conn, ticker: str, *, wall_id: str, metric_id: str = "dadgex_net_
                 "units": registry.get("units"),
             }
         previous = {"observation_id": observation_id, "scope": scope, "wall": wall,
-                    "definition_version": definition_version}
+                    "definition_version": definition_version, "status": status, "reason": reason}
 
     if not points:
         if gaps:
@@ -424,21 +483,25 @@ def wall_curve(conn, ticker: str, *, wall_id: str, metric_id: str = "dadgex_net_
             reason = REASON_NO_MATCHING_OBSERVATIONS
         return _unavailable(reason, metric_id=metric_id, gaps=gaps)
 
+    n_points_available = len(points)
+    truncated = n_points_available > limit
     points = points[:limit]
     n_unavailable = sum(1 for point in points if point["status"] == "unavailable")
     n_partial = sum(1 for point in points if point["status"] == "partial")
-    status = "partial" if (gaps or n_partial or n_unavailable) else "ok"
+    status = "partial" if (gaps or n_partial or n_unavailable or truncated) else "ok"
     return {
         "version": CURVE_VERSION,
         "status": status,
-        "reason": None,
+        "reason": "RESULT_TRUNCATED" if truncated else None,
         "metric_id": metric_id,
         "series_key": series,
         "wall": points[0]["wall"],
         "points": points,
         "gaps": gaps,
         "coverage": {"n_points": len(points), "n_gaps": len(gaps),
-                     "n_unavailable": n_unavailable, "n_partial": n_partial},
+                     "n_unavailable": n_unavailable, "n_partial": n_partial,
+                     "n_points_available": n_points_available, "limit": limit,
+                     "truncated": truncated},
         "note": ("Stored same-wall readings. Missing, invalid and unavailable stay "
                  "distinct from a measured zero; no live chain is consulted."),
     }
@@ -447,10 +510,12 @@ def wall_curve(conn, ticker: str, *, wall_id: str, metric_id: str = "dadgex_net_
 __all__ = [
     "CURVE_VERSION",
     "REASON_COVERAGE_TRUNCATED",
+    "REASON_COVERAGE_UNVERIFIED",
     "REASON_CUTOFF_INVALID",
     "REASON_DAY_INVALID",
     "REASON_LIMIT_OUT_OF_RANGE",
     "REASON_METRIC_NOT_STORED",
+    "REASON_METRIC_INVALID",
     "REASON_METRIC_UNSUPPORTED",
     "REASON_NO_MATCHING_OBSERVATIONS",
     "REASON_POPULATION_INCOMPLETE",
@@ -464,6 +529,7 @@ __all__ = [
     "REASON_STORE_UNAVAILABLE",
     "REASON_VALUE_UNAVAILABLE",
     "REASON_WALL_DEFINITION_CHANGED",
+    "REASON_WALL_DEFINITION_UNVERIFIED",
     "REASON_WALL_NOT_PRESENT",
     "REASON_WALL_NOT_RECORDED",
     "WALL_METRIC_FIELDS",

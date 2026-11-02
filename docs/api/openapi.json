@@ -1286,7 +1286,7 @@
     },
     "/api/agent/citations/{citation_id}": {
       "get": {
-        "description": "One citation from the owner's saved answers.\n\nAn id that does not belong to this owner is not found: the search only\never runs over the owner's own saved turns.",
+        "description": "One citation from the owner's saved answers.\n\nUse the returned detail_path for lookup through the exact saved answer,\nindependent of newer answers. ID-only lookups retain a bounded recent\nwindow. Another owner's or an unfinished answer is never returned.",
         "operationId": "get_api_agent_citations_citation_id",
         "parameters": [
           {
@@ -1303,11 +1303,27 @@
             "name": "limit",
             "required": false,
             "schema": {
-              "default": 30,
+              "default": 200,
               "maximum": 200,
               "minimum": 1,
               "title": "Limit",
               "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "turn_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Turn Id"
             }
           }
         ],

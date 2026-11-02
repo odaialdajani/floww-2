@@ -456,7 +456,7 @@ class AgentRepository:
         projection = {"_id": 0, "turn_id": 1, "owner": 1, "status": 1,
                       "answer.facts": 1, "answer.sections": 1}
         query = self.turns.find({"owner": owner, "status": "completed"},
-                                projection).sort([("created_at", -1), ("turn_id", -1)])
+                                projection).sort([("created_at", -1), ("turn_id", -1)]).limit(limit)
         if hasattr(query, "max_time_ms"):
             query = query.max_time_ms(HISTORY_DB_TIME_MS)
         return await query.to_list(length=limit)

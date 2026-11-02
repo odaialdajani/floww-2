@@ -188,6 +188,20 @@ async def history_page(request: Request, limit: int = Query(30, ge=1, le=30), cu
     return {**page, "turns": [public_turn(doc) for doc in page["turns"]]}
 
 
+async def _citation_documents(request, identity, *, limit, turn_id=None):
+    """Resolve an exact owned answer before applying any recent-answer window."""
+    try:
+        repository = service(request).repository
+        if turn_id:
+            doc = await repository.read(identity, turn_id)
+            return [doc] if doc and doc.get("status") == "completed" else []
+        return await repository.citation_documents(identity, limit=limit)
+    except ValueError:
+        raise HTTPException(422, "Invalid saved-answer lookup") from None
+    except Exception:
+        raise HTTPException(503, "Saved research storage is unavailable") from None
+
+
 @router.get("/citations")
 async def citations(request: Request, limit: int = Query(30, ge=1, le=200),
                     turn_id: str | None = None, metric: str | None = None):
@@ -200,12 +214,7 @@ async def citations(request: Request, limit: int = Query(30, ge=1, le=200),
     from services.agent.citations import build_index, filter_index
 
     identity = await owner(request)
-    try:
-        docs = await service(request).repository.citation_documents(identity, limit=limit)
-    except ValueError:
-        raise HTTPException(422, "Invalid saved-answer limit") from None
-    except Exception:
-        raise HTTPException(503, "Saved research storage is unavailable") from None
+    docs = await _citation_documents(request, identity, limit=limit, turn_id=turn_id)
     index = build_index(docs)
     if turn_id or metric:
         index = filter_index(index, turn_id=turn_id, metric=metric)
@@ -213,21 +222,18 @@ async def citations(request: Request, limit: int = Query(30, ge=1, le=200),
 
 
 @router.get("/citations/{citation_id}")
-async def citation(citation_id: str, request: Request, limit: int = Query(30, ge=1, le=200)):
+async def citation(citation_id: str, request: Request, limit: int = Query(200, ge=1, le=200),
+                   turn_id: str | None = None):
     """One citation from the owner's saved answers.
 
-    An id that does not belong to this owner is not found: the search only
-    ever runs over the owner's own saved turns.
+    Use the returned detail_path for lookup through the exact saved answer,
+    independent of newer answers. ID-only lookups retain a bounded recent
+    window. Another owner's or an unfinished answer is never returned.
     """
     from services.agent.citations import build_index
 
     identity = await owner(request)
-    try:
-        docs = await service(request).repository.citation_documents(identity, limit=limit)
-    except ValueError:
-        raise HTTPException(422, "Invalid saved-answer limit") from None
-    except Exception:
-        raise HTTPException(503, "Saved research storage is unavailable") from None
+    docs = await _citation_documents(request, identity, limit=limit, turn_id=turn_id)
     index = build_index(docs)
     for row in index["citations"]:
         if row["citation_id"] == citation_id:
