@@ -188,6 +188,53 @@ async def history_page(request: Request, limit: int = Query(30, ge=1, le=30), cu
     return {**page, "turns": [public_turn(doc) for doc in page["turns"]]}
 
 
+@router.get("/citations")
+async def citations(request: Request, limit: int = Query(30, ge=1, le=200),
+                    turn_id: str | None = None, metric: str | None = None):
+    """The owner's citation index over saved answers.
+
+    A citation points at one reading in one saved answer and keeps that
+    reading's own source, clocks, status and reason. Nothing is re-fetched
+    or recomputed here, and another owner's citations are never visible.
+    """
+    from services.agent.citations import build_index, filter_index
+
+    identity = await owner(request)
+    try:
+        docs = await service(request).repository.citation_documents(identity, limit=limit)
+    except ValueError:
+        raise HTTPException(422, "Invalid saved-answer limit") from None
+    except Exception:
+        raise HTTPException(503, "Saved research storage is unavailable") from None
+    index = build_index(docs)
+    if turn_id or metric:
+        index = filter_index(index, turn_id=turn_id, metric=metric)
+    return index
+
+
+@router.get("/citations/{citation_id}")
+async def citation(citation_id: str, request: Request, limit: int = Query(30, ge=1, le=200)):
+    """One citation from the owner's saved answers.
+
+    An id that does not belong to this owner is not found: the search only
+    ever runs over the owner's own saved turns.
+    """
+    from services.agent.citations import build_index
+
+    identity = await owner(request)
+    try:
+        docs = await service(request).repository.citation_documents(identity, limit=limit)
+    except ValueError:
+        raise HTTPException(422, "Invalid saved-answer limit") from None
+    except Exception:
+        raise HTTPException(503, "Saved research storage is unavailable") from None
+    index = build_index(docs)
+    for row in index["citations"]:
+        if row["citation_id"] == citation_id:
+            return {"version": index["version"], "citation": row}
+    raise HTTPException(404, "Citation not found")
+
+
 @router.post("/cancel/{turn_id}")
 async def cancel(turn_id: str, request: Request):
     identity = await owner(request)
