@@ -77,8 +77,8 @@ function AskFlow({ subject = "", overlayMetric = "raw", displayMode = "live", co
   const [note, setNote] = useState(null);
   const host=useRef(null),trigger=useRef(null),menu=useRef(null);
   const [focused,setFocused]=useState(0);
-  useEffect(()=>{if(!open)return;const items=[...menu.current?.querySelectorAll("button") || []];items[0]?.focus();const outside=e=>{if(!host.current?.contains(e.target))setOpen(false);};document.addEventListener("pointerdown",outside);return()=>document.removeEventListener("pointerdown",outside);},[open]);
-  const menuKey=e=>{const items=[...menu.current?.querySelectorAll("button") || []];let next=focused;if(e.key==="Escape"){e.preventDefault();e.stopPropagation();setOpen(false);trigger.current?.focus();return;}if(e.key==="ArrowDown")next=(focused+1)%items.length;else if(e.key==="ArrowUp")next=(focused+items.length-1)%items.length;else if(e.key==="Home")next=0;else if(e.key==="End")next=items.length-1;else return;e.preventDefault();e.stopPropagation();setFocused(next);items[next]?.focus();};
+  useEffect(()=>{if(!open)return;const items=[...menu.current?.querySelectorAll("button") || []];(items[focused]||items[0])?.focus();const outside=e=>{if(!host.current?.contains(e.target))setOpen(false);};document.addEventListener("pointerdown",outside);return()=>document.removeEventListener("pointerdown",outside);},[open,focused]);
+  const menuKey=e=>{const items=[...menu.current?.querySelectorAll("button") || []];let next=focused;if(e.key==="Escape"){e.preventDefault();e.stopPropagation();setOpen(false);trigger.current?.focus();return;}if(e.key==="ArrowDown")next=(focused+1)%items.length;else if(e.key==="ArrowUp")next=(focused+items.length-1)%items.length;else if(e.key==="Home")next=0;else if(e.key==="End")next=items.length-1;else {e.stopPropagation();return;}e.preventDefault();e.stopPropagation();setFocused(next);items[next]?.focus();};
   if (!agent) {
     return (
       <span className="lodestar-ask lodestar-ask-off" data-testid={`${testId}-unavailable`}
@@ -109,7 +109,7 @@ function AskFlow({ subject = "", overlayMetric = "raw", displayMode = "live", co
         aria-haspopup="menu" aria-expanded={open} disabled={busy}
         title={block || "Ask Flow about the selected reading"}
         data-testid={`${testId}-btn`}
-        onKeyDown={e=>{if(e.key==="ArrowDown" && !busy){e.preventDefault();e.stopPropagation();setFocused(0);setOpen(true);}}}
+        onKeyDown={e=>{if((e.key==="ArrowDown"||e.key==="ArrowUp") && !busy){e.preventDefault();e.stopPropagation();setFocused(e.key==="ArrowUp"?Math.max(starters.length-1,0):0);setOpen(true);}}}
         onClick={() => { setNote(null);setFocused(0); setOpen((o) => !o); }}>
         Ask Flow
       </button>
