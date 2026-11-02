@@ -14538,7 +14538,7 @@
     },
     "/api/paper-trading/attribution": {
       "get": {
-        "description": "P&L attribution by ticker (Phase 6.5, 2026-09-05).\n\nQuery params:\n  tickers: optional comma-separated symbols to fetch live marks for\n    unrealized P&L (via the merged chain fetcher). Omitted tickers\n    report unrealized_pnl=null (unknown, never mark-to-model).",
+        "description": "P&L attribution by ticker (Phase 6.5, 2026-09-05).\n\nQuery params:\n  tickers: optional comma-separated symbols to fetch live marks for\n    unrealized P&L (via the merged chain fetcher). Omitted tickers\n    report unrealized_pnl=null (unknown, never mark-to-model).\n\nEvery mark carries its provenance (provider, source, receipt clock, event\nclock, staleness). A failed fetch is an unavailable mark with a reason,\nnever a zero.",
         "operationId": "get_api_paper-trading_attribution",
         "parameters": [
           {

@@ -162,21 +162,32 @@ async def pnl_attribution(tickers: str | None = Query(default=None)):
       tickers: optional comma-separated symbols to fetch live marks for
         unrealized P&L (via the merged chain fetcher). Omitted tickers
         report unrealized_pnl=null (unknown, never mark-to-model).
+
+    Every mark carries its provenance (provider, source, receipt clock, event
+    clock, staleness). A failed fetch is an unavailable mark with a reason,
+    never a zero.
     """
     global _paper_engine
     if not _paper_engine:
         raise HTTPException(503, "Paper trading engine not initialized")
-    prices: dict[str, float] = {}
+    from services.paper_mark_provenance import (
+        REASON_MARK_FETCH_FAILED,
+        mark_from_chain_payload,
+        mark_record,
+    )
+
+    marks: dict[str, dict] = {}
     if tickers:
         from server import fetch_spot_and_chains_merged
         for sym in [t.strip().upper() for t in tickers.split(",") if t.strip()][:20]:
             try:
                 raw = await fetch_spot_and_chains_merged(sym, 1)
-                if raw and (raw.get("spot") or 0) > 0:
-                    prices[sym] = float(raw["spot"])
             except Exception as e:
                 logger.warning("attribution mark fetch failed for %s: %s", sym, e)
-    return {"status": "ok", **_paper_engine.get_pnl_attribution(prices or None)}
+                marks[sym] = mark_record(sym, None, reason=REASON_MARK_FETCH_FAILED)
+                continue
+            marks[sym] = mark_from_chain_payload(sym, raw)
+    return {"status": "ok", **_paper_engine.get_pnl_attribution(marks=marks or None)}
 
 
 @router.get("/api/paper-trading/history")
