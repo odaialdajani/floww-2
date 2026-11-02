@@ -2421,43 +2421,198 @@ async def get_trading_summary(ticker: str) -> str:
 
 # ============ Portfolio Helpers ============
 
-async def calc_portfolio_summary(portfolio: dict, spot: float, iv: float) -> dict:
-    """Return portfolio summary with aggregated Greeks and P&L."""
+DEFAULT_CONTRACT_MULTIPLIER = 100
+DEFAULT_MULTIPLIER_SOURCE = "assumed_equity_contract_100"
+
+
+def _portfolio_position_inputs(p: Any, default_iv: float, default_spot: float) -> dict[str, Any]:
+    """Normalise one stored position, or raise ValueError with a typed reason.
+
+    Every rejection reason is explicit so the summary can disclose which
+    stored position could not be priced instead of dropping it silently.
+    """
+    if not isinstance(p, dict):
+        raise ValueError("INVALID_POSITION_DATA")
+    symbol = str(p.get("symbol", "") or "")
+    raw_iv = p.get("entry_iv")
+    raw_underlying = p.get("underlying_price")
+    try:
+        strike = float(p.get("strike", 0))
+        quantity = int(p.get("quantity", 1))
+        entry_price = float(p.get("entry_price", 0))
+        entry_iv = float(default_iv if raw_iv is None else raw_iv)
+        underlying = float(default_spot if raw_underlying is None else raw_underlying)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("INVALID_POSITION_NUMBERS") from exc
+    expiry = str(p.get("expiry", "") or "")
+    try:
+        datetime.strptime(expiry, "%Y-%m-%d")
+    except (TypeError, ValueError) as exc:
+        raise ValueError("INVALID_EXPIRY") from exc
+    if strike <= 0 or not math.isfinite(strike):
+        raise ValueError("INVALID_STRIKE")
+    if quantity == 0:
+        raise ValueError("ZERO_QUANTITY")
+    if entry_price < 0 or not math.isfinite(entry_price):
+        raise ValueError("INVALID_ENTRY_PRICE")
+    if entry_iv <= 0 or not math.isfinite(entry_iv):
+        raise ValueError("INVALID_ENTRY_IV")
+    if underlying <= 0 or not math.isfinite(underlying):
+        raise ValueError("INVALID_UNDERLYING_PRICE")
+    option_type = str(p.get("option_type", "call") or "call").lower()
+    if option_type not in ("call", "put"):
+        raise ValueError("INVALID_OPTION_TYPE")
+    return {
+        "symbol": symbol,
+        "option_type": option_type,
+        "strike": strike,
+        "expiry": expiry,
+        "quantity": quantity,
+        "entry_price": entry_price,
+        "entry_iv": entry_iv,
+        "underlying_price": underlying,
+        "is_long": bool(p.get("is_long", True)),
+    }
+
+
+def _portfolio_multiplier(p: dict[str, Any]) -> tuple[float, str]:
+    """Contract multiplier with its provenance. Never an undeclared 100."""
+    raw = p.get("multiplier")
+    if raw is None:
+        return DEFAULT_CONTRACT_MULTIPLIER, DEFAULT_MULTIPLIER_SOURCE
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return DEFAULT_CONTRACT_MULTIPLIER, DEFAULT_MULTIPLIER_SOURCE
+    if value <= 0 or not math.isfinite(value):
+        return DEFAULT_CONTRACT_MULTIPLIER, DEFAULT_MULTIPLIER_SOURCE
+    return value, "position_record"
+
+
+def _price_portfolio_positions(positions_data: list[Any], spot: float, iv: float
+                               ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Split stored positions into priced rows and disclosed skips.
+
+    A position that cannot be priced is never valued at zero and never
+    dropped without a reason. Money math happens in the caller with Decimal.
+    """
     from portfolio import Position
-    positions_data = portfolio.get("positions", [])
-    pos_list = []
-    for p in positions_data:
+
+    priced: list[dict[str, Any]] = []
+    skipped: list[dict[str, Any]] = []
+    for index, raw in enumerate(positions_data or []):
         try:
-            pos = Position(
-                symbol=p.get("symbol", ""),
-                option_type=p.get("option_type", "call"),
-                strike=float(p.get("strike", 0)),
-                expiry=p.get("expiry", "2026-06-15"),
-                quantity=int(p.get("quantity", 1)),
-                entry_price=float(p.get("entry_price", 0)),
-                entry_iv=float(p.get("entry_iv", iv)),
-                underlying_price=float(p.get("underlying_price", spot)),
-                is_long=p.get("is_long", True),
-            )
-            pos_list.append(pos)
-        except Exception:
+            fields = _portfolio_position_inputs(raw, iv, spot)
+        except ValueError as exc:
+            reason = str(exc)
+            skipped.append({"index": index, "reason": reason,
+                            "symbol": (raw.get("symbol") if isinstance(raw, dict) else None)})
             continue
+        if spot <= 0 or not math.isfinite(spot):
+            skipped.append({"index": index, "reason": "INVALID_SPOT", "symbol": fields["symbol"]})
+            continue
+        if iv <= 0 or not math.isfinite(iv):
+            skipped.append({"index": index, "reason": "INVALID_IV", "symbol": fields["symbol"]})
+            continue
+        try:
+            pos = Position(**fields)
+            greeks = pos.current_greeks(spot, iv)
+        except Exception:
+            skipped.append({"index": index, "reason": "MODEL_PRICE_UNAVAILABLE",
+                            "symbol": fields["symbol"]})
+            continue
+        price = greeks.get("price") if isinstance(greeks, dict) else None
+        if not isinstance(price, (int, float)) or isinstance(price, bool) or not math.isfinite(price):
+            skipped.append({"index": index, "reason": "MODEL_PRICE_UNAVAILABLE",
+                            "symbol": fields["symbol"]})
+            continue
+        multiplier, multiplier_source = _portfolio_multiplier(raw if isinstance(raw, dict) else {})
+        priced.append({"index": index, "position": pos, "greeks": greeks, "price": float(price),
+                       "multiplier": multiplier, "multiplier_source": multiplier_source,
+                       "symbol": fields["symbol"]})
+    return priced, skipped
+
+
+async def calc_portfolio_summary(portfolio: dict, spot: float, iv: float) -> dict:
+    """Return portfolio summary with aggregated Greeks and a typed P&L object.
+
+    Money uses Decimal (same rule as ``Position.pnl``). The P&L object carries
+    the fields the Portfolio panel consumes (``total_pnl``, ``pct_pnl``,
+    ``total_entry_value``, ``total_current_value``) plus its own status,
+    reason, currency and multiplier provenance. Positions that cannot be
+    priced are disclosed in ``skipped`` and excluded from the totals; an
+    empty priced population is *unavailable*, never a measured zero.
+    """
+    from decimal import Decimal
+
+    positions_data = portfolio.get("positions", []) or []
+    priced, skipped = _price_portfolio_positions(positions_data, spot, iv)
 
     totals = {"delta": 0, "gamma": 0, "vega": 0, "theta": 0}
-    total_pnl = 0.0
-    for pos in pos_list:
-        g = pos.current_greeks(spot, iv)
-        for k in totals:
-            totals[k] += g.get(k, 0)
-        current_price = g.get("price", 0)
+    total_entry = Decimal("0")
+    total_current = Decimal("0")
+    total_pnl = Decimal("0")
+    for row in priced:
+        pos = row["position"]
+        greeks = row["greeks"]
+        for key in totals:
+            totals[key] += greeks.get(key, 0)
         sign = 1 if pos.is_long else -1
-        total_pnl += (current_price - pos.entry_price) * sign * abs(pos.quantity) * 100
+        qty = Decimal(abs(int(pos.quantity)))
+        multiplier = Decimal(str(row["multiplier"]))
+        entry = Decimal(str(pos.entry_price))
+        current = Decimal(str(row["price"]))
+        total_entry += entry * qty * multiplier
+        total_current += current * qty * multiplier
+        total_pnl += (current - entry) * sign * qty * multiplier
+
+    coverage = {"stored": len(positions_data), "priced": len(priced), "skipped": len(skipped)}
+    multipliers = [{"index": row["index"], "value": row["multiplier"],
+                    "source": row["multiplier_source"]} for row in priced]
+    if priced:
+        entry_value = float(round(total_entry, 2))
+        current_value = float(round(total_current, 2))
+        pnl_value = float(round(total_pnl, 2))
+        pct_pnl = (float(round(total_pnl / total_entry * 100, 4))
+                   if total_entry > 0 else None)
+        pnl_reason = None
+        pnl_pct_reason = None if pct_pnl is not None else "NO_ENTRY_VALUE"
+        pnl_status = "ok"
+    else:
+        entry_value = current_value = pnl_value = pct_pnl = None
+        pnl_reason = "NO_PRICED_POSITIONS"
+        pnl_pct_reason = None
+        pnl_status = "unavailable"
+
+    pnl = {
+        "status": pnl_status,
+        "reason": pnl_reason,
+        "total_pnl": pnl_value,
+        "pct_pnl": pct_pnl,
+        "pct_reason": pnl_pct_reason,
+        "total_entry_value": entry_value,
+        "total_current_value": current_value,
+        "currency": "USD",
+        "unit": "USD",
+        "multiplier": {"value": DEFAULT_CONTRACT_MULTIPLIER,
+                       "source": DEFAULT_MULTIPLIER_SOURCE,
+                       "per_position": multipliers},
+        "coverage": coverage,
+    }
 
     return {
         "name": portfolio.get("name", ""),
         "positions": len(positions_data),
+        "positions_priced": len(priced),
+        "positions_skipped": len(skipped),
+        "skipped": skipped,
         "greeks": {k: round(v, 4) for k, v in totals.items()},
-        "pnl": round(total_pnl, 2),
+        "pnl": pnl,
+        "total_pnl": pnl_value,
+        "valuation_basis": "local_bs_model_at_spot_iv",
+        "spot": spot,
+        "iv": iv,
+        "note": "Model-priced from the supplied spot/IV — a research estimate, not a broker mark.",
     }
 
 

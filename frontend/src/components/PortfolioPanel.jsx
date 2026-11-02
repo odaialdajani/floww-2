@@ -401,8 +401,20 @@ export default function PortfolioPanel({ ticker, spot }) {
     setLoading(false);
   };
 
-  const pnl = portfolioData?.pnl;
+  // The endpoint returns a typed P&L object (status, reason, coverage,
+  // multiplier provenance). A legacy bare number is still tolerated, but its
+  // missing fields stay unavailable instead of rendering as undefined/zero.
+  const rawPnl = portfolioData?.pnl;
+  const pnl = typeof rawPnl === "number"
+    ? { status: "partial", reason: "LEGACY_TOTAL_ONLY", total_pnl: rawPnl, pct_pnl: null,
+        pct_reason: "NO_ENTRY_VALUE", total_entry_value: null, total_current_value: null,
+        coverage: null }
+    : rawPnl;
   const greeks = portfolioData?.greeks;
+  const money = (value, { sign = false, percent = false } = {}) => {
+    if (value === null || value === undefined) return "unavailable";
+    return `${sign && value > 0 ? "+" : ""}${percent ? `${value}%` : fmt(value, 0)}`;
+  };
 
   return (
     <div className="p-4 flex-1 overflow-auto">
@@ -434,28 +446,52 @@ export default function PortfolioPanel({ ticker, spot }) {
         {/* P&L Summary */}
         {pnl && (
           <div className="panel p-3">
+            <div className="flex items-center justify-between mb-2">
+              <div className="label mb-0">P&L · model-priced</div>
+              {pnl.status !== "ok" && (
+                <div className="text-[10px] text-slate-400">
+                  unavailable{pnl.reason ? ` · ${pnl.reason}` : ""}
+                </div>
+              )}
+            </div>
             <div className="grid grid-cols-4 gap-3 text-center">
               <div>
                 <div className="label">Total P&L</div>
                 <div className={`text-xl mono font-bold ${pnl.total_pnl > 0 ? "text-emerald-400" : pnl.total_pnl < 0 ? "text-rose-400" : "text-slate-300"}`}>
-                  {pnl.total_pnl > 0 ? "+" : ""}{fmt(pnl.total_pnl, 0)}
+                  {money(pnl.total_pnl, { sign: true })}
                 </div>
               </div>
               <div>
                 <div className="label">P&L %</div>
                 <div className={`text-xl mono font-bold ${pctClass(pnl.pct_pnl)}`}>
-                  {pnl.pct_pnl > 0 ? "+" : ""}{pnl.pct_pnl}%
+                  {money(pnl.pct_pnl, { sign: true, percent: true })}
                 </div>
               </div>
               <div>
                 <div className="label">Entry Value</div>
-                <div className="text-lg mono text-slate-300">{fmt(pnl.total_entry_value, 0)}</div>
+                <div className="text-lg mono text-slate-300">{money(pnl.total_entry_value)}</div>
               </div>
               <div>
                 <div className="label">Current Value</div>
-                <div className="text-lg mono text-slate-300">{fmt(pnl.total_current_value, 0)}</div>
+                <div className="text-lg mono text-slate-300">{money(pnl.total_current_value)}</div>
               </div>
             </div>
+            {pnl.coverage && (
+              <div className="mt-2 text-[10px] text-slate-500 text-center">
+                {pnl.coverage.priced} priced · {pnl.coverage.skipped} skipped ·{" "}
+                {pnl.coverage.stored} stored
+              </div>
+            )}
+            {Array.isArray(portfolioData?.skipped) && portfolioData.skipped.length > 0 && (
+              <div className="mt-1 text-[10px] text-amber-400/80 text-center">
+                skipped: {portfolioData.skipped.map((s) => `${s.symbol || "position"} (${s.reason})`).join(", ")}
+              </div>
+            )}
+            {portfolioData?.valuation_basis && (
+              <div className="mt-1 text-[10px] text-slate-500 text-center">
+                {portfolioData.valuation_basis} · not a broker mark
+              </div>
+            )}
           </div>
         )}
 
