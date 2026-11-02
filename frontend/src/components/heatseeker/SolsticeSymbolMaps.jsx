@@ -8,9 +8,12 @@ import ExactContractReview from "./ExactContractReview";
 import AskFlow from "./AskFlow";
 import { mapSurface } from "./shownMapStrikes";
 
+const panePair = symbol => [...new Set([symbol, symbol === "QQQ" ? "SPY" : "QQQ"])];
+const paneQuad = symbol => [...new Set([symbol, "SPY", "QQQ", "^SPX", "IWM"])].slice(0, 4);
+
 /** Independent canonical panes; never projects another symbol onto SPY's strike rail. */
 export default function SolsticeSymbolMaps({ ticker = "SPY", data, metric = "raw", viewMode = "gex", mode = "day", expiries = 4, dte = null, replay = false, locked = false }) {
-  const [names, setNames] = useState(() => [...new Set([ticker, ticker === "QQQ" ? "SPY" : "QQQ"])]);
+  const [names, setNames] = useState(() => panePair(ticker));
   const [active, setActive] = useState(ticker);
   const [packets, setPackets] = useState({});
   const [errors, setErrors] = useState({});
@@ -25,6 +28,13 @@ export default function SolsticeSymbolMaps({ ticker = "SPY", data, metric = "raw
   useEffect(() => {
     if (data?.ticker === ticker) setPackets(p => ({ ...p, [ticker]: data }));
   }, [ticker, data]);
+  const previousTicker = useRef(ticker);
+  useEffect(() => {
+    if (previousTicker.current === ticker) return;
+    previousTicker.current = ticker;
+    setNames(panePair(ticker));
+    setActive(ticker);
+  }, [ticker]);
   useEffect(() => {
     const gen = ++generation.current;
     const ctrl = new AbortController();
@@ -53,11 +63,12 @@ export default function SolsticeSymbolMaps({ ticker = "SPY", data, metric = "raw
   const scaleCallbacks = useMemo(() => Object.fromEntries(names.map(n => [n, range => setRanges(prev =>
     prev[n]?.min === range.min && prev[n]?.max === range.max ? prev : { ...prev, [n]: range })])), [nameKey]);
   useEffect(() => { frozen.current = {}; }, [scopeKey]);
-  const packet = packets[active];
-  const cell = selected?.ticker === active ? selected : null;
+  const activeSymbol = names.includes(active) ? active : ticker;
+  const packet = packets[activeSymbol];
+  const cell = selected?.ticker === activeSymbol ? selected : null;
   const wall = cell ? (packet?.metrics?.walls || []).find(w => w.wall_id === cell.wall_id) || null : null;
   const surface = mapSurface(packet, viewMode, metric);
-  usePublishScreenContext(packet ? { contextVersion: 2, page: "heatseeker", ticker: active, metric: viewMode, overlayMetric: metric,
+  usePublishScreenContext(packet ? { contextVersion: 2, page: "heatseeker", ticker: activeSymbol, metric: viewMode, overlayMetric: metric,
     displayMode: replay ? "replay" : "live", snapshotId: packet.snapshotId || null, provider: packet.data_source || null,
     formula: packet.formula_version || null, activePane: viewMode, mapQuery: packet.map_query || null, mapVersion: packet.asof || null,
     mapStrikes: surface.strikes, mapExpiries: surface.expiries, selectedWall: cell?.wall_id || null,
@@ -66,6 +77,10 @@ export default function SolsticeSymbolMaps({ ticker = "SPY", data, metric = "raw
     const w = (packets[name]?.metrics?.walls || []).find(w => strike >= w.low && strike <= w.high);
     setActive(name); setSelected({ ticker: name, strike, colKey, wall_id: w?.wall_id || null });
   }, [packets]);
+  const setPaneSet = useCallback(next => {
+    setNames(next);
+    setActive(prev => (next.includes(prev) ? prev : ticker));
+  }, [ticker]);
   useEffect(() => {
     if (!review) return undefined;
     const close = e => { if (e.key === "Escape") setReview(false); };
@@ -74,17 +89,17 @@ export default function SolsticeSymbolMaps({ ticker = "SPY", data, metric = "raw
   }, [review]);
   return <div className="solstice-symbol-workspace" data-testid="solstice-symbol-maps">
     <div className="solstice-symbol-heading">
-      <span>Independent symbol axes · active inspector: {active} · each timestamp/scope disclosed</span>
-      <button onClick={() => setNames([...new Set([ticker, ticker === "QQQ" ? "SPY" : "QQQ"])])}>Two symbols</button>
-      <button onClick={() => setNames([...new Set([ticker, "SPY", "QQQ", "^SPX", "IWM"])].slice(0, 4))}>Four symbols</button>
-      {names.map(n => <button key={n} aria-pressed={active === n} onClick={() => { setActive(n); setReview(false); }}>{n}</button>)}
+      <span>Independent symbol axes · active inspector: {activeSymbol} · each timestamp/scope disclosed</span>
+      <button onClick={() => setPaneSet(panePair(ticker))}>Two symbols</button>
+      <button onClick={() => setPaneSet(paneQuad(ticker))}>Four symbols</button>
+      {names.map(n => <button key={n} aria-pressed={activeSymbol === n} onClick={() => { setActive(n); setReview(false); }}>{n}</button>)}
       <button disabled={!cell || !packet} onClick={() => setReview(true)}>Review selected wall</button>
     </div>
     <div className="solstice-symbol-body">
       <div className="solstice-symbol-grid">{names.map(name => {
         const p = packets[name];
         const range = locked ? frozen.current[name] : null;
-        return <section className={`solstice-symbol-pane${active === name ? " active" : ""}`} key={name} data-testid={`symbol-map-${name}`}>
+        return <section className={`solstice-symbol-pane${activeSymbol === name ? " active" : ""}`} key={name} data-testid={`symbol-map-${name}`}>
           <header><button onClick={() => { setActive(name); setReview(false); }}>{name}</button> · {viewMode.toUpperCase()} / {metric}
             <small>{p?.snapshotId || "observation unavailable"} · {p?.asof || "timestamp unknown"} · {p?.data_source || "source unknown"}</small>
             <small>{p?.grid?.expiries?.join(", ") || "expiry scope unavailable"} · {p?.quality?.state || "quality unknown"}
@@ -92,25 +107,25 @@ export default function SolsticeSymbolMaps({ ticker = "SPY", data, metric = "raw
           {p ? <SkylitHeatmapGrid data={p} spot={p.spot ?? null} ticker={name} metric={metric} viewMode={viewMode}
             scale={range ? { ...range, locked: true } : null} onScaleReady={scaleCallbacks[name]}
             selected={cell?.ticker === name ? { strike: cell.strike, expiry: cell.colKey } : null}
-            wallBand={active === name ? wall : null} onCellClick={(s,e) => select(name,s,e)} /> : <p role="status">
+            wallBand={activeSymbol === name ? wall : null} onCellClick={(s,e) => select(name,s,e)} /> : <p role="status">
             {replay ? "Recorded frame unavailable — no live substitution" : errors[name]
               ? `${name.includes("SPX") ? "SPX unavailable · entitlement not proven" : name + " unavailable"} · ${errors[name]}` : "Loading bounded symbol scope…"}</p>}
         </section>;
       })}</div>
-      <aside className="solstice-symbol-inspector" data-testid="symbol-map-inspector"><strong>{active} · selected wall</strong>
+      <aside className="solstice-symbol-inspector" data-testid="symbol-map-inspector"><strong>{activeSymbol} · selected wall</strong>
         <p>{packet?.quality?.state || "unavailable"} · {(packet?.quality?.reasonCodes || []).join(", ") || "source age / coverage inspectable in packet"}</p>
         <WallInspector wall={wall} metrics={packet?.metrics} grids={packet?.metrics?.grids} displayGrid={packet?.grid}
           quality={packet?.quality} interaction={(packet?.interactions || []).find(i => i.wall_id === wall?.wall_id)}
           metric={metric} snapshotId={packet?.snapshotId} replay={replay} />
         <button disabled={!cell || !packet} onClick={() => setReview(true)}>Review exact contract</button>
-        <AskFlow subject={`${active} · ${cell?.wall_id || "no selected wall"}`} overlayMetric={metric} displayMode={replay ? "replay" : "live"} compact />
+        <AskFlow subject={`${activeSymbol} · ${cell?.wall_id || "no selected wall"}`} overlayMetric={metric} displayMode={replay ? "replay" : "live"} compact />
       </aside>
     </div>
-    {review && <div className="skylit-drawer" role="dialog" aria-label={`${active} contract review`}>
+    {review && <div className="skylit-drawer" role="dialog" aria-label={`${activeSymbol} contract review`}>
       <button autoFocus onClick={() => setReview(false)} aria-label="Close contract review">Close</button>
       <WallInspector wall={wall} metrics={packet?.metrics} grids={packet?.metrics?.grids} displayGrid={packet?.grid}
         quality={packet?.quality} metric={metric} snapshotId={packet?.snapshotId} replay={replay} />
-      <ExactContractReview ticker={active} data={packet} wall={wall} cell={cell} replay={replay} />
+      <ExactContractReview ticker={activeSymbol} data={packet} wall={wall} cell={cell} replay={replay} />
     </div>}
   </div>;
 }
