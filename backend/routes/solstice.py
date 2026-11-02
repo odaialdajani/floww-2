@@ -266,6 +266,35 @@ async def attribute(ticker: str, day: str = Query(""),
     return compare_snapshots(conn, ticker, day, query_key=query_key, as_of=as_of)
 
 
+@router.get("/wall-curve/{ticker}")
+async def wall_curve_route(ticker: str,
+                            wall_id: str = Query(..., min_length=1),
+                            metric_id: str = Query("dadgex_net_v1"),
+                            query_key: str | None = Query(None),
+                            as_of: str | None = Query(None),
+                            day: str | None = Query(None),
+                            limit: int = Query(200, ge=1, le=2000)) -> dict[str, Any]:
+    """Recorded same-wall curve (`recorded-wall-curve.v1`).
+
+    Read-only over the recorder store: the stored observations of ONE raw
+    wall inside ONE declared scope. No live chain, no recomputation, no
+    forward fill. A removed wall, a changed definition and a session, scope
+    or provider change break the line and leave an explicit gap; missing,
+    invalid, unavailable and a measured zero stay distinct.
+    """
+    from services.duckdb_engine import db as eng
+    from services.solstice_wall_curve import CURVE_VERSION
+    from services.solstice_wall_curve import wall_curve as read_wall_curve
+
+    conn = eng.conn if hasattr(eng, "conn") else None
+    if conn is None:
+        return {"version": CURVE_VERSION, "status": "error",
+                "error": "recorder_unavailable", "reason": "recorder_unavailable",
+                "points": [], "gaps": []}
+    return read_wall_curve(conn, ticker, wall_id=wall_id, metric_id=metric_id,
+                            query_key=query_key, as_of=as_of, day=day, limit=limit)
+
+
 @router.get("/recorder_health")
 async def recorder_health() -> dict[str, Any]:
     """Truthful recorder health (R5-F): durable mode, tables, latest write.

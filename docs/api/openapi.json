@@ -16086,7 +16086,7 @@
     },
     "/api/public/portfolio/raw": {
       "get": {
-        "description": "Return the raw authenticated Public.com paper-trading portfolio.\n\nNOTE: the canonical UI-facing portfolio (flattened positions, money\nfields) lives at GET /api/public/portfolio (routes/public_brokerage.py),\nwhich takes precedence on that path. This raw view is kept for\ndebugging/inspection.",
+        "description": "Return the raw authenticated Public.com paper-trading portfolio.\n\nNOTE: the canonical UI-facing portfolio (flattened positions, money\nfields) lives at GET /api/public/portfolio (routes/public_brokerage.py),\nwhich takes precedence on that path. This raw view is kept for\ndebugging/inspection.\n\nAccount reads are sensitive: this route must carry the master key even\nthough it is a GET. Without the dependency, GET auth (mutating methods\nonly) left the account id, cash and positions readable to any reachable\nclient \u2014 reproduced 2026-11-01 before this fix.",
         "operationId": "get_api_public_portfolio_raw",
         "responses": {
           "200": {
@@ -18820,6 +18820,132 @@
           }
         },
         "summary": "Vanna",
+        "tags": [
+          "solstice",
+          "solstice"
+        ]
+      }
+    },
+    "/api/solstice/wall-curve/{ticker}": {
+      "get": {
+        "description": "Recorded same-wall curve (`recorded-wall-curve.v1`).\n\nRead-only over the recorder store: the stored observations of ONE raw\nwall inside ONE declared scope. No live chain, no recomputation, no\nforward fill. A removed wall, a changed definition and a session, scope\nor provider change break the line and leave an explicit gap; missing,\ninvalid, unavailable and a measured zero stay distinct.",
+        "operationId": "get_api_solstice_wall-curve_ticker",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ticker",
+            "required": true,
+            "schema": {
+              "title": "Ticker",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "wall_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Wall Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "metric_id",
+            "required": false,
+            "schema": {
+              "default": "dadgex_net_v1",
+              "title": "Metric Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "query_key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Query Key"
+            }
+          },
+          {
+            "in": "query",
+            "name": "as_of",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "As Of"
+            }
+          },
+          {
+            "in": "query",
+            "name": "day",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Day"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "maximum": 2000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Wall Curve Route Api Solstice Wall Curve  Ticker  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Wall Curve Route",
         "tags": [
           "solstice",
           "solstice"
