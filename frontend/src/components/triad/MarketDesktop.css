@@ -99,9 +99,10 @@
  * was stronger than the approved restrained palette) — same family as the
  * candle/map surfaces, gold accents, calm slate borders. */
 .tdk-dock {
+  --tdk-floating-clearance: 132px;
   position: sticky;
   top: 6px;
-  max-height: calc(100vh - 26px);
+  max-height: calc(100vh - var(--tdk-floating-clearance));
   display: flex; flex-direction: column;
   min-width: 0; min-height: 0;
   background: var(--floww-surface, var(--panel, #111111));
@@ -230,7 +231,7 @@
   .trinity-desktop.tdk-dock-closed .tdk-dock,
   .trinity-desktop:not(.tdk-dock-open) .tdk-dock { display: none; }
   .trinity-desktop.tdk-dock-open .tdk-dock {
-    position: fixed; top: 10px; right: 10px; bottom: 10px;
+    position: fixed; top: 10px; right: 10px; bottom: var(--tdk-floating-clearance);
     width: min(356px, calc(100vw - 28px)); max-height: none; z-index: 60;
     box-shadow: 0 14px 40px rgba(0,0,0,.55);
   }
