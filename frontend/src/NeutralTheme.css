@@ -1,5 +1,7 @@
-/* Surface-only dark theme. Data palettes and workspace geometry stay owned
-   by their existing components; body portals share these same surface tokens. */
+/* Dark theme surfaces plus the shared floating-control lane. Data palettes
+   stay owned by their existing components; body portals share these same
+   surface tokens. The bottom-right floating-control lane is theme-independent
+   geometry owned here (see the S02 block at the end of this file). */
 @media screen {
   html:not([data-theme="light"]) {
     --bg: #090909;
@@ -244,4 +246,35 @@
     border-color: var(--floww-line) !important;
   }
   html:not([data-theme="light"]) ::-webkit-scrollbar-thumb:hover { background: #666666; }
+  /* The shared App health chip is a control, not stray text over the page:
+     it gets the same restrained gray/black surface as the other controls. */
+  html:not([data-theme="light"]) aside[aria-label="App health"] > button {
+    background: var(--floww-raised);
+    border: 1px solid var(--floww-line);
+    color: var(--text-primary);
+    border-radius: 4px;
+    padding: 4px 8px;
+    min-height: 28px;
+    cursor: pointer;
+  }
+  html:not([data-theme="light"]) aside[aria-label="App health"] section {
+    background: var(--floww-raised) !important;
+    border-color: var(--floww-line) !important;
+    color: var(--text-primary) !important;
+  }
+}
+
+/* S02: the bottom-right corner is a reserved lane for the shared floating
+   controls (App health, Ask Flow). The Stock Filters/Analytics strip used to
+   end underneath the Ask Flow opener, so its open-range control could not be
+   pressed; on narrow screens the App health chip sat under the same opener.
+   Geometry only: no layout direction, chart size or control ownership change.
+   The Market inspector's own clearance belongs to the inspector owner. */
+@media screen and (min-width: 1024px) {
+  body:has(.heatseeker-layout) .mobile-toggle-bar { padding-right: 140px; }
+  body:has(.heatseeker-layout) .floww-page-footer { padding-right: 140px; }
+}
+@media screen and (max-width: 768px) {
+  /* The chip's position is an inline style, so the rule needs !important. */
+  aside[aria-label="App health"] { bottom: calc(116px + env(safe-area-inset-bottom)) !important; }
 }
