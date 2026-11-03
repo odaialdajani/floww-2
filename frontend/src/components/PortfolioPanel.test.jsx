@@ -51,8 +51,9 @@ function summary(overrides = {}) {
   };
 }
 
-async function refreshWith(payload) {
-  mockGet.mockResolvedValueOnce({ data: payload });
+async function refreshWith(payload, book = { name: "main", positions: [] }) {
+  mockGet.mockImplementation(async (url, config) =>
+    (config?.params?.spot ? { data: payload } : { data: book }));
   render(<PortfolioPanel ticker="SPY" spot={600} />);
   fireEvent.click(screen.getByRole("button", { name: /refresh/i }));
   await waitFor(() => expect(mockGet).toHaveBeenCalled());
