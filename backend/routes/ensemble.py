@@ -45,9 +45,12 @@ async def update_ensemble(
 
 @router.get("/state")
 async def get_ensemble_state(ticker: str):
-    """Get full ensemble state including calibration and history."""
+    """Read existing state without initializing models or adding observations."""
     t = ticker.upper()
-    from services.ml_ensemble import ToxicityEnsemble
-    if t not in _ensembles:
-        _ensembles[t] = ToxicityEnsemble()
-    return {"ticker": t, **_ensembles[t].get_state()}
+    ensemble = _ensembles.get(t)
+    if ensemble is None:
+        return {"ticker": t, "type": "toxicity_ensemble", "horizons": [1, 5, 15, 60],
+                "initialized": False, "status": "uninitialized",
+                "reason": "NO_OBSERVATIONS_IN_THIS_PROCESS", "n_score_history": 0,
+                "ensemble_probabilities": {}, "component_scores": {}}
+    return {"ticker": t, "initialized": True, **ensemble.get_state()}

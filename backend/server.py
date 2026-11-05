@@ -872,9 +872,14 @@ async def fetch_spot_and_chains_merged(ticker: str, max_expiries: int = 4) -> di
 
 
 async def tap_counts(ticker: str, strikes: list[float], days: int = 5) -> dict[float, int]:
-    """Count how many days price crossed each strike in last N trading days using Polygon aggs."""
-    if not POLYGON_API_KEY or not strikes:
-        return {s: 0 for s in strikes}
+    """Count observed daily range crossings; absent history stays unknown."""
+    # Public daily evidence currently retains closes with unverified adjustment
+    # basis. It cannot establish high/low crossings; never substitute a legacy
+    # provider or manufacture zero touches from that missing evidence.
+    if os.getenv("FLOWW_MARKET_DATA_PROVIDER") == "public":
+        return {}
+    if not POLYGON_API_KEY or not strikes or days < 1:
+        return {}
     end = datetime.now(UTC).date()
     start = end - timedelta(days=days * 2)
     pg_ticker = ticker.replace("^SPX", "I:SPX") if ticker.startswith("^") else ticker
@@ -884,17 +889,26 @@ async def tap_counts(ticker: str, strikes: list[float], days: int = 5) -> dict[f
         async with httpx.AsyncClient(timeout=10) as cli:
             r = await cli.get(url, params={"apiKey": POLYGON_API_KEY, "limit": days * 2})
             data = r.json()
-        if not data.get("results"):
-            return out
-        results = data["results"][-days:]
+        results = data.get("results") if isinstance(data, dict) else None
+        if not isinstance(results, list) or len(results) < days:
+            return {}
+        results = results[-days:]
+        import math
         for bar in results:
-            lo = bar.get("l", 0)
-            hi = bar.get("h", 0)
+            if not isinstance(bar, dict):
+                return {}
+            lo, hi = bar.get("l"), bar.get("h")
+            if any(isinstance(v, bool) or not isinstance(v, (int, float)) or
+                   not math.isfinite(v) or v <= 0 for v in (lo, hi)) or lo > hi:
+                return {}
+        for bar in results:
+            lo, hi = bar["l"], bar["h"]
             for s in strikes:
                 if lo <= s <= hi:
                     out[s] += 1
     except Exception as e:
         log.warning(f"tap_counts fail {ticker}: {e}")
+        return {}
     return out
 
 
