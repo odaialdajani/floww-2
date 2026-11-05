@@ -257,6 +257,9 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
     }
   }, [status, readData]);
   const frames = payload?.ticker === ticker.toUpperCase() ? payload.frames || [] : [];
+  const savedNodeCountKnown = payload?.node_status !== "unavailable" &&
+    Number.isInteger(payload?.candles_with_recorded_nodes) && payload.candles_with_recorded_nodes >= 0 &&
+    payload.candles_with_recorded_nodes <= frames.length;
   // B08 ACTUAL STUDY INSTANCES (C045-C048): per-pane instances through the ONE
   // registry, persisted per symbol (versioned store, quota-capped). Two
   // differently configured studies compute independent series from THIS pane's
@@ -457,7 +460,7 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
       status,
       badge: readBadge,
       sourceTime: frames.length ? frames[frames.length - 1].time : null,
-      coverage: frames.length ? `${payload?.candles_with_recorded_nodes ?? 0} of ${frames.length} candles carry saved nodes` : "no candles loaded",
+      coverage: frames.length ? savedNodeCountKnown ? `${payload.candles_with_recorded_nodes} of ${frames.length} candles carry saved nodes` : `saved-node coverage unknown for ${frames.length} candles` : "no candles loaded",
       partialBars: payload?.records_truncated ? "period contains more saved readings than can be loaded" : null,
       capability: payload?.node_status ?? null,
       retry: retryRemaining > 0 ? `manual retry in ${retryRemaining}s` : "manual retry available",
@@ -740,9 +743,18 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
   const missingMapScope=usingMapScope&&payload?.node_status!=="unavailable"&&Array.isArray(payload?.scopes)&&!payload.scopes.includes(forcedScope);
   const details = <div className="price-history-details">
     {payload?.recording&&<p>{payload.recording.status==="unavailable"?"Saved recording details are unavailable.":payload.recording.durable?"New node readings are saved across restarts.":"Warning: node readings are temporary and may be lost on restart."}{payload.recording.first_at?" First saved reading for "+ticker+": "+chartTime(payload.recording.first_at,true)+" New York.":payload.recording.status==="available"?" No node readings have been saved for "+ticker+" yet.":""} Readings are captured when this symbol's heatmap refreshes.</p>}
-    {!!frames.length&&<p>{payload?.price_sessions_returned!=null?payload.price_sessions_returned+" sessions returned. ":""}{payload?.candles_with_recorded_nodes!=null?payload.candles_with_recorded_nodes+" of "+frames.length+" candles have saved nodes. ":"Saved-node count is unknown for these "+frames.length+" candles. "}{payload.bar_seconds?payload.bar_seconds/60+"-minute candles. ":""}Gaps mean no recent saved reading. Chart times use New York.{payload.node_status==="unavailable"?" Saved node history is currently unavailable.":""}{payload.records_truncated?" This period contains more saved readings than can be loaded; use a shorter period.":""}{payload.node_status==="available"&&payload.candles_with_recorded_nodes===0?" No recorded nodes match these candles. Earlier missing readings cannot be recreated from today's data.":""}</p>}
+    {!!frames.length&&<p>{payload?.price_sessions_returned!=null?payload.price_sessions_returned+" sessions returned. ":""}{savedNodeCountKnown?payload.candles_with_recorded_nodes+" of "+frames.length+" candles have saved nodes. ":"Saved-node count is unknown for these "+frames.length+" candles. "}{payload.bar_seconds?payload.bar_seconds/60+"-minute candles. ":""}Gaps mean no recent saved reading. Chart times use New York.{payload.node_status==="unavailable"?" Saved node history is currently unavailable.":""}{payload.records_truncated?" This period contains more saved readings than can be loaded; use a shorter period.":""}{payload.node_status==="available"&&payload.candles_with_recorded_nodes===0?" No recorded nodes match these candles. Earlier missing readings cannot be recreated from today's data.":""}</p>}
     {payload?.node_status!=="unavailable"&&payload?.node_coverage?.gap_counts&&<p>Saved-node gaps: {payload.node_coverage.gap_counts.no_prior_observation} with no earlier observation; {payload.node_coverage.gap_counts.observation_too_old} older than the saved-reading limit; {payload.node_coverage.gap_counts.recorded_without_nodes} recorded without node levels. Other scopes are not substituted.</p>}
-    {Object.entries(payload?.metric_line_coverage||{}).map(([metric,coverage])=><p key={metric}>{metric==="vex"?"VEX / Vanna":"Charm"}: {coverage.checked_candles} of {frames.length} candles have qualified saved readings.</p>)}
+    {Object.entries(payload?.metric_line_coverage||{}).map(([metric,coverage])=>{
+      const label=metric==="vex"?"VEX / Vanna":metric==="charm"?"Charm":metric;
+      const checked=coverage?.checked_candles,zero=coverage?.zero_candles;
+      const known=payload.metric_details_status!=="unavailable"&&Number.isInteger(checked)&&
+        Number.isInteger(zero)&&zero>=0&&checked>=zero&&checked<=frames.length;
+      if(!known)return <p key={metric}>{label}: Saved metric-line coverage is unavailable.</p>;
+      const qualified=checked-zero;
+      return <p key={metric}>{label}: {checked} of {frames.length} candles checked, {qualified} with a qualified saved reading, {zero} recorded zero.</p>;
+    })}
+    {payload?.metric_details_status==="unavailable"&&<p>Saved metric-line detail check was unavailable, so no VEX/Vanna or Charm reading was counted for this period.</p>}
     {payload?.metric_details_truncated&&<p>Use a shorter period to load older saved lines; this request reached its history limit.</p>}
     {missingMapScope&&<p>No saved readings match the map scope at these candle times. Open Chart tools and turn off Follow map scope to choose an older saved view. No other scope was substituted.</p>}
     {status==="ready"&&!velocityRows.length&&<p data-testid="velocity-unavailable">Node velocity unavailable — {velocityNote}</p>}
