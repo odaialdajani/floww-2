@@ -12,6 +12,7 @@ import builtins
 import logging
 import os
 import sys
+import threading
 import time
 import types
 from datetime import UTC, datetime, timedelta
@@ -79,6 +80,12 @@ def builder(monkeypatch, raw=None):
     daily = module_stub(monkeypatch, 'services.agent.daily_bar_evidence',
                         ensure_public_daily_bars=AsyncMock(return_value=None))
     module_stub(monkeypatch, 'services.market_provenance', cached_market_copy=lambda data, *a, **kw: data)
+
+    async def isolated_cpu(function, *args):
+        # Analytic collaborators in this policy harness are local lambdas.
+        # Real process isolation, capacity and parity have their own suite.
+        return await asyncio.to_thread(function, *args)
+
     original_import = builtins.__import__
 
     def isolated_import(name, *args, **kwargs):
@@ -90,7 +97,7 @@ def builder(monkeypatch, raw=None):
         return original_import(name, *args, **kwargs)
 
     env = {'__builtins__': {**vars(builtins), '__import__': isolated_import},
-           'asyncio': asyncio, 'os': os, 'time': time, 'datetime': datetime,
+           'asyncio': asyncio, 'run_cpu': isolated_cpu, 'os': os, 'time': time, 'datetime': datetime,
            'UTC': UTC, 'timedelta': timedelta, 'HTTPException': HTTPException,
            'log': logging.getLogger('policy-test'), '_BUILD_HEATMAP_CACHE': {},
            '_BUILD_HEATMAP_CACHE_TTL': 30, '_background_tasks': set(),
@@ -122,6 +129,42 @@ def run_build(env, ticker='SPY', **kwargs):
             await asyncio.gather(*list(env['_background_tasks']))
         return result
     return asyncio.run(run())
+
+
+@pytest.mark.parametrize('calculation', [
+    '_display_surfaces', '_attach_strike_volumes', 'classify_nodes', 'detect_patterns',
+    'calc_implied_move', 'calc_probability_distribution', 'calc_aggregate_gex_curve',
+    'detect_opportunities', 'calc_iv_surface_data', 'calc_skew_metrics',
+    'calc_market_regime', 'calc_implied_pdf', 'calc_gamma_flip_levels',
+    'calc_hedge_impulse_curve', 'calc_pressure_cloud', 'calc_charm_integral',
+])
+def test_heatmap_calculations_allow_unrelated_loop_callbacks(monkeypatch, calculation):
+    env, _, _, _, _ = builder(monkeypatch, chain(45))
+    monkeypatch.setenv('FLOWW_MARKET_DATA_PROVIDER', 'public')
+    original = env[calculation]
+    progress = []
+
+    async def run():
+        loop = asyncio.get_running_loop()
+
+        def calculation_with_waiting_reader(*args, **kwargs):
+            reader_responded = threading.Event()
+            loop.call_soon_threadsafe(reader_responded.set)
+            progress.append(reader_responded.wait(timeout=0.5))
+            return original(*args, **kwargs)
+
+        env[calculation] = calculation_with_waiting_reader
+        result = await env['_build_heatmap_impl']('SPY', with_taps=False)
+        if env['_background_tasks']:
+            await asyncio.gather(*list(env['_background_tasks']))
+        return result
+
+    result = asyncio.run(run())
+    assert progress, f'{calculation} was not exercised'
+    assert all(progress), f'{calculation} prevented an unrelated loop callback'
+    assert result['spot'] == 100.0
+    assert result['grid']['strikes'] == [100.0]
+    assert result['strikes'][0]['gex'] == 1.0
 
 
 @pytest.mark.parametrize('ticker', ['^SPX', 'I:SPX'])

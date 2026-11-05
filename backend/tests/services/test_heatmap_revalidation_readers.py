@@ -5,6 +5,7 @@ import asyncio
 import logging
 import os
 import sys
+import threading
 import time
 from datetime import datetime
 from pathlib import Path
@@ -113,6 +114,36 @@ async def test_public_policy_rejects_legacy_stale_cache(cache_functions, monkeyp
     assert answer["spot"] == 101.0
     assert answer["data_source"] == "public_api"
     assert not env["_background_tasks"]
+
+
+@pytest.mark.asyncio
+async def test_shared_payload_copy_keeps_other_readers_responsive_and_independent(cache_functions):
+    import copy
+
+    env = cache_functions
+    loop = asyncio.get_running_loop()
+    progress, builds = [], []
+
+    class Payload(dict):
+        def __deepcopy__(self, memo):
+            reader_responded = threading.Event()
+            loop.call_soon_threadsafe(reader_responded.set)
+            progress.append(reader_responded.wait(timeout=0.5))
+            return copy.deepcopy(dict(self), memo)
+
+    original = Payload(ticker="SPY", spot=100.0, nested={"levels": [0.0, None, -2.0]})
+
+    async def build(*args, **kwargs):
+        builds.append(args)
+        return original
+
+    env["_build_heatmap_impl"] = build
+    first, second = await asyncio.gather(env["build_heatmap"]("SPY"), env["build_heatmap"]("SPY"))
+    assert len(builds) == 1
+    assert progress == [True, True], "copying a shared result blocked unrelated loop callbacks"
+    assert first == second == original
+    first["nested"]["levels"].append(123.0)
+    assert second["nested"]["levels"] == original["nested"]["levels"] == [0.0, None, -2.0]
 
 
 @pytest.mark.asyncio

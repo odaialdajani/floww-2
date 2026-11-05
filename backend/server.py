@@ -44,6 +44,7 @@ from advanced_analytics import (
 from databento_provider import fetch_oi_for_ticker, init_cache
 from portfolio import Portfolio, Position, calc_position_size
 from routes.diagnostics import router as diagnostics_router
+from services.cpu_execution import run_cpu
 from services.duckdb_engine import db as duckdb_engine
 
 # Rust-backed implementations (decoder_core delegation with pure-Python fallback,
@@ -1106,7 +1107,8 @@ async def build_heatmap(ticker: str, max_expiries: int = 4, with_taps: bool = Tr
             )))
         # A browser cancel cannot cancel another reader's build. Shutdown
         # still owns the tracked task, and each caller receives its own copy.
-        return copy.deepcopy(await asyncio.shield(pending))
+        payload = await asyncio.shield(pending)
+        return await asyncio.to_thread(copy.deepcopy, payload)
     except HTTPException:
         raise
     except Exception as e:
@@ -1400,7 +1402,7 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                 log.debug(f"build_heatmap: cvserver enrichment failed for {ticker}: {e}")
     # Work on our copy: scope selection must not mutate the provider cache.
     import copy
-    raw = copy.deepcopy(raw)
+    raw = await asyncio.to_thread(copy.deepcopy, raw)
     scope_selection = None
     if expiry_scope == "next":
         scope_selection = next_listed_selection(raw.get("contracts", []), scope_session)
@@ -1481,8 +1483,8 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
     # mixed into raw structure, walls or replay.
     # F07: every supported mode produces a real 2D matrix. Scalp is a
     # horizon/display/weighting combination — not an empty grid.
-    exposure_basis, model_basis, strikes, grid = _display_surfaces(
-        spot, raw["contracts"], ticker, scalp)
+    exposure_basis, model_basis, strikes, grid = await asyncio.to_thread(
+        _display_surfaces, spot, raw["contracts"], ticker, scalp)
 
     # Band: scalp=±2%, day=±15%, swing=±25%
     # Dynamic band based on price level: wider bands for low-priced stocks
@@ -1568,10 +1570,10 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
     # Per-strike traded volume for the Profile view's volume column. Engine-agnostic
     # rollup from the raw contracts (Public/cvserver/yfinance all carry volume),
     # independent of which GEX engine produced `strikes`. None-safe: raw can be None.
-    _attach_strike_volumes(strikes, (raw or {}).get("contracts", []))
+    await asyncio.to_thread(_attach_strike_volumes, strikes, (raw or {}).get("contracts", []))
 
-    nodes = classify_nodes(strikes, spot)
-    patterns = detect_patterns(strikes, nodes, spot)
+    nodes = await asyncio.to_thread(classify_nodes, strikes, spot)
+    patterns = await asyncio.to_thread(detect_patterns, strikes, nodes, spot)
 
     # T04: distinct raw/delta/activity surfaces from the SAME normalized
     # contracts (no extra upstream calls). Default strikes/grid stay compat;
@@ -1591,18 +1593,23 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         )
         from services.solstice_metric_contract import window_grid_section as _window_grid_section
         from services.wall_structure import discover_walls, nearest_by_side, nearest_walls
-        raw_m = compute_raw_oi(raw["contracts"], spot)
-        dw_m = compute_delta_weighted_oi(raw["contracts"], spot)
-        vol_m = compute_volume_gamma(raw["contracts"], spot)
+        raw_m = await asyncio.to_thread(compute_raw_oi, raw["contracts"], spot)
+        dw_m = await asyncio.to_thread(compute_delta_weighted_oi, raw["contracts"], spot)
+        vol_m = await asyncio.to_thread(compute_volume_gamma, raw["contracts"], spot)
         # S2: DISTINCT fourth activity surface (R10-01 repair). session_dvol
         # is Σ c·u·V·|δ|; the legacy volume_gamma keys stay Σ c·u·V,
         # backward compatible. No silent field replacement.
-        sess_dvol_m = _compute_sess_dvol(raw["contracts"], spot)
-        vendor_rows = compute_gex_by_strike_vendor(spot, raw["contracts"])
-        vendor_grid = compute_gex_grid_vendor(spot, raw["contracts"])
-        delta_grid = compute_gex_grid_delta_weighted(spot, raw["contracts"])
-        activity_grid = compute_gex_grid_volume_vendor(spot, raw["contracts"])
-        sess_dvol_grid = compute_gex_grid_session_delta_volume(spot, raw["contracts"])
+        sess_dvol_m = await asyncio.to_thread(_compute_sess_dvol, raw["contracts"], spot)
+        vendor_rows = await asyncio.to_thread(
+            compute_gex_by_strike_vendor, spot, raw["contracts"])
+        vendor_grid = await asyncio.to_thread(
+            compute_gex_grid_vendor, spot, raw["contracts"])
+        delta_grid = await asyncio.to_thread(
+            compute_gex_grid_delta_weighted, spot, raw["contracts"])
+        activity_grid = await asyncio.to_thread(
+            compute_gex_grid_volume_vendor, spot, raw["contracts"])
+        sess_dvol_grid = await asyncio.to_thread(
+            compute_gex_grid_session_delta_volume, spot, raw["contracts"])
         metrics.update({
             "gex_gross_v1": raw_m.gross, "gex_net_v1": raw_m.net,
             "gex_call": raw_m.call, "gex_put": raw_m.put,
@@ -1658,24 +1665,26 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
             "formula_version": "gex.v2",
         })
         sol_scope = {"symbol": ticker, "formula": "gex.v2"}
-        sol_walls = discover_walls(strikes if exposure_basis == "OI" else vendor_rows, spot,
-                                   scope=sol_scope)
+        sol_walls = await asyncio.to_thread(
+            discover_walls, strikes if exposure_basis == "OI" else vendor_rows, spot,
+            scope=sol_scope)
         metrics["walls"] = sol_walls
-        metrics["nearest_walls"] = nearest_walls(sol_walls, spot)
-        metrics["nearest_by_side"] = nearest_by_side(sol_walls, spot)
+        metrics["nearest_walls"] = await asyncio.to_thread(nearest_walls, sol_walls, spot)
+        metrics["nearest_by_side"] = await asyncio.to_thread(nearest_by_side, sol_walls, spot)
         # R6-2: per-wall delta-weighted + session-volume breakdown over the
         # same declared scope (wall-local comparison data for the inspector).
         try:
             from domain.exposure_metrics import wall_metric_breakdown
-            metrics["wall_metrics"] = wall_metric_breakdown(
-                sol_walls, raw["contracts"], spot)
+            metrics["wall_metrics"] = await asyncio.to_thread(
+                wall_metric_breakdown, sol_walls, raw["contracts"], spot)
         except Exception as wme:
             log.debug("wall metric breakdown failed: %s", wme)
             metrics["wall_metrics"] = {}
         # F23: off-screen landmarks from the FULL universe (pre-band vendor
         # rows), so major walls outside the visible window stay navigable.
         try:
-            universe_walls = discover_walls(vendor_rows, spot, scope=sol_scope)
+            universe_walls = await asyncio.to_thread(
+                discover_walls, vendor_rows, spot, scope=sol_scope)
             kept = {w["wall_id"] for w in sol_walls}
             metrics["offscreen_landmarks"] = [
                 {**w, "offscreen": True} for w in universe_walls
@@ -1739,14 +1748,14 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         metrics["error"] = "METRICS_UNAVAILABLE"
 
     # --- New analytics (from EzOptions + GEX-Dashboard) ---
-    implied_move = calc_implied_move(spot, raw["contracts"])
-    prob_distribution = calc_probability_distribution(spot, raw["contracts"])
-    aggregate_curve = calc_aggregate_gex_curve(spot, raw["contracts"], ticker)
-    opportunities = detect_opportunities(strikes, nodes, spot, raw["contracts"])
+    implied_move = await asyncio.to_thread(calc_implied_move, spot, raw["contracts"])
+    prob_distribution = await asyncio.to_thread(calc_probability_distribution, spot, raw["contracts"])
+    aggregate_curve = await run_cpu(calc_aggregate_gex_curve, spot, raw["contracts"], ticker)
+    opportunities = await asyncio.to_thread(detect_opportunities, strikes, nodes, spot, raw["contracts"])
 
     # --- Institutional vol analytics ---
-    iv_surface = calc_iv_surface_data(spot, raw["contracts"])
-    skew = calc_skew_metrics(spot, raw["contracts"])
+    iv_surface = await asyncio.to_thread(calc_iv_surface_data, spot, raw["contracts"])
+    skew = await asyncio.to_thread(calc_skew_metrics, spot, raw["contracts"])
     # Warm verified Public daily closes for copy-only research while normal
     # desktop analytics are built. It reuses a completed-session cache and
     # never starts a provider request from an Ask FLOWW read.
@@ -1773,12 +1782,12 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         iv_rank["rv_close"] = rv.get("rv_close")
 
     # --- Advanced analytics (regime + implied PDF + gamma flip levels) ---
-    market_regime = calc_market_regime(spot, raw["contracts"])
-    implied_pdf = calc_implied_pdf(spot, raw["contracts"])
-    gamma_flip_data = calc_gamma_flip_levels(spot, raw["contracts"], ticker)
-    hedge_impulse = calc_hedge_impulse_curve(spot, raw["contracts"])
-    pressure_cloud = calc_pressure_cloud(spot, raw["contracts"], ticker)
-    charm_integral = calc_charm_integral(spot, raw["contracts"], ticker)
+    market_regime = await asyncio.to_thread(calc_market_regime, spot, raw["contracts"])
+    implied_pdf = await asyncio.to_thread(calc_implied_pdf, spot, raw["contracts"])
+    gamma_flip_data = await asyncio.to_thread(calc_gamma_flip_levels, spot, raw["contracts"], ticker)
+    hedge_impulse = await asyncio.to_thread(calc_hedge_impulse_curve, spot, raw["contracts"])
+    pressure_cloud = await asyncio.to_thread(calc_pressure_cloud, spot, raw["contracts"], ticker)
+    charm_integral = await asyncio.to_thread(calc_charm_integral, spot, raw["contracts"], ticker)
 
     # Velocity & rolling
     velocity = await velocity_and_rolling(ticker, {"strikes_compact": [{"strike": s["strike"], "gex": s["gex"]} for s in strikes]})
@@ -1871,7 +1880,7 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
     # enrichment — each best-effort, never breaking the core payload.
     try:
         from services.solstice_session import playbook_for, session_state
-        payload["session"] = session_state(quality=payload.get("quality"))
+        payload["session"] = await asyncio.to_thread(session_state, quality=payload.get("quality"))
         top_wall = (metrics.get("nearest_walls") or [None])[0]
         payload["playbook"] = playbook_for(top_wall, spot, payload.get("quality"))
     except Exception as se:
@@ -2004,7 +2013,7 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         log.debug("solstice interaction attach failed: %s", ie)
     try:
         from services.solstice_regime import regime_at_spot
-        payload["gamma_regime_v1"] = regime_at_spot(spot, raw["contracts"], ticker)
+        payload["gamma_regime_v1"] = await run_cpu(regime_at_spot, spot, raw["contracts"], ticker)
     except Exception as re:
         log.debug("solstice regime attach failed: %s", re)
     try:
@@ -3904,6 +3913,9 @@ async def on_stop():
         await _shutdown_join(_scheduler_task, "scheduler")
 
     await _stop_tracked_background_tasks()
+
+    from services.cpu_execution import close_cpu
+    await _shutdown_join(close_cpu(), "calculation processes")
 
     # Research cancellation persists terminal state. It must finish while
     # Mongo is still open; its later registered callback is idempotent.
