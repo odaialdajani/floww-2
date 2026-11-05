@@ -26,6 +26,7 @@ jest.mock("axios", () => ({
 function summary(overrides = {}) {
   return {
     name: "main",
+    book_revision: "a".repeat(64),
     positions: 1,
     positions_priced: 1,
     positions_skipped: 0,
@@ -51,7 +52,7 @@ function summary(overrides = {}) {
   };
 }
 
-async function refreshWith(payload, book = { name: "main", positions: [] }) {
+async function refreshWith(payload, book = { name: "main", positions: [], book_revision: "a".repeat(64) }) {
   mockGet.mockImplementation(async (url, config) =>
     (config?.params?.spot ? { data: payload } : { data: book }));
   render(<PortfolioPanel ticker="SPY" spot={600} />);

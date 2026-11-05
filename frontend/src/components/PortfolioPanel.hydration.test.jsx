@@ -2,10 +2,10 @@
  * @jest-environment jsdom
  *
  * The Portfolio page used to keep its own position list: it never read the
- * stored book, a failed read looked like an empty book, and removal sent the
- * local row index to an endpoint that pops the server's stored array. These
- * checks pin the panel to the stored book: hydration, an explicit read state,
- * and a removal that resolves the stored row before it deletes.
+ * stored book, a failed read looked like an empty book, and removal sent a
+ * row index to an endpoint that pops the server's stored array. These checks
+ * pin the panel to the stored book: hydration, an explicit read state, and a
+ * removal conditional on the exact displayed book revision.
  */
 
 import React from "react";
@@ -35,9 +35,11 @@ const position = (overrides = {}) => ({
   ...overrides,
 });
 
-const rawBook = (positions) => ({ name: "main", positions });
+const REVISION = "a".repeat(64);
+const rawBook = (positions, revision = REVISION) => ({ name: "main", positions, book_revision: revision });
 
 const pricedBook = (overrides = {}) => ({
+  book_revision: REVISION,
   name: "main",
   positions: 1,
   positions_priced: 1,
@@ -78,7 +80,8 @@ const deferred = () => {
 beforeEach(() => {
   mockGet.mockReset();
   mockPost.mockClear();
-  mockDelete.mockClear();
+  mockDelete.mockReset();
+  mockDelete.mockResolvedValue({ data: { status: "removed" } });
 });
 
 test("reads the stored book without a spot and shows the stored positions", async () => {
@@ -99,6 +102,14 @@ test("a failed read is not shown as an empty book", async () => {
   expect(screen.getByText(/Open positions are unknown/i)).toBeInTheDocument();
 });
 
+test("a malformed stored envelope is invalid, not an empty book", async () => {
+  routeReads({ name: "main" });
+  render(<PortfolioPanel ticker="SPY" spot={600} />);
+  await waitFor(() => expect(screen.getByTestId("portfolio-read-state")).toHaveTextContent(/failed/i));
+  expect(screen.queryByText(/No positions yet/i)).toBeNull();
+  expect(screen.getByText(/Open positions are unknown/i)).toBeInTheDocument();
+});
+
 test("a missing stored portfolio is distinct from an empty book", async () => {
   mockGet.mockRejectedValue(Object.assign(new Error("not found"), { response: { status: 404 } }));
   render(<PortfolioPanel ticker="SPY" spot={600} />);
@@ -113,33 +124,67 @@ test("an empty stored book still reads as empty", async () => {
   expect(screen.getByTestId("portfolio-read-state")).toHaveTextContent(/read #1/);
 });
 
-test("removal resolves the stored row instead of sending the local row index", async () => {
+test("a later missing book clears the priced values it no longer belongs to", async () => {
   let storedRead = 0;
   mockGet.mockImplementation(async (url, config) => {
     if (isStoredRead(config)) {
       storedRead += 1;
-      return {
-        data: storedRead === 1
-          ? rawBook([position({ added_at: "2026-11-03T10:00:00Z" }), position({ added_at: "2026-11-03T11:00:00Z", strike: 610 })])
-          : rawBook([position({ added_at: "2026-11-03T11:00:00Z", strike: 610 }), position({ added_at: "2026-11-03T10:00:00Z" })]),
-      };
+      if (storedRead === 1) return { data: rawBook([position()]) };
+      throw Object.assign(new Error("not found"), { response: { status: 404 } });
     }
     return { data: pricedBook() };
   });
   render(<PortfolioPanel ticker="SPY" spot={600} />);
-  await waitFor(() => expect(screen.getAllByRole("button", { name: /Remove position SPY call 600/i })).toHaveLength(1));
-  fireEvent.click(screen.getByRole("button", { name: /Remove position SPY call 600/i }));
-  await waitFor(() => expect(mockDelete).toHaveBeenCalled());
-  expect(String(mockDelete.mock.calls[0][0])).toMatch(/\/portfolio\/main\/position\/1$/);
+  await waitFor(() => expect(document.body.textContent).toContain("1,200"));
+  fireEvent.click(screen.getByRole("button", { name: /refresh/i }));
+  await waitFor(() => expect(screen.getByTestId("portfolio-read-state")).toHaveTextContent(/no stored portfolio/i));
+  expect(document.body.textContent).not.toContain("1,200");
+  expect(screen.getByTestId("portfolio-read-state")).toHaveTextContent(/priced values were cleared/i);
 });
 
-test("an ambiguous stored row is not removed", async () => {
-  routeReads(rawBook([position({ added_at: "2026-11-03T10:00:00Z" }), position({ added_at: "2026-11-03T10:00:00Z" })]));
+test("a removal is conditional on the displayed stored-book revision", async () => {
+  routeReads(rawBook([position(), position({ strike: 610 })]));
   render(<PortfolioPanel ticker="SPY" spot={600} />);
-  await waitFor(() => expect(screen.getAllByRole("button", { name: /Remove position SPY call 600/i })).toHaveLength(2));
-  fireEvent.click(screen.getAllByRole("button", { name: /Remove position SPY call 600/i })[0]);
-  await waitFor(() => expect(screen.getByTestId("portfolio-action-status")).toHaveTextContent(/stable position id/i));
+  const remove = await screen.findByRole("button", { name: /Remove position SPY call 600/i });
+  expect(remove).not.toBeDisabled();
+  fireEvent.click(remove);
+  await waitFor(() => expect(mockDelete).toHaveBeenCalled());
+  expect(mockDelete).toHaveBeenCalledWith(expect.stringMatching(/\/portfolio\/main\/position\/0$/), {
+    params: { expected_revision: REVISION },
+  });
+});
+
+test("a changed book rejects removal, refreshes the rows and settles the controls", async () => {
+  let book = rawBook([position(), position({ strike: 610 })]);
+  mockGet.mockImplementation(async (url, config) =>
+    isStoredRead(config) ? { data: book } : { data: pricedBook({ book_revision: book.book_revision }) });
+  mockDelete.mockImplementation(async () => {
+    book = rawBook([...book.positions].reverse(), "b".repeat(64));
+    throw Object.assign(new Error("book changed"), { response: { status: 409, data: { detail: "The stored book changed; review again" } } });
+  });
+  render(<PortfolioPanel ticker="SPY" spot={600} />);
+  fireEvent.click(await screen.findByRole("button", { name: /Remove position SPY call 600/i }));
+  await waitFor(() => expect(screen.getByTestId("portfolio-action-status")).toHaveTextContent(/book changed/i));
+  await waitFor(() => expect(screen.getByRole("button", { name: /refresh/i })).not.toBeDisabled());
+  expect(mockDelete.mock.calls[0][1]).toEqual({ params: { expected_revision: REVISION } });
+  expect(book.positions).toHaveLength(2);
+  expect(screen.queryByText("Position removed from the stored book.")).toBeNull();
+});
+
+test("a book without a server revision cannot be deleted", async () => {
+  routeReads({ name: "main", positions: [position()] });
+  render(<PortfolioPanel ticker="SPY" spot={600} />);
+  const remove = await screen.findByRole("button", { name: /Remove position SPY call 600/i });
+  expect(remove).toBeDisabled();
+  fireEvent.click(remove);
   expect(mockDelete).not.toHaveBeenCalled();
+});
+
+test("priced values from another book revision are unavailable", async () => {
+  routeReads(rawBook([position()]), pricedBook({ book_revision: "b".repeat(64) }));
+  render(<PortfolioPanel ticker="SPY" spot={600} />);
+  await waitFor(() => expect(screen.getByTestId("portfolio-read-state")).toHaveTextContent(/priced read failed/i));
+  expect(document.body.textContent).not.toContain("1,200");
 });
 
 test("a late read cannot overwrite a newer read", async () => {

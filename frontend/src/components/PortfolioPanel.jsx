@@ -5,18 +5,6 @@ import { BACKEND_URL, API } from "../config/api";
 
 // BACKEND_URL and API imported from config/api.js
 
-const positionFingerprint = (position) => JSON.stringify([
-  position?.symbol ?? null,
-  position?.option_type ?? null,
-  position?.strike ?? null,
-  position?.expiry ?? null,
-  position?.quantity ?? null,
-  position?.entry_price ?? null,
-  position?.entry_iv ?? null,
-  position?.underlying_price ?? null,
-  position?.added_at ?? null,
-]);
-
 const describeError = (error) =>
   error?.response?.data?.detail || error?.message || "request failed";
 
@@ -338,11 +326,10 @@ export default function PortfolioPanel({ ticker, spot }) {
       if (!data || typeof data !== "object") {
         return { ok: false, missing: false, error: new Error("stored book response was empty") };
       }
-      if (!("positions" in data)) return { ok: true, positions: [] };
       if (!Array.isArray(data.positions)) {
         return { ok: false, missing: false, error: new Error("stored book carried no positions list") };
       }
-      return { ok: true, positions: data.positions };
+      return { ok: true, positions: data.positions, revision: data.book_revision };
     } catch (e) {
       return { ok: false, missing: e?.response?.status === 404, error: e };
     }
@@ -367,7 +354,13 @@ export default function PortfolioPanel({ ticker, spot }) {
     const [stored, priced] = await Promise.all([readStoredBook(), readPricedBook()]);
     if (generation !== readGeneration.current) return;
     if (stored.ok) {
-      setPositions(stored.positions.map((position, index) => ({ ...position, serverIndex: index })));
+      setPositions(stored.positions.map((position, index) => ({
+        ...position, serverIndex: index, bookRevision: stored.revision,
+      })));
+      if (priced.ok && (!stored.revision || priced.data?.book_revision !== stored.revision)) {
+        priced.ok = false;
+        priced.error = new Error("The priced read belongs to another stored-book revision; refresh to price the current rows");
+      }
       if (priced.ok) setPortfolioData(priced.data);
       setReadState((state) => ({
         ...state,
@@ -381,7 +374,15 @@ export default function PortfolioPanel({ ticker, spot }) {
     }
     if (stored.missing) {
       setPositions([]);
-      setReadState((state) => ({ ...state, phase: "empty", generation, message: null }));
+      setPortfolioData(null);
+      setReadState((state) => ({
+        ...state,
+        phase: "empty",
+        generation,
+        bookGeneration: 0,
+        pricedGeneration: 0,
+        message: "the stored portfolio is gone, so the priced values were cleared",
+      }));
       return;
     }
     setReadState((state) => ({ ...state, phase: "error", generation, message: describeError(stored.error) }));
@@ -411,33 +412,23 @@ export default function PortfolioPanel({ ticker, spot }) {
     setLoading(true);
     setActionStatus(null);
     try {
-      const stored = await readStoredBook();
-      if (!stored.ok) {
-        setActionStatus({ type: "error", message: "The stored book could not be read, so nothing was removed." });
-        return;
-      }
-      const fingerprint = positionFingerprint(position);
-      const matches = stored.positions
-        .map((candidate, index) => (positionFingerprint(candidate) === fingerprint ? index : -1))
-        .filter((index) => index >= 0);
-      if (matches.length === 0) {
-        setActionStatus({ type: "error", message: "The stored book no longer holds that position, so nothing was removed." });
+      if (!position?.bookRevision) {
+        setActionStatus({ type: "error", message: "Refresh the stored book before removing a position." });
         await refreshPortfolio();
         return;
       }
-      if (matches.length > 1) {
-        setActionStatus({ type: "error", message: "That position matches several stored rows, so nothing was removed. A stable position id is required." });
-        await refreshPortfolio();
-        return;
-      }
-      await axios.delete(`${API}/portfolio/${portfolioName}/position/${matches[0]}`);
+      await axios.delete(`${API}/portfolio/${portfolioName}/position/${position.serverIndex}`, {
+        params: { expected_revision: position.bookRevision },
+      });
       setActionStatus({ type: "ok", message: "Position removed from the stored book." });
       await refreshPortfolio();
     } catch (e) {
       setActionStatus({ type: "error", message: describeError(e) });
+      await refreshPortfolio();
       console.error("Failed to remove position:", e);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const runScenarios = async () => {
@@ -512,9 +503,9 @@ export default function PortfolioPanel({ ticker, spot }) {
   const readStateText = readState.phase === "loading"
     ? `Reading stored book · read #${readState.generation}…`
     : readState.phase === "empty"
-      ? `No stored portfolio · read #${readState.generation}`
+      ? `No stored portfolio · read #${readState.generation}${readState.message ? ` — ${readState.message}` : ""}`
       : readState.phase === "error"
-        ? `Stored book read failed · read #${readState.generation}${readState.message ? ` — ${readState.message}` : ""}${staleRows ? ` — showing rows from read #${readState.bookGeneration}` : ""}`
+        ? `Stored book read failed · read #${readState.generation}${readState.message ? ` — ${readState.message}` : ""}${staleRows ? ` — showing rows from read #${readState.bookGeneration}` : ""}${readState.pricedGeneration > 0 && readState.pricedGeneration < readState.generation ? ` — showing priced values from read #${readState.pricedGeneration}` : ""}`
         : readState.phase === "priced_failed"
           ? `Stored book · read #${readState.generation} · priced read failed${readState.message ? ` — ${readState.message}` : ""}${readState.pricedGeneration > 0 && readState.pricedGeneration < readState.generation ? ` — showing priced values from read #${readState.pricedGeneration}` : ""}`
           : readState.phase === "ready"
@@ -658,9 +649,14 @@ export default function PortfolioPanel({ ticker, spot }) {
                         positions.map(p => ({ symbol: p.symbol, type: p.option_type, strike: p.strike, expiry: p.expiry, qty: p.quantity, entry_price: p.entry_price, entry_iv: p.entry_iv, underlying_price: p.underlying_price }))
                       )}
                       className="btn text-[9px] px-2 py-0.5"
-                    >Export CSV</button>
+                      >Export CSV</button>
                   )}
                 </div>
+                {positions.length > 0 && positions.some((p) => !p.bookRevision) && (
+                  <div className="text-[10px] text-amber-400/80 mb-1" data-testid="portfolio-removal-unavailable">
+                    Refresh to read the stored book before removing a position.
+                  </div>
+                )}
                 <table className="w-full text-[11px] mono">
                   <thead>
                     <tr className="text-slate-500 text-[10px] uppercase tracking-widest">
@@ -677,7 +673,7 @@ export default function PortfolioPanel({ ticker, spot }) {
                   </thead>
                   <tbody>
                     {positions.map((p) => (
-                      <tr key={`${p.serverIndex}-${positionFingerprint(p)}`} className="border-t border-slate-800/60 bar-row">
+                      <tr key={`${p.bookRevision || "unversioned"}-${p.serverIndex}`} className="border-t border-slate-800/60 bar-row">
                         <td className="px-2 py-1 font-bold">{p.symbol}</td>
                         <td className={`px-2 py-1 ${p.option_type === "call" ? "text-emerald-400" : "text-rose-400"}`}>{p.option_type}</td>
                         <td className="text-right px-2 py-1">{p.strike}</td>
@@ -687,7 +683,13 @@ export default function PortfolioPanel({ ticker, spot }) {
                         <td className="text-right px-2 py-1 text-slate-400">{(p.entry_iv * 100).toFixed(1)}%</td>
                         <td className="text-right px-2 py-1 text-slate-400">{p.underlying_price}</td>
                         <td className="px-2 py-1">
-                          <button onClick={() => removePosition(p)} className="text-rose-400 hover:text-rose-300 text-[10px]" aria-label={`Remove position ${p.symbol} ${p.option_type} ${p.strike} ${p.expiry}`}>✕</button>
+                          <button
+                            onClick={() => removePosition(p)}
+                            disabled={loading || !p.bookRevision}
+                            title={p.bookRevision ? "Remove this position if the stored book is unchanged" : "Refresh the stored book first"}
+                            className="text-rose-400 hover:text-rose-300 text-[10px] disabled:text-slate-600 disabled:cursor-not-allowed"
+                            aria-label={`Remove position ${p.symbol} ${p.option_type} ${p.strike} ${p.expiry}`}
+                          >✕</button>
                         </td>
                       </tr>
                     ))}
