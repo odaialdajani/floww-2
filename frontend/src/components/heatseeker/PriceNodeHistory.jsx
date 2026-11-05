@@ -257,7 +257,9 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
     }
   }, [status, readData]);
   const frames = payload?.ticker === ticker.toUpperCase() ? payload.frames || [] : [];
-  const savedNodeCountKnown = payload?.node_status !== "unavailable" && payload?.candles_with_recorded_nodes != null;
+  const savedNodeCountKnown = payload?.node_status !== "unavailable" &&
+    Number.isInteger(payload?.candles_with_recorded_nodes) && payload.candles_with_recorded_nodes >= 0 &&
+    payload.candles_with_recorded_nodes <= frames.length;
   // B08 ACTUAL STUDY INSTANCES (C045-C048): per-pane instances through the ONE
   // registry, persisted per symbol (versioned store, quota-capped). Two
   // differently configured studies compute independent series from THIS pane's
@@ -744,10 +746,12 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
     {!!frames.length&&<p>{payload?.price_sessions_returned!=null?payload.price_sessions_returned+" sessions returned. ":""}{savedNodeCountKnown?payload.candles_with_recorded_nodes+" of "+frames.length+" candles have saved nodes. ":"Saved-node count is unknown for these "+frames.length+" candles. "}{payload.bar_seconds?payload.bar_seconds/60+"-minute candles. ":""}Gaps mean no recent saved reading. Chart times use New York.{payload.node_status==="unavailable"?" Saved node history is currently unavailable.":""}{payload.records_truncated?" This period contains more saved readings than can be loaded; use a shorter period.":""}{payload.node_status==="available"&&payload.candles_with_recorded_nodes===0?" No recorded nodes match these candles. Earlier missing readings cannot be recreated from today's data.":""}</p>}
     {payload?.node_status!=="unavailable"&&payload?.node_coverage?.gap_counts&&<p>Saved-node gaps: {payload.node_coverage.gap_counts.no_prior_observation} with no earlier observation; {payload.node_coverage.gap_counts.observation_too_old} older than the saved-reading limit; {payload.node_coverage.gap_counts.recorded_without_nodes} recorded without node levels. Other scopes are not substituted.</p>}
     {Object.entries(payload?.metric_line_coverage||{}).map(([metric,coverage])=>{
-      const checked=Number.isFinite(coverage?.checked_candles)?coverage.checked_candles:0;
-      const zero=Number.isFinite(coverage?.zero_candles)?coverage.zero_candles:0;
-      const qualified=Math.max(0,checked-zero);
       const label=metric==="vex"?"VEX / Vanna":metric==="charm"?"Charm":metric;
+      const checked=coverage?.checked_candles,zero=coverage?.zero_candles;
+      const known=payload.metric_details_status!=="unavailable"&&Number.isInteger(checked)&&
+        Number.isInteger(zero)&&zero>=0&&checked>=zero&&checked<=frames.length;
+      if(!known)return <p key={metric}>{label}: Saved metric-line coverage is unavailable.</p>;
+      const qualified=checked-zero;
       return <p key={metric}>{label}: {checked} of {frames.length} candles checked, {qualified} with a qualified saved reading, {zero} recorded zero.</p>;
     })}
     {payload?.metric_details_status==="unavailable"&&<p>Saved metric-line detail check was unavailable, so no VEX/Vanna or Charm reading was counted for this period.</p>}

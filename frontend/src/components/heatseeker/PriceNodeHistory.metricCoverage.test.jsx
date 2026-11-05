@@ -38,7 +38,8 @@ test('an unavailable metric detail check is never reported as a measured zero',a
   render(<PriceNodeHistory ticker="SPY" open/>);
   await openDetails();
   expect(screen.getByText(/Saved metric-line detail check was unavailable/)).toBeVisible();
-  expect(screen.getByText(/VEX \/ Vanna: 0 of 3 candles checked, 0 with a qualified saved reading, 0 recorded zero/)).toBeVisible();
+  expect(screen.getByText(/VEX \/ Vanna: Saved metric-line coverage is unavailable/)).toBeVisible();
+  expect(screen.queryByText(/0 recorded zero/)).not.toBeInTheDocument();
 });
 
 test('no metric coverage payload means no metric claim at all',async()=>{
@@ -46,4 +47,17 @@ test('no metric coverage payload means no metric claim at all',async()=>{
   render(<PriceNodeHistory ticker="SPY" open/>);
   await openDetails();
   expect(screen.queryByText(/candles checked/)).not.toBeInTheDocument();
+});
+
+test.each([
+  {checked_candles:null,zero_candles:0},
+  {checked_candles:3,zero_candles:null},
+  {checked_candles:-1,zero_candles:0},
+  {checked_candles:3,zero_candles:4},
+])('invalid coverage counts stay unavailable: %j',async(coverage)=>{
+  mockHistory({metric_line_coverage:{vex:coverage}});
+  render(<PriceNodeHistory ticker="SPY" open/>);
+  await openDetails();
+  expect(screen.getByText(/VEX \/ Vanna: Saved metric-line coverage is unavailable/)).toBeVisible();
+  expect(screen.queryByText(/recorded zero/)).not.toBeInTheDocument();
 });
