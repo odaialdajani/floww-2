@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useMemo, useRef, useState } from "react";
+import React, { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { API } from "../../config/api";
 import { wallPositionOf } from "../../lib/solsticeSelection";
@@ -8,8 +8,9 @@ import WallInspector from "../heatseeker/WallInspector";
 import { chartTime } from "../heatseeker/recordedPriceChartData";
 import { GroundedPublicReview } from "../public/PublicHandoffReview";
 import RecordedWallExposure from "./RecordedWallExposure";
+import { inspectorDockStyle, observeInspectorClearance } from "./inspectorGeometry";
 
-// Market selected-object inspector (OpenCode market-desktop-20261025).
+// Market selected-object inspector.
 // Root pixel critique 22:40 refinement — the Wall/Contract/Flow/Public tab
 // strip sits DIRECTLY beneath the identity/close header and stays stable;
 // only the body below it scrolls, and exactly ONE selected panel shows.
@@ -242,6 +243,8 @@ export default function MarketInspectorDock({
 }) {
   const id = useId();
   const tabsRef = useRef([]);
+  const dockRef = useRef(null);
+  useLayoutEffect(() => observeInspectorClearance(dockRef.current), [drawerOpen, wall, cell]);
   const [active, setActive] = useState("wall");
   // The deliberate review action opens the exact-contract panel.
   const startReview = () => { onContracts(); setActive("contract"); };
@@ -319,6 +322,8 @@ export default function MarketInspectorDock({
   const panels = { wall: wallPanel, contract: contractPanel, flow: flowPanel, publicAgent: publicPanel };
   return (
     <aside className="tdk-dock"
+      ref={dockRef}
+      style={inspectorDockStyle()}
       data-testid={drawerOpen ? "triad-contract-drawer" : "triad-inspector-dock"}
       role="dialog" aria-label={drawerOpen ? "Contract review" : "Selected object inspector"}>
       <div className="tdk-dock-head">
