@@ -5785,7 +5785,7 @@
     },
     "/api/ensemble/state": {
       "get": {
-        "description": "Get full ensemble state including calibration and history.",
+        "description": "Read existing state without initializing models or adding observations.",
         "operationId": "get_api_ensemble_state",
         "parameters": [
           {
