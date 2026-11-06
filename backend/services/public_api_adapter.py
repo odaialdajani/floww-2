@@ -335,7 +335,8 @@ async def _resolve_spot_observation(pb, symbol: str, account_id: str,
     closing = await completed_public_close(pb, symbol, now) if rejected_quote else None
     if closing is not None:
         return closing
-    if os.getenv("FLOWW_MARKET_DATA_PROVIDER") == "public":
+    from data_providers import market_data_policy
+    if market_data_policy()["public_only"]:
         return {"price": None, "source": "public-unavailable", "event_time": None,
                 "fetched_at": datetime.now(UTC).isoformat()}
     try:

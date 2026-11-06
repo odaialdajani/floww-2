@@ -753,7 +753,8 @@ async def fetch_spot_and_chains_merged(ticker: str, max_expiries: int = 4) -> di
                 # must not abort the cvserver fallback below.
                 pass
 
-    if os.getenv("FLOWW_MARKET_DATA_PROVIDER") == "public":
+    from data_providers import market_data_policy
+    if market_data_policy()["public_only"]:
         raise HTTPException(503, "Public market data is unavailable; alternate sources are disabled")
 
     # ── 1. Try cvserver first (with timeout) ──
