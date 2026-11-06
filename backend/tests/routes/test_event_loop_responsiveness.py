@@ -10,6 +10,10 @@ These checks hold the real connection lock from a writer thread and require
 the loop to keep answering an unrelated request while the store read or the
 calculation is still in flight. They use a temporary DuckDB file, never the
 live store.
+
+The store-backed routes that still wrote or read the recorder on the loop
+thread are covered here too: the solstice outcome job, the review save and
+the range-envelope persist.
 """
 
 from __future__ import annotations
@@ -349,3 +353,223 @@ async def test_daily_checklist_kernels_run_off_the_event_loop(monkeypatch):
         await _probe_while_pending(client, "/api/analytics/daily-checklist/SPY", budget_s=0.5)
     assert threads, "the checklist kernels were never called"
     assert all(threads), "the checklist kernels ran on the event-loop thread"
+
+
+def _probe_app():
+    """An app with one unrelated probe route.
+
+    The probe only answers once the blocking store call is actually in
+    flight, so the probe cannot pass before the work it has to overlap ever
+    started.
+    """
+    application = FastAPI()
+    state = {"entered": threading.Event()}
+
+    @application.get("/__loop_probe")
+    async def loop_probe():
+        for _ in range(500):
+            if state["entered"].is_set():
+                return {"probe": "ok"}
+            await asyncio.sleep(0.01)
+        return {"probe": "late"}
+
+    return application, state
+
+
+async def _require_probe_while_pending(client, slow_task, state):
+    """The probe has to be answered while the blocking store call is pending."""
+    probe = asyncio.create_task(client.get("/__loop_probe"))
+    started = time.monotonic()
+    try:
+        while True:
+            if time.monotonic() - started > PROBE_BUDGET_S:
+                raise AssertionError(
+                    "the event loop was frozen while the store write was pending")
+            if probe.done():
+                break
+            await asyncio.sleep(0.01)
+        response = await probe
+        assert response.status_code == 200
+        assert response.json() == {"probe": "ok"}, response.text
+    finally:
+        for task in (slow_task, probe):
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(slow_task, probe, return_exceptions=True)
+
+
+@pytest.mark.asyncio
+async def test_solstice_episode_closure_keeps_the_event_loop_servable(monkeypatch):
+    """The outcome job writes to the recorder: it must not run on the loop.
+
+    The closure reads the open decisions and appends the outcome rows on the
+    shared DuckDB connection. On the loop thread it froze every unrelated
+    request for the length of the recorder transaction.
+    """
+    import services.solstice_labels as solstice_labels
+    from routes.solstice import router as solstice_router
+
+    entered = threading.Event()
+    release = threading.Event()
+    threads: list[bool] = []
+
+    def _blocking_close(conn, paths):
+        threads.append(threading.current_thread() is not threading.main_thread())
+        entered.set()
+        release.wait(timeout=2.0)
+        return {"closed": [], "skipped_idempotent": [], "skipped_pending": [],
+                "pending_reasons": {}, "results": {}}
+
+    monkeypatch.setattr(solstice_labels, "close_episodes", _blocking_close)
+    monkeypatch.setattr("services.duckdb_engine.db", SimpleNamespace(conn=object()))
+
+    application, state = _probe_app()
+    state["entered"] = entered
+    application.include_router(solstice_router)
+
+    async with AsyncClient(transport=ASGITransport(app=application),
+                           base_url="http://loop-test") as client:
+        slow = asyncio.create_task(
+            client.post("/api/solstice/outcomes/close", json={"paths": {}}))
+        try:
+            await _require_probe_while_pending(client, slow, state)
+        finally:
+            release.set()
+
+    assert threads, "the episode closure never ran"
+    assert all(threads), "the episode closure ran on the event-loop thread"
+
+
+@pytest.mark.asyncio
+async def test_solstice_outcome_attachment_keeps_the_event_loop_servable(monkeypatch):
+    """The outcome attachment writes to the recorder: it must not run on the loop."""
+    import services.heatmap_history as heatmap_history
+    import services.solstice_labels as solstice_labels
+    from routes.solstice import router as solstice_router
+
+    entered = threading.Event()
+    release = threading.Event()
+    threads: list[bool] = []
+
+    def _close(conn, paths):
+        return {"closed": [{"decision_id": "dec-1"}], "skipped_idempotent": [],
+                "skipped_pending": [], "pending_reasons": {},
+                "results": {"dec-1": {"episode": [1.0, 2.0]}}}
+
+    def _blocking_attach(conn, results):
+        threads.append(threading.current_thread() is not threading.main_thread())
+        entered.set()
+        release.wait(timeout=2.0)
+        return None
+
+    monkeypatch.setattr(solstice_labels, "close_episodes", _close)
+    monkeypatch.setattr(heatmap_history, "attach_outcomes_to_decisions", _blocking_attach)
+    monkeypatch.setattr("services.duckdb_engine.db", SimpleNamespace(conn=object()))
+
+    application, state = _probe_app()
+    state["entered"] = entered
+    application.include_router(solstice_router)
+
+    async with AsyncClient(transport=ASGITransport(app=application),
+                           base_url="http://loop-test") as client:
+        slow = asyncio.create_task(
+            client.post("/api/solstice/outcomes/close", json={"paths": {}}))
+        try:
+            await _require_probe_while_pending(client, slow, state)
+        finally:
+            release.set()
+
+    assert threads, "the outcome attachment never ran"
+    assert all(threads), "the outcome attachment ran on the event-loop thread"
+
+
+@pytest.mark.asyncio
+async def test_review_save_keeps_the_event_loop_servable(monkeypatch):
+    """Saving a review writes to the recorder: it must not run on the loop."""
+    import services.heatmap_history as heatmap_history
+    from routes.solstice_review import register_review_routes
+
+    entered = threading.Event()
+    release = threading.Event()
+    threads: list[bool] = []
+
+    def _blocking_save(conn, decision_id, state, **kwargs):
+        threads.append(threading.current_thread() is not threading.main_thread())
+        entered.set()
+        release.wait(timeout=2.0)
+        return "2026-11-05T00:00:00+00:00"
+
+    monkeypatch.setattr(heatmap_history, "save_decision_review", _blocking_save)
+    monkeypatch.setattr("services.duckdb_engine.db", SimpleNamespace(conn=object()))
+
+    application, state = _probe_app()
+    state["entered"] = entered
+    review_router = APIRouter(prefix="/api/solstice")
+    register_review_routes(review_router)
+    application.include_router(review_router)
+
+    async with AsyncClient(transport=ASGITransport(app=application),
+                           base_url="http://loop-test") as client:
+        slow = asyncio.create_task(client.post(
+            "/api/solstice/SPY/decisions/dec-1/review", json={"state": "reviewed"}))
+        try:
+            await _require_probe_while_pending(client, slow, state)
+        finally:
+            release.set()
+
+    assert threads, "the review save never ran"
+    assert all(threads), "the review save ran on the event-loop thread"
+
+
+@pytest.mark.asyncio
+async def test_range_envelope_persist_keeps_the_event_loop_servable(monkeypatch):
+    """The range-envelope recorder write must not run on the event loop.
+
+    The write takes the shared connection lock for the whole envelope, so on
+    the loop thread it froze every unrelated request for its duration.
+    """
+    import json
+    from datetime import UTC, datetime
+    from pathlib import Path
+
+    from services import heatmap_history
+    from services.solstice_range_analytics import fetch_range_analytics
+
+    fixtures = Path(__file__).parent.parent / "solstice" / "fixtures" / "range_analytics_v1"
+    listing = json.loads((fixtures / "listing.json").read_text())
+    chain = json.loads((fixtures / "chain_complete.json").read_text())
+    now = datetime(2026, 10, 5, 14, 0, 0, tzinfo=UTC)
+
+    entered = threading.Event()
+    release = threading.Event()
+    threads: list[bool] = []
+
+    def _blocking_record(conn, envelope):
+        threads.append(threading.current_thread() is not threading.main_thread())
+        entered.set()
+        release.wait(timeout=2.0)
+        return {"status": "recorded"}
+
+    monkeypatch.setattr(heatmap_history, "record_range_envelope", _blocking_record)
+
+    async def _listing_fetcher(_t):
+        return listing
+
+    async def _window_fetcher(_t, _dates):
+        return chain
+
+    application, state = _probe_app()
+    state["entered"] = entered
+
+    async with AsyncClient(transport=ASGITransport(app=application),
+                           base_url="http://loop-test") as client:
+        slow = asyncio.create_task(fetch_range_analytics(
+            "SPY", 14, 60, listing_fetcher=_listing_fetcher,
+            window_fetcher=_window_fetcher, now_utc=now, persist_conn=object()))
+        try:
+            await _require_probe_while_pending(client, slow, state)
+        finally:
+            release.set()
+
+    assert threads, "the range-envelope persist never ran"
+    assert all(threads), "the range-envelope persist ran on the event-loop thread"

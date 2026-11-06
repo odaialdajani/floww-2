@@ -420,7 +420,7 @@ async def outcomes_close(body: _OutcomesCloseBody) -> dict[str, Any]:
                 clean.append((0.0, None))  # corrupt point censors, never labels
         paths[did] = clean
 
-    out = close_episodes(conn, paths)
+    out = await run_store(close_episodes, conn, paths)
 
     # R8-05: after closure, attach outcome labels to the decision features
     # so the review journal shows the final outcome alongside the frozen
@@ -429,7 +429,11 @@ async def outcomes_close(body: _OutcomesCloseBody) -> dict[str, Any]:
     if out.get("closed"):
         try:
             from services.heatmap_history import attach_outcomes_to_decisions
-            attach_outcomes_to_decisions(conn, out["results"])
+            await run_store(attach_outcomes_to_decisions, conn, out["results"])
+        except StoreBusy:
+            # Backpressure: the outcome rows were not written. Let it reach
+            # the 503 handler instead of claiming the attachment succeeded.
+            raise
         except Exception as _ae:
             log.debug("attach outcomes to decisions: %s", _ae)
 

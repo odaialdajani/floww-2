@@ -120,8 +120,8 @@ def register_review_routes(router: APIRouter) -> None:
                     "durability": "transient_memory_fallback_not_allowed"}
 
         try:
-            saved = save_decision_review(
-                conn, decision_id, body.state,
+            saved = await run_store(
+                save_decision_review, conn, decision_id, body.state,
                 reason=body.reason, note=body.note, ticker=ticker)
             if not saved:
                 raise HTTPException(status_code=503, detail={
@@ -129,6 +129,10 @@ def register_review_routes(router: APIRouter) -> None:
             return {"decision_id": decision_id, "state": body.state,
                     "saved_at": saved, "durability": "durable"}
         except HTTPException:
+            raise
+        except StoreBusy:
+            # Backpressure: the review was not stored. Let it reach the 503
+            # handler instead of answering a failed save.
             raise
         except Exception as e:
             log.warning("review save failed for %s/%s: %s",
