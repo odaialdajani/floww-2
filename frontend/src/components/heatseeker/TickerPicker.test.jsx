@@ -99,8 +99,37 @@ test("moving focus outside closes the dropdown and aborts a pending lookup",asyn
 });
 
 
-const feedCounts=()=>{const now=Date.now()/1000;return {status:"available",checked_at:new Date().toISOString(),directory:{available:true,stale:false,total:3000,optionable_total:800,sectors:["Technology"],sector_classified:2},options:{received_recently:2,receipt_times:[now-2,now-3],window_seconds:300,last_scan_at:now-2},provider:{last_success_at:now-5}};};
-test("global stock counts stay visible with the dropdown closed and distinguish reads from listed names",async()=>{axios.get.mockResolvedValue({data:feedCounts()});render(<TickerPicker value="SPY" tickers={["SPY","AMD"]} className="floww-header-symbol-picker"/>);await waitFor(()=>expect(screen.getByTestId("stock-feed-counts")).toHaveTextContent("3,000 listed"));expect(screen.getByTestId("stock-feed-counts")).toHaveTextContent("2 stocks checked / 800 with options in 5 min");expect(screen.queryByRole("listbox")).toBeNull();expect(screen.getByTestId("stock-feed-counts")).toBeVisible();});
+const feedCounts=()=>{const now=Date.now()/1000;return {status:"available",checked_at:new Date().toISOString(),directory:{available:true,stale:false,total:3000,optionable_total:800,sectors:["Technology"],sector_classified:2},options:{received_recently:2,receipt_times:[now-2,now-3],window_seconds:300,last_scan_at:now-2,scan_scope:"explicit_symbols",scope_size:40},provider:{last_success_at:now-5}};};
+test("global stock counts stay visible with the dropdown closed and distinguish reads from listed names",async()=>{axios.get.mockResolvedValue({data:feedCounts()});render(<TickerPicker value="SPY" tickers={["SPY","AMD"]} className="floww-header-symbol-picker"/>);await waitFor(()=>expect(screen.getByTestId("stock-feed-counts")).toHaveTextContent("3,000 listed"));expect(screen.getByTestId("stock-feed-counts")).toHaveTextContent("800 with options");expect(screen.getByTestId("stock-feed-counts")).toHaveTextContent("2 stocks checked of 40 configured symbols in 5 min");expect(screen.getByTestId("stock-feed-counts")).not.toHaveTextContent("/ 800 with options");expect(screen.queryByRole("listbox")).toBeNull();expect(screen.getByTestId("stock-feed-counts")).toBeVisible();});
+test("the checked count names its scan scope and never borrows the directory count as its denominator",async()=>{
+ const body=feedCounts();axios.get.mockResolvedValue({data:body});
+ render(<TickerPicker value="SPY" tickers={["SPY","AMD"]} className="floww-header-symbol-picker"/>);
+ const counts=screen.getByTestId("stock-feed-counts");
+ // The directory count and the scan count are different claims.
+ await waitFor(()=>expect(counts).toHaveTextContent("800 with options"));
+ expect(counts).toHaveTextContent("2 stocks checked of 40 configured symbols");
+ expect(counts.textContent).not.toMatch(/\d+\s*stocks checked\s*\/\s*[\d,]+/);
+});
+test("an unknown scan scope claims no denominator",async()=>{
+ const body=feedCounts();delete body.options.scan_scope;delete body.options.scope_size;axios.get.mockResolvedValue({data:body});
+ render(<TickerPicker value="SPY" tickers={["SPY","AMD"]} className="floww-header-symbol-picker"/>);
+ const counts=screen.getByTestId("stock-feed-counts");
+ await waitFor(()=>expect(counts).toHaveTextContent("2 stocks checked in 5 min"));
+ expect(counts).not.toHaveTextContent("configured symbols");
+});
+test("a provider option-enabled scope is named as such",async()=>{
+ const body=feedCounts();body.options.scan_scope="provider_option_enabled";body.options.scope_size=null;axios.get.mockResolvedValue({data:body});
+ render(<TickerPicker value="SPY" tickers={["SPY","AMD"]} className="floww-header-symbol-picker"/>);
+ const counts=screen.getByTestId("stock-feed-counts");
+ await waitFor(()=>expect(counts).toHaveTextContent("2 stocks checked in the provider's option-enabled set"));
+});
+test("a short freshness window is shown in seconds rather than rounded up to minutes",async()=>{
+ const body=feedCounts();body.options.window_seconds=60;axios.get.mockResolvedValue({data:body});
+ render(<TickerPicker value="SPY" tickers={["SPY","AMD"]} className="floww-header-symbol-picker"/>);
+ const counts=screen.getByTestId("stock-feed-counts");
+ await waitFor(()=>expect(counts).toHaveTextContent("2 stocks checked of 40 configured symbols in 60s"));
+ expect(counts).not.toHaveTextContent("in 1 min");
+});
 test("global categories use provider options and supplied sectors without changing scanning scope",async()=>{const change=jest.fn();axios.get.mockImplementation(async(url,options)=>({data:String(url).includes("/market/status")?feedCounts():{instruments:[{symbol:"AMD",options:true,sector:"Technology"}],matches:1,stale:false}}));render(<TickerPicker value="SPY" tickers={["SPY","AMD","NOPT"]} onChange={change} className="floww-header-symbol-picker"/>);await waitFor(()=>expect(screen.getByTestId("stock-feed-counts")).toHaveTextContent("3,000 listed"));fireEvent.focus(screen.getByRole("combobox",{name:"Search stocks"}));fireEvent.change(screen.getByRole("combobox",{name:"Stock category"}),{target:{value:"options"}});await waitFor(()=>expect(screen.getByRole("option",{name:"AMD"})).toBeInTheDocument());expect(screen.queryByRole("option",{name:"NOPT"})).toBeNull();fireEvent.change(screen.getByRole("combobox",{name:"Stock sector"}),{target:{value:"Technology"}});await waitFor(()=>expect(axios.get).toHaveBeenCalledWith(expect.stringContaining("/market/catalog"),expect.objectContaining({params:expect.objectContaining({options_only:true,sector:"Technology"})})));await waitFor(()=>expect(screen.getByRole("option",{name:"AMD"})).toBeInTheDocument());fireEvent.click(screen.getByRole("option",{name:"AMD"}));expect(change).toHaveBeenCalledWith("AMD");expect(axios.get.mock.calls.every(([url])=>!String(url).includes("scan"))).toBe(true);});
 test("missing sector details stay unavailable rather than guessed from a ticker",async()=>{const b=feedCounts();axios.get.mockResolvedValue({data:{...b,directory:{...b.directory,sectors:[],sector_classified:0}}});render(<TickerPicker value="SPY" tickers={["SPY","AMD"]} className="floww-header-symbol-picker"/>);await waitFor(()=>expect(screen.getByTestId("stock-feed-counts")).toHaveTextContent("3,000 listed"));fireEvent.focus(screen.getByRole("combobox",{name:"Search stocks"}));expect(screen.getByRole("combobox",{name:"Stock sector"})).toBeDisabled();expect(screen.getByRole("option",{name:"Sector details unavailable"})).toBeInTheDocument();});
 test("favorite category narrows browsing without rewriting the full list",async()=>{localStorage.setItem(FAVORITES_KEY,JSON.stringify(["SPY"]));axios.get.mockImplementation(async url=>({data:String(url).includes("/market/status")?feedCounts():{instruments:[{symbol:"SPY",options:true},{symbol:"AMD",options:true}],matches:2,stale:false}}));render(<TickerPicker value="SPY" tickers={["SPY","AMD"]} className="floww-header-symbol-picker"/>);fireEvent.focus(screen.getByRole("combobox",{name:"Search stocks"}));fireEvent.change(screen.getByRole("combobox",{name:"Stock category"}),{target:{value:"favorites"}});expect(screen.getByRole("option",{name:"SPY"})).toBeInTheDocument();expect(screen.queryByRole("option",{name:"AMD"})).toBeNull();fireEvent.change(screen.getByRole("combobox",{name:"Stock category"}),{target:{value:"all"}});await waitFor(()=>expect(screen.getByRole("option",{name:"AMD"})).toBeInTheDocument());expect(JSON.parse(localStorage.getItem(FAVORITES_KEY))).toEqual(["SPY"]);});
