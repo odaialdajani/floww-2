@@ -61,11 +61,9 @@ async def test_concurrent_stale_readers_return_without_duplicate_build(cache_fun
     await asyncio.wait_for(entered.wait(), 1)
     second = asyncio.create_task(env["build_heatmap"]("SPY"))
     try:
-        # Give a second request one event-loop turn; cached reads must not
-        # wait for the deliberately blocked provider operation.
-        await asyncio.sleep(0)
-        assert second.done(), "a stale reader waited for a redundant provider build"
-        answer = await second
+        # The cached read must answer while the deliberately blocked provider
+        # operation is still pending: it never waits for a redundant build.
+        answer = await asyncio.wait_for(second, 1)
         assert len(builds) == 1
         assert first["spot"] == answer["spot"] == 100.0
         assert first["stale"] is answer["stale"] is True

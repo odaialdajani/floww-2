@@ -1121,7 +1121,7 @@ async def build_heatmap(ticker: str, max_expiries: int = 4, with_taps: bool = Tr
     if cached is not None and age is not None:
         if age < _BUILD_HEATMAP_CACHE_TTL:
             # Contract: frontend StaleDataBadge reads data.stale_age_s (App.js).
-            return cached_market_copy(cached["data"], age)
+            return await asyncio.to_thread(cached_market_copy, cached["data"], age)
         if (
             age < _BUILD_HEATMAP_STALE_TTL
             and isinstance(cached.get("data"), dict)
@@ -1136,7 +1136,7 @@ async def build_heatmap(ticker: str, max_expiries: int = 4, with_taps: bool = Tr
                 own(asyncio.create_task(_revalidate_heatmap(
                     cache_key, ticker, max_expiries, with_taps, mode, dte, scalp, max_strikes, **scope_kwargs,
                 )))
-            return cached_market_copy(cached["data"], age, revalidating=True)
+            return await asyncio.to_thread(cached_market_copy, cached["data"], age, revalidating=True)
     try:
         import copy
 
@@ -1735,7 +1735,7 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         # One bounded stored baseline. Source clocks, NY session and the FULL
         # request identity govern comparison; build time is only availability.
         from services.solstice_window import recorded_window_activity
-        _w = recorded_window_activity(None, {}, spot)
+        _w = await asyncio.to_thread(recorded_window_activity, None, {}, spot)
         try:
             from services.connection_guard import query_rows
             from services.duckdb_engine import db as _ddb_win
@@ -1750,20 +1750,22 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                 _legacy_scope_key = f"{ticker}:{mode}:{dte}:{scalp}"
                 _prev_rows = []
                 for _scope_key in ([cache_key] if cache_key == _legacy_scope_key else [cache_key, _legacy_scope_key]):
-                    _prev_rows = query_rows(_wconn,
+                    _prev_rows = await run_store(query_rows, _wconn,
                         "SELECT snapshot_id FROM heatmap_snapshots_v2 "
                         "WHERE ticker = '" + str(ticker).replace("'", "''") + "' AND query_key = '"
                         + _scope_key.replace("'", "''") + "' ORDER BY asof_ts DESC LIMIT 1")
                     if _prev_rows:
                         break
                 if _prev_rows:
-                    _w = recorded_window_activity(replay_snapshot(_wconn, _prev_rows[0][0]), {
-                        "ticker": ticker, "data_source": raw.get("data_source"),
-                        "formula_version": "gex.v2", "map_query": requested_map_query,
-                        "event_time": raw.get("event_time") or raw.get("observed_at"),
-                        "fetched_at": raw.get("fetched_at"), "asof": datetime.now(UTC).isoformat(),
-                        "contracts": raw["contracts"],
-                    }, spot)
+                    def _window_from_store():
+                        return recorded_window_activity(replay_snapshot(_wconn, _prev_rows[0][0]), {
+                            "ticker": ticker, "data_source": raw.get("data_source"),
+                            "formula_version": "gex.v2", "map_query": requested_map_query,
+                            "event_time": raw.get("event_time") or raw.get("observed_at"),
+                            "fetched_at": raw.get("fetched_at"), "asof": datetime.now(UTC).isoformat(),
+                            "contracts": raw["contracts"],
+                        }, spot)
+                    _w = await run_store(_window_from_store)
         except Exception as we:
             log.warning("window baseline read failed: %s", we)
             _w["reason"] = "BASELINE_READ_FAILED"
@@ -1782,7 +1784,8 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         metrics["window_interval"] = _w.get("interval")
         metrics["window_provenance_note"] = _w["provenance_note"]
         from services.solstice_enrichment import aggregate_window_by_wall
-        metrics["wall_window"] = aggregate_window_by_wall(sol_walls, _wrows) if _wr is None else {}
+        metrics["wall_window"] = await asyncio.to_thread(
+            aggregate_window_by_wall, sol_walls, _wrows) if _wr is None else {}
     except Exception as me:
         log.debug("solstice metrics surfaces failed (non-fatal): %s", me)
         metrics["error"] = "METRICS_UNAVAILABLE"
@@ -1976,11 +1979,13 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                 )
                 _hconn = getattr(_ddb_hist, "_conn", getattr(_ddb_hist, "conn", None))
                 if _hconn is not None and wid:
-                    db_last = latest_wall_state(_hconn, wid, ticker, scope_id)
+                    def _wall_history(_hconn=_hconn, wid=wid):
+                        return (latest_wall_state(_hconn, wid, ticker, scope_id),
+                                latest_wall_last_state(_hconn, ticker, scope_id, wid))
+                    db_last, db_full = await run_store(_wall_history)
                     # Maximization #1: full dwell state (inside_since/beyond)
                     # outlives restarts via wall_last_state_v1; the event log
                     # alone cannot restore dwell continuity.
-                    db_full = latest_wall_last_state(_hconn, ticker, scope_id, wid)
                     if db_full and is_newer_state(db_full, mem_last):
                         last = db_full
                     if db_last and is_newer_state(db_last, last):
@@ -1988,8 +1993,9 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                     # Durable only on a real file-backed recorder, never on
                     # :memory: fallback.
                     import os as _os
-                    if last is not None and recorder_status(
-                            _hconn, _os.environ.get("DUCKDB_PATH", ":memory:"))["durable"]:
+                    if last is not None and (await asyncio.to_thread(
+                            recorder_status, _hconn,
+                            _os.environ.get("DUCKDB_PATH", ":memory:")))["durable"]:
                         durable = True
             except Exception:
                 pass  # silent by design: history is best-effort; heatmap builds without it (durable=False)
@@ -2027,24 +2033,26 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                     from services.heatmap_history import record_wall_last_state
                     _hconn_last = getattr(_ddb_last, "conn", None)
                     if _hconn_last is not None and wid:
-                        record_wall_last_state(_hconn_last, ticker, scope_id, wid,
-                                               _wall_last_state)
+                        await run_store(record_wall_last_state, _hconn_last,
+                                       ticker, scope_id, wid,
+                                       _wall_last_state)
             with _ctxlib.suppress(Exception):
                 from services.duckdb_engine import db as _ddb_rec
                 from services.heatmap_history import latest_wall_last_state, record_wall_event
                 _hconn2 = getattr(_ddb_rec, "_conn", getattr(_ddb_rec, "conn", None))
                 if _hconn2 is not None and wid and tr.get("event"):
-                    record_wall_event(_hconn2, wid, ticker, tr.get("event"),
-                                      payload.get("snapshotId", ""),
-                                      {"state": tr.get("state"), "at": tr.get("at", now_iso),
-                                       "approach_side": tr.get("approach_side"),
-                                       "inside_since": tr.get("inside_since"),
-                                       "beyond_since": tr.get("beyond_since"),
-                                       "beyond_side": tr.get("beyond_side"),
-                                       "adverse_side": tr.get("adverse_side"),
-                                       "reclaim_state": tr.get("reclaim_state"),
-                                       "wall_position": wpos},
-                                      scope_id)
+                    await run_store(record_wall_event, _hconn2, wid, ticker,
+                                   tr.get("event"),
+                                   payload.get("snapshotId", ""),
+                                   {"state": tr.get("state"), "at": tr.get("at", now_iso),
+                                    "approach_side": tr.get("approach_side"),
+                                    "inside_since": tr.get("inside_since"),
+                                    "beyond_since": tr.get("beyond_since"),
+                                    "beyond_side": tr.get("beyond_side"),
+                                    "adverse_side": tr.get("adverse_side"),
+                                    "reclaim_state": tr.get("reclaim_state"),
+                                    "wall_position": wpos},
+                                   scope_id)
             scenarios.extend(scenario_for(w, spot, wall_position=wpos,
                                           wall_id=wid, scope=scope_id))
         payload["interactions"] = interactions
@@ -2158,7 +2166,7 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                                             "bid_ts": None, "ask_ts": None, "delta": None,
                                             "spread_ticks": None, "rejected": True,
                                             "reject_reason": _r.get("reason")})
-                        record_decision(_dconn, {
+                        await run_store(record_decision, _dconn, {
                             "ticker": ticker, "snapshot_id": payload.get("snapshotId", ""),
                             "scenario": _side, "side": _side,
                             "eligible": _res.get("n_eligible", 0) > 0,
@@ -2261,7 +2269,7 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         payload["recording_receipt"] = {"status": "failed", "reason": "queue_failed",
                                          "snapshot_id": payload.get("snapshotId")}
         log.debug("heatmap_history record skipped: %s", type(rh).__name__)
-    sanitized = _sanitize(payload)
+    sanitized = await asyncio.to_thread(_sanitize, payload)
     from services.solstice_scope import attach_scope_echo
     attach_scope_echo(sanitized, cache_key, history_query_key=history_query_key, formula_version="gex.v2")
     _BUILD_HEATMAP_CACHE[cache_key] = {"ts": time.time(), "data": sanitized,
@@ -2946,15 +2954,15 @@ async def _snapshot_chains():
         except Exception as e:
             log.warning(f"snapshot: no duckdb conn: {e}")
             return
-    create_snapshot_table(conn)
+    await run_store(create_snapshot_table, conn)
     for t in ("SPY", "QQQ", "IWM"):
         try:
             raw = await fetch_spot_and_chains_merged(t, 4)
             if not raw or raw.get("spot") != raw.get("spot"):
                 log.warning(f"chain snapshot {t}: no data")
                 continue
-            batch = contracts_to_recordbatch(raw)
-            n = bulk_insert(conn, batch)
+            batch = await asyncio.to_thread(contracts_to_recordbatch, raw)
+            n = await run_store(bulk_insert, conn, batch)
             log.info(f"chain snapshot {t}: {n} rows")
             # Exposure alerts (VEX walls / charm pins vs last grid snapshot).
             # Ported pattern from floww-2 gsd/010 (their repo untouched):
@@ -2965,19 +2973,25 @@ async def _snapshot_chains():
                 from services import flow_alerts as _fa
                 from services.duckdb_engine import db as _duckdb
 
-                grid = compute_gex_grid(raw.get("spot") or 0,
-                                        raw.get("contracts") or [], t)
-                _fa.init_flow_alert_tables(_duckdb)
+                grid = await asyncio.to_thread(compute_gex_grid,
+                                               raw.get("spot") or 0,
+                                               raw.get("contracts") or [], t)
+                # The alert-table DDL takes the shared connection lock several
+                # times. It must never run on the event loop: the recorder
+                # holds that same lock for a whole write transaction, so a
+                # loop-side call would freeze every request for its duration.
+                await run_store(_fa.init_flow_alert_tables, _duckdb)
                 try:
                     from routes.vpin import snapshot_vpin_state
-                    _vpin_state = snapshot_vpin_state(t)
+                    _vpin_state = await asyncio.to_thread(snapshot_vpin_state, t)
                 except Exception:
                     _vpin_state = None
                 try:
                     from advanced_analytics import calc_gamma_flip_levels
-                    _flip = calc_gamma_flip_levels(
+                    _flip = (await asyncio.to_thread(
+                        calc_gamma_flip_levels,
                         float(raw.get("spot") or 0),
-                        raw.get("contracts") or [], t).get("gamma_flip")
+                        raw.get("contracts") or [], t)).get("gamma_flip")
                 except Exception:
                     _flip = None
                 try:
@@ -3002,9 +3016,12 @@ async def _snapshot_chains():
                     vpin_state=_vpin_state, flip_level=_flip,
                     liquidity_state=_liq_state)
                 if events:
-                    kept = _fa.dedup_filter(_duckdb, events)
+                    # The dedup read and the alert write both take the shared
+                    # connection lock: they run on the store pool, never on
+                    # the event loop.
+                    kept = await run_store(_fa.dedup_filter, _duckdb, events)
                     if kept:
-                        _fa.persist_alerts(_duckdb, kept)
+                        await run_store(_fa.persist_alerts, _duckdb, kept)
                         log.info(f"exposure alerts {t}: {len(kept)} events")
             except Exception as e:
                 log.warning(f"exposure alert eval {t}: {e}")
@@ -3762,6 +3779,16 @@ _VPIN_AUTOFETCH_TICKERS = ["SPY", "QQQ", "IWM"]  # Re-enabled with 3 tickers
 _VPIN_AUTOFETCH_INTERVAL = 300
 
 
+def _build_toxicity_ensemble():
+    """Build the toxicity ensemble off the request thread.
+
+    The first construction imports torch and builds a model — seconds of work
+    that must never run on the event loop.
+    """
+    from services.ml_ensemble import ToxicityEnsemble
+    return ToxicityEnsemble()
+
+
 async def _vpin_autofeed_loop():
     """Background loop: fetch recent trades from yfinance, compute VPIN,
     and feed to the ToxicityEnsemble for each tracked ticker."""
@@ -3813,8 +3840,7 @@ async def _vpin_autofeed_loop():
                     qi_val = engine._qi_tracker.qi
                     if vpin_val > 0:
                         if t not in _ensembles:
-                            from services.ml_ensemble import ToxicityEnsemble
-                            _ensembles[t] = ToxicityEnsemble()
+                            _ensembles[t] = await asyncio.to_thread(_build_toxicity_ensemble)
                         _ensembles[t].update(vpin_val, qi_val)
 
                 except Exception as e:
@@ -3863,10 +3889,11 @@ async def _public_sweep_loop():
         import subprocess
 
         _root = str(pathlib.Path(__file__).resolve().parent.parent)
-        _sha = subprocess.run(
+        _sha = (await asyncio.to_thread(
+            subprocess.run,
             ["git", "-C", _root, "rev-parse", "--short", "HEAD"],
             capture_output=True, text=True, timeout=5,
-            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0).stdout.strip() or "unknown"
+            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)).stdout.strip() or "unknown"
     except Exception:
         _sha = "unknown"
     log.info("public sweep identity: pid=%d tree=%s", os.getpid(), _sha)
@@ -3956,6 +3983,11 @@ async def on_stop():
 
     from services.cpu_execution import close_cpu
     await _shutdown_join(close_cpu(), "calculation processes")
+
+    # The bounded store pool holds its own threads: drain and stop them so no
+    # store worker outlives the app.
+    from services.store_executor import close_store
+    await _shutdown_join(close_store(), "store workers")
 
     # Research cancellation persists terminal state. It must finish while
     # Mongo is still open; its later registered callback is idempotent.
