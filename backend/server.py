@@ -61,6 +61,7 @@ from services.gex_core import (
 )
 from services.logging_config import CorrelationIdMiddleware, setup_logging
 from services.problem_journal import install_problem_logging, record_problem
+from services.store_executor import STORE_BUSY_MESSAGE, StoreBusy, run_store
 from services.websocket_streamer import manager as ws_manager
 from vol_analytics import (
     calc_iv_rank_percentile,
@@ -297,6 +298,31 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
             "Access-Control-Allow-Headers": "Content-Type, Authorization, X-API-Key",
         },
     )
+
+@app.exception_handler(StoreBusy)
+async def store_busy_exception_handler(request: Request, exc: StoreBusy):
+    """The bounded store pool refused the call: answer 503, never a bare 500.
+
+    The store pool is deliberately bounded, so a saturated pool refuses the
+    call instead of queueing it forever. That refusal is explicit
+    backpressure, not a server fault: the caller gets a retryable 503 with a
+    stable message instead of an opaque 500 whose body says nothing.
+
+    The message is a fixed constant: no path, no exception text, no internal
+    detail reaches the wire, in any environment.
+    """
+    log.warning(f"Store busy {request.url.path}: {type(exc).__name__}")
+    return JSONResponse(
+        status_code=503,
+        content={"error": STORE_BUSY_MESSAGE,
+                 "status_code": 503, "path": request.url.path},
+        headers={
+            "Access-Control-Allow-Origin": _get_cors_origin_for_handlers(),
+            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization, X-API-Key",
+        },
+    )
+
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):

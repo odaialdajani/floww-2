@@ -16,6 +16,8 @@ from typing import Any
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
 
+from services.store_executor import StoreBusy, run_store
+
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/solstice", tags=["solstice"])
 
@@ -58,7 +60,7 @@ async def evidence(ticker: str, wall_id: str | None = None,
         conn = eng.conn if hasattr(eng, "conn") else None
         if conn is None:
             return {"packet": None, "error": "recorder_unavailable"}
-        rep = replay_snapshot(conn, snapshot_id)
+        rep = await run_store(replay_snapshot, conn, snapshot_id)
         if rep is None:
             return {"packet": None, "error": "snapshot_not_found"}
         snap_row = rep.get("snapshot", {}) or {}
@@ -136,7 +138,8 @@ async def regime(ticker: str, expiries: int = Query(4, ge=1, le=12)) -> dict[str
     from server import fetch_spot_and_chains_merged
     from services.solstice_regime import regime_at_spot
     raw = await fetch_spot_and_chains_merged(ticker.strip().upper(), expiries)
-    return regime_at_spot(float(raw.get("spot", 0)), raw.get("contracts", []), ticker)
+    return await asyncio.to_thread(regime_at_spot, float(raw.get("spot", 0)),
+                                   raw.get("contracts", []), ticker)
 
 
 @router.get("/patterns/{ticker}")
@@ -165,9 +168,13 @@ async def vanna(ticker: str, expiries: int = Query(4, ge=1, le=12)) -> dict[str,
     from services.solstice_vanna import expiry_removal_view, vanna_by_expiry
     raw = await fetch_spot_and_chains_merged(ticker.strip().upper(), expiries)
     spot = float(raw.get("spot", 0))
-    return {"vanna": vanna_by_expiry(raw.get("contracts", []), spot, ticker),
-            "removal": expiry_removal_view(raw.get("contracts", []), spot,
-                                           raw.get("expiries", [])[:1], ticker)}
+
+    def _vanna_view():
+        return {"vanna": vanna_by_expiry(raw.get("contracts", []), spot, ticker),
+                "removal": expiry_removal_view(raw.get("contracts", []), spot,
+                                               raw.get("expiries", [])[:1], ticker)}
+
+    return await asyncio.to_thread(_vanna_view)
 
 
 @router.get("/scout/{ticker}")
@@ -180,8 +187,10 @@ async def scout(ticker: str, side: str = Query("CALLS"),
     from services.contract_scout import scout_candidates
     raw = await fetch_spot_and_chains_merged(ticker.strip().upper(), expiries)
     _now = datetime.now(UTC)
-    return scout_candidates(raw.get("contracts", []), side, float(raw.get("spot", 0) or 0),
-                            now_s=_now.timestamp(), session_date=_now.date().isoformat())
+    return await asyncio.to_thread(scout_candidates, raw.get("contracts", []), side,
+                                   float(raw.get("spot", 0) or 0),
+                                   now_s=_now.timestamp(),
+                                   session_date=_now.date().isoformat())
 
 
 @router.get("/capability")
@@ -200,13 +209,17 @@ async def capability() -> dict[str, Any]:
         conn = eng.conn if hasattr(eng, "conn") else None
         if conn is not None:
             from services.connection_guard import query_rows
-            rows = await asyncio.to_thread(query_rows, conn,
+            rows = await run_store(query_rows, conn,
                 "SELECT at_ts, ticker, operation, requested, returned, usable, truncated "
                 "FROM capability_observations_v1 ORDER BY at_ts DESC LIMIT 50")
             for r in rows or []:
                 observed.append({"at": r[0], "ticker": r[1], "operation": r[2],
                                  "requested": r[3], "returned": r[4],
                                  "usable": r[5], "truncated": bool(r[6])})
+    except StoreBusy:
+        # The bounded pool refused the read: that is backpressure, not an
+        # empty observation list. Let it reach the 503 handler.
+        raise
     except Exception as e:
         log.debug("capability observations unavailable: %s", e)
     from services.public_capability import symbol_matrix
@@ -223,7 +236,7 @@ async def replay(snapshot_id: str) -> dict[str, Any]:
     conn = eng.conn if hasattr(eng, "conn") else None
     if conn is None:
         return {"snapshot_id": snapshot_id, "error": "recorder_unavailable"}
-    return await asyncio.to_thread(replay_snapshot, conn, snapshot_id) or {"snapshot_id": snapshot_id, "error": "not_found"}
+    return await run_store(replay_snapshot, conn, snapshot_id) or {"snapshot_id": snapshot_id, "error": "not_found"}
 
 
 @router.get("/manifest/{ticker}")
@@ -242,7 +255,8 @@ async def manifest(ticker: str, day: str = Query(""),
     day = day or datetime.now(UTC).date().isoformat()
     if conn is None:
         return {"ticker": ticker.upper(), "day": day, "error": "recorder_unavailable"}
-    return session_manifest(conn, ticker, day, expected_cadence_s=cadence_s)
+    return await run_store(session_manifest, conn, ticker, day,
+                           expected_cadence_s=cadence_s)
 
 
 @router.get("/attribute/{ticker}")
@@ -264,7 +278,8 @@ async def attribute(ticker: str, day: str = Query(""),
     if conn is None:
         return {"ticker": ticker.upper(), "day": day, "status": "error",
                 "error": "recorder_unavailable"}
-    return compare_snapshots(conn, ticker, day, query_key=query_key, as_of=as_of)
+    return await run_store(compare_snapshots, conn, ticker, day,
+                           query_key=query_key, as_of=as_of)
 
 
 @router.get("/wall-curve/{ticker}")
@@ -292,8 +307,8 @@ async def wall_curve_route(ticker: str,
         return {"version": CURVE_VERSION, "status": "error",
                 "error": "recorder_unavailable", "reason": "recorder_unavailable",
                 "points": [], "gaps": []}
-    return await asyncio.to_thread(read_wall_curve, conn, ticker, wall_id=wall_id, metric_id=metric_id,
-                                   query_key=query_key, as_of=as_of, day=day, limit=limit)
+    return await run_store(read_wall_curve, conn, ticker, wall_id=wall_id, metric_id=metric_id,
+                           query_key=query_key, as_of=as_of, day=day, limit=limit)
 
 
 @router.get("/recorder_health")
@@ -314,7 +329,7 @@ async def recorder_health() -> dict[str, Any]:
     from services.recorder_health import recorder_health as capture_health
 
     conn = eng.conn if hasattr(eng, "conn") else None
-    combined = capture_health(conn)
+    combined = await run_store(capture_health, conn)
     # Preserve the existing top-level shape (durable/mode/backing/path/
     # tables) for current consumers, and add the capture state beneath it.
     status = dict(combined["store"])
@@ -323,7 +338,7 @@ async def recorder_health() -> dict[str, Any]:
     try:
         if conn is not None:
             from services.connection_guard import query_rows
-            rows = query_rows(conn,
+            rows = await run_store(query_rows, conn,
                 "SELECT snapshot_id, ticker, asof_ts FROM heatmap_snapshots_v2 "
                 "ORDER BY asof_ts DESC LIMIT 1")
             if rows:

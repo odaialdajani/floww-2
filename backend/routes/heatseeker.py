@@ -29,6 +29,7 @@ from services.heatseeker import (
     detect_rainbow_road,
     detect_reverse_rug,
 )
+from services.store_executor import STORE_BUSY_MESSAGE, StoreBusy, run_store
 
 logger = logging.getLogger(__name__)
 
@@ -245,13 +246,20 @@ async def node_lifecycle_route(
             from services.duckdb_engine import db as _duckdb
             from services.heatmap_history import latest_node_lifecycle, recorder_status
             _hconn = getattr(_duckdb, "_conn", getattr(_duckdb, "conn", None))
-            _stored = latest_node_lifecycle(_hconn, ticker.upper(), "microstructure") \
+            _stored = await run_store(
+                latest_node_lifecycle, _hconn, ticker.upper(), "microstructure") \
                 if _hconn is not None else None
             if _stored:
-                durable = bool(recorder_status(
-                    _hconn, _os.environ.get("DUCKDB_PATH", ":memory:"))["durable"])
+                durable = bool((await run_store(
+                    recorder_status,
+                    _hconn, _os.environ.get("DUCKDB_PATH", ":memory:")))["durable"])
             else:
                 durable = False
+        except StoreBusy:
+            # The join is best-effort, but a refusal from the bounded pool is
+            # backpressure: it has to reach this route's degraded body
+            # instead of being answered as "no durable state".
+            raise
         except Exception:
             durable = None
         out = {"ticker": ticker.upper(), "spot": spot,
@@ -263,6 +271,11 @@ async def node_lifecycle_route(
         return _sanitize(out)
     except HTTPException:
         raise
+    except StoreBusy:
+        # The bounded store pool refused the read: answer with the same fixed
+        # body the global 503 handler uses, never the pool's own text.
+        logger.warning("node-lifecycle route store busy")
+        return {"ticker": ticker.upper() if isinstance(ticker, str) else "unknown", "spot": 0, "nodes": [], "n_nodes": 0, "error": STORE_BUSY_MESSAGE, "status": "degraded"}
     except Exception as e:
         logger.warning(f"node-lifecycle route fail: {e}")
         return {"ticker": ticker.upper() if isinstance(ticker, str) else "unknown", "spot": 0, "nodes": [], "n_nodes": 0, "error": str(e), "status": "degraded"}
@@ -705,12 +718,17 @@ async def node_confluence_route(
             try:
                 from services.duckdb_engine import db as _ddb
                 from services.flow_alerts import read_alert_feed
-                flow_rows = await asyncio.to_thread(
+                flow_rows = await run_store(
                     read_alert_feed, _ddb, days=2, ticker=t, sort_by="conviction", raise_on_error=True
                 )
                 selected_expiries = {str(c.get("expiry")) for c in contracts if c.get("expiry")}
                 flow_rows = [r for r in flow_rows if str(r.get("expiry") or r.get("exp") or "") in selected_expiries]
                 flow_status = "ok" if flow_rows else "no_prints"
+            except StoreBusy:
+                # The flow read is best-effort, but a refusal from the
+                # bounded pool is backpressure: it has to reach this route's
+                # degraded body instead of being answered as "unavailable".
+                raise
             except Exception as e:
                 logger.warning("node-confluence flow read failed: %s", e)
                 flow_status = "unavailable"
@@ -719,6 +737,18 @@ async def node_confluence_route(
         return _sanitize({**out, "spot": spot, "flow_status": flow_status})
     except HTTPException:
         raise
+    except StoreBusy:
+        # The bounded store pool refused the read: answer with the same fixed
+        # body the global 503 handler uses, never the pool's own text.
+        logger.warning("node-confluence route store busy")
+        return {
+            "ticker": ticker.upper() if isinstance(ticker, str) else "unknown",
+            "spot": 0,
+            "rows": [],
+            "strikes_considered": 0,
+            "error": STORE_BUSY_MESSAGE,
+            "status": "degraded",
+        }
     except Exception as e:
         logger.warning(f"node-confluence route fail: {e}")
         return {

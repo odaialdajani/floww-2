@@ -15,6 +15,8 @@ from typing import Any
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
 
+from services.store_executor import STORE_BUSY_MESSAGE, StoreBusy, run_store
+
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/solstice", tags=["solstice"])
 
@@ -55,10 +57,17 @@ def register_review_routes(router: APIRouter) -> None:
                     "error": "recorder_unavailable"}
 
         try:
-            rows = list_decisions(conn, ticker, limit=limit, state_filter=state)
+            rows = await run_store(list_decisions, conn, ticker,
+                                   limit=limit, state_filter=state)
             return {"ticker": ticker.upper(), "decisions": rows,
                     "count": len(rows), "checked_at": __import__("datetime").datetime.now(
                         __import__("datetime").timezone.utc).isoformat()}
+        except StoreBusy:
+            # The bounded store pool refused the read: answer with the same
+            # fixed body the global 503 handler uses, never the pool's text.
+            log.warning("decisions list store busy for %s", ticker)
+            return {"ticker": ticker.upper(), "decisions": [],
+                    "error": STORE_BUSY_MESSAGE}
         except Exception as e:
             log.warning("decisions list failed for %s: %s", ticker, e)
             return {"ticker": ticker.upper(), "decisions": [],
@@ -71,8 +80,6 @@ def register_review_routes(router: APIRouter) -> None:
                              cursor: str | None = Query(None, max_length=1024),
                              order: str = Query("newest", max_length=6, pattern="^(newest|oldest)$")) -> dict[str, Any]:
         """Read older saved decisions without repeating or changing any work."""
-        import asyncio
-
         from fastapi import HTTPException
 
         from services.duckdb_engine import db as eng
@@ -80,8 +87,8 @@ def register_review_routes(router: APIRouter) -> None:
 
         conn = eng.conn if hasattr(eng, "conn") else None
         try:
-            return await asyncio.to_thread(decision_page, conn, ticker,
-                                           limit=limit, state=state, cursor=cursor, order=order)
+            return await run_store(decision_page, conn, ticker,
+                                   limit=limit, state=state, cursor=cursor, order=order)
         except ValueError as exc:
             raise HTTPException(422, str(exc)) from None
         except DecisionHistoryUnavailable as exc:
@@ -175,12 +182,18 @@ def register_review_routes(router: APIRouter) -> None:
             try:
                 from services.connection_guard import query_rows
 
-                rows = query_rows(
+                rows = await run_store(
+                    query_rows,
                     conn,
                     "SELECT snapshot_id FROM heatmap_snapshots_v2 WHERE ticker = '"
                     + str(ticker).upper().replace("'", "''")
                     + "' ORDER BY asof_ts DESC LIMIT 1")
                 sid = str(rows[0][0]) if rows else None
+            except StoreBusy:
+                # The bounded pool refused the read: that is backpressure,
+                # not a missing recorded snapshot. Let it reach the 503
+                # handler.
+                raise
             except Exception as e:  # non-fatal: no recorded snapshot to resolve against
                 log.debug("contract detail: no recorded snapshot for %s (%s)", ticker, e)
                 sid = None
@@ -189,7 +202,11 @@ def register_review_routes(router: APIRouter) -> None:
                     "reason": "NO_RECORDED_SNAPSHOT", "scope": scope,
                     "snapshot_id": None, "quote": None}
         try:
-            replayed = replay_snapshot(conn, sid) or {}
+            replayed = await run_store(replay_snapshot, conn, sid) or {}
+        except StoreBusy:
+            # The bounded pool refused the replay: that is backpressure, not
+            # a failed replay. Let it reach the 503 handler.
+            raise
         except Exception as e:
             log.warning("contract detail replay failed for %s/%s: %s", ticker, sid, e)
             return {"ticker": ticker.upper(), "status": "unavailable",
