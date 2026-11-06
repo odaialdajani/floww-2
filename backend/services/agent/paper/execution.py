@@ -8,7 +8,7 @@ approval, market hours, or lifecycle readiness. No route imports this module.
 from __future__ import annotations
 
 import copy
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 from services.agent.paper.accounting import ARITHMETIC_PRECISION, derived, exact, exact_context, simulated_fill
@@ -237,8 +237,12 @@ def fill_order(state, order_id, quote, *, now, committed_version):
         raise ValueError("Fill must advance the committed account version")
     if checked >= instant(order["expires_at"]):
         raise PaperConflict("Order confirmation expired; no fill was created")
-    if (checked - instant(order["created_at"])).total_seconds() * 1000 < order["latency_ms"]:
+    created_at = instant(order["created_at"])
+    latency = timedelta(milliseconds=order["latency_ms"])
+    if checked - created_at < latency:
         raise PaperConflict("Declared simulated latency has not elapsed")
+    if latency and instant(body["observed_at"]) - created_at < latency:
+        raise PaperConflict("Quote was observed before simulated latency elapsed")
     for key, saved in list(state["quotes"].items()):
         if (checked - instant(saved["observed_at"])).total_seconds() > MAX_QUOTE_AGE_SECONDS:
             del state["quotes"][key]
