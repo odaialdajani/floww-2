@@ -2196,7 +2196,7 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
             _kept = _all[:2000]
             _cov = {"requested": len(_all), "returned": len(_kept),
                     "truncated": len(_all) > len(_kept)}
-            _write = snapshot_writes.submit(
+            _write = await snapshot_writes.submit_async(
                 _conn, {"ticker": ticker,
                                          "expiries_used": payload.get("expiries_used"),
                                          "spot": spot,
