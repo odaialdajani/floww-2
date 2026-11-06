@@ -298,9 +298,18 @@ async def _resolve_spot_observation(pb, symbol: str, account_id: str,
     substitution (P2 contract); (0.0, reason) when there is honestly no
     price so downstream fails over to the next provider.
     """
+    from services.public_api import resolve_public_instrument_type
+
+    # Public.com serves equities and indices from different books. The
+    # quote request has to name the book it wants: an index asked for as an
+    # equity is not answered, so the spot fell through to a fallback instead
+    # of the quote that was requested. The symbol is normalised here too, so
+    # the request always carries the provider's own symbol form.
+    symbol = _normalize_symbol(symbol)
+    quote_type = resolve_public_instrument_type(symbol, "quote")
     rejected_quote = False
     try:
-        quotes = await pb.get_quotes([symbol], account_id)
+        quotes = await pb.get_quotes([symbol], account_id, instrument_type=quote_type)
         q = _matching_quote(quotes, symbol)
         if q is not None:
             price, reason = _public_quote_spot(q, now=now)
@@ -1481,18 +1490,35 @@ async def fetch_quotes_from_public_api(
         log.warning("No trading account for Public API")
         return None
 
-    try:
-        quotes = await pb.get_quotes(symbols, trading.account_id)
-    except _TRANSPORT_ERRORS as e:
-        # Transport-level failure — this one really is the provider being down.
-        log.warning("Public API quotes transport failure for %s: %s", ",".join(symbols), e)
-        _record_call(False)
-        return None
-    except Exception as e:
-        # Unknown symbol / rejected request is a data condition, not an outage.
-        # Recording it would let an unauthenticated request trip the
-        # provider-down alerts the primary options-chain path depends on.
-        log.warning("Public API quotes fail for %s: %s", ",".join(symbols), e)
+    from services.public_api import resolve_public_instrument_type
+
+    # An index and an equity are different books: one request cannot ask for
+    # both. The batch stays one round-trip per instrument type, so a batch of
+    # one type is still exactly one call.
+    groups: dict[str, list[str]] = {}
+    for symbol in symbols:
+        groups.setdefault(resolve_public_instrument_type(symbol, "quote"), []).append(symbol)
+
+    quotes: list = []
+    transport_failed = False
+    for instrument_type, group in groups.items():
+        try:
+            quotes.extend(await pb.get_quotes(group, trading.account_id,
+                                              instrument_type=instrument_type))
+        except _TRANSPORT_ERRORS as e:
+            # Transport-level failure — this one really is the provider being down.
+            log.warning("Public API quotes transport failure for %s: %s",
+                        ",".join(group), e)
+            _record_call(False)
+            transport_failed = True
+            break
+        except Exception as e:
+            # Unknown symbol / rejected request is a data condition, not an outage.
+            # Recording it would let an unauthenticated request trip the
+            # provider-down alerts the primary options-chain path depends on.
+            # One refused book must not discard the answers of the other.
+            log.warning("Public API quotes fail for %s: %s", ",".join(group), e)
+    if transport_failed:
         return None
 
     out: dict[str, dict[str, Any]] = {}
