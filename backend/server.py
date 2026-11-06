@@ -509,7 +509,13 @@ def _eastern_now() -> datetime:
 
 
 def _in_window_now_et() -> bool:
-    """Check if current time is within configured live window (US/Eastern)."""
+    """Check if current time is within configured live window (US/Eastern).
+
+    The stop instant is EXCLUSIVE: the window covers [start, stop). The trade
+    route that gates /api/flow uses the same bound (`hhmm < start or
+    hhmm >= stop` refuses), and this helper exists so the admin window
+    readout and that route can never disagree about the same minute.
+    """
     try:
         et = _eastern_now()
     except Exception:
@@ -518,7 +524,7 @@ def _in_window_now_et() -> bool:
         # rather than guessing at Eastern time.
         return False
     hhmm = et.strftime("%H:%M")
-    return LIVE_WINDOW["start_hhmm"] <= hhmm <= LIVE_WINDOW["stop_hhmm"]
+    return LIVE_WINDOW["start_hhmm"] <= hhmm < LIVE_WINDOW["stop_hhmm"]
 
 
 # ===== RESTORED (7ec433f over-deletion): cache + gex/pdf/opportunity helpers =====
