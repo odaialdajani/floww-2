@@ -714,6 +714,8 @@ async def fetch_spot_and_chains_merged(ticker: str, max_expiries: int = 4) -> di
       2. cvserver (CVForge) — 32 expiries, 171 strikes, all greeks included
       3. yfinance + Databento OI overlay (legacy path)
     """
+    from data_providers import market_data_policy
+
     # ── 0. Try Public API first (with timeout) ──
     PUBLIC_API_KEY = os.environ.get("PUBLIC_API_KEY", "")
     if PUBLIC_API_KEY:
@@ -736,11 +738,12 @@ async def fetch_spot_and_chains_merged(ticker: str, max_expiries: int = 4) -> di
                     pass
                 return pub_data
         except BudgetExhausted as exc:
-            from services.fetch_coordinator import degraded_response
+            if market_data_policy()["public_only"]:
+                from services.fetch_coordinator import degraded_response
 
-            detail = degraded_response("budget_exhausted", str(exc), retry_after=exc.retry_after)
-            detail["budget_reason"] = exc.reason
-            raise HTTPException(503, detail, headers={"Retry-After": str(exc.retry_after)}) from exc
+                detail = degraded_response("budget_exhausted", str(exc), retry_after=exc.retry_after)
+                detail["budget_reason"] = exc.reason
+                raise HTTPException(503, detail, headers={"Retry-After": str(exc.retry_after)}) from exc
         except TimeoutError:
             log.info(f"Public API timeout for {ticker}, falling back to cvserver")
             try:
@@ -762,7 +765,6 @@ async def fetch_spot_and_chains_merged(ticker: str, max_expiries: int = 4) -> di
                 # must not abort the cvserver fallback below.
                 pass
 
-    from data_providers import market_data_policy
     if market_data_policy()["public_only"]:
         raise HTTPException(503, "Public market data is unavailable; alternate sources are disabled")
 
