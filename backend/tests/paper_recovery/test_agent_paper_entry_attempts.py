@@ -1,7 +1,6 @@
 """Eight immutable entry-fill parents, including no-fill/refused observations."""
 from __future__ import annotations
 
-import copy
 import sys
 from datetime import timedelta
 from pathlib import Path
@@ -9,12 +8,11 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from services.agent.paper.admission import MAX_ARTIFACTS, artifact_liabilities  # noqa: E402
+from services.agent.paper.repository import PaperCapacity, operation_id  # noqa: E402
 from test_agent_paper_admission_corrections import retained_parents, service_for  # noqa: E402
 from test_agent_paper_admission_supervisor import ready  # noqa: E402
 from test_agent_paper_runner import NOW, POLICY, QUOTE, RULE, UnadmittedPaperRunner  # noqa: E402
-
-from services.agent.paper.admission import MAX_ARTIFACTS, artifact_liabilities  # noqa: E402
-from services.agent.paper.repository import PaperCapacity, operation_id  # noqa: E402
 
 
 def advance(repo, runner, seconds, *, source, away=False):

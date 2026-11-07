@@ -33,7 +33,6 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from pymongo.errors import DuplicateKeyError  # noqa: E402
-
 from scripts.paper_synthetic_fixture import SyntheticPaperAdapter, persist_synthetic_policy  # noqa: E402
 from services.agent.paper.admission import PaperExecutionAuthority  # noqa: E402
 from services.agent.paper.execution import new_book  # noqa: E402
@@ -456,7 +455,6 @@ class TestPaperRunnerAcceptance:
         # Guarded accounts reserve finite recovery storage for each structure.
         await runner.cancel(owner, account, entry_receipt["order_id"])
         await repo.project(owner, account)
-        from services.agent.paper.repository import operation_id
         from services.agent.paper.service import PreparedPaperService
         current = await repo.read(owner, account)
         await PreparedPaperService(repo).archive(owner, account,

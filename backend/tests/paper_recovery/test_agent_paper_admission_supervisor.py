@@ -6,10 +6,9 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from test_agent_paper_runner import NOW, POLICY, QUOTE, RULE, _fresh_repo  # noqa: E402
-
 from services.agent.paper.repository import PaperConflict  # noqa: E402
 from services.agent.paper.runner import PaperRunner  # noqa: E402
+from test_agent_paper_runner import NOW, POLICY, QUOTE, RULE, _fresh_repo  # noqa: E402
 
 
 @pytest.mark.asyncio
@@ -25,11 +24,10 @@ async def test_missing_trusted_composition_refuses_without_any_write():
 from dataclasses import replace  # noqa: E402
 from datetime import timedelta  # noqa: E402
 
-from test_agent_paper_runner import PaperRunner as admitted_runner  # noqa: E402
-
 from services.agent.paper.repository import PaperCapacity, operation_id  # noqa: E402
 from services.agent.paper.service import PreparedPaperService  # noqa: E402
 from services.execution_lease import release_lease  # noqa: E402
+from test_agent_paper_runner import PaperRunner as admitted_runner  # noqa: E402
 
 
 def economics(account):

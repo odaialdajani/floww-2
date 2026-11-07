@@ -16,10 +16,9 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from test_agent_paper_runner import NOW, POLICY, QUOTE, RULE, PaperRunner, _fresh_repo  # noqa: E402
-
 from services.agent.paper.policy import create_policy, prepare_policy_change  # noqa: E402
 from services.agent.paper.repository import PaperConflict, operation_id  # noqa: E402
+from test_agent_paper_runner import NOW, POLICY, QUOTE, RULE, PaperRunner, _fresh_repo  # noqa: E402
 
 
 def economic_book(account):
