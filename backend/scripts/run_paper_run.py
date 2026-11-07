@@ -3,7 +3,7 @@
 Runs a synthetic paper lifecycle against an isolated Mongo database
 (prefix floww_paper_run_*) and writes a JSON report/receipt. Composes the
 guarded paper sequence through PaperRunner over injected quote observations.
-No PublicBroker import and no broker order method anywhere in this module.
+No broker import and no broker order method anywhere in this module.
 """
 
 from __future__ import annotations

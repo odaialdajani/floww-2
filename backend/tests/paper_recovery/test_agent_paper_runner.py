@@ -4,13 +4,15 @@ The runner composes the guarded paper sequence over an injected quote reader
 and injected repository. It must:
 
 - refuse to start without an explicit frozen rule and policy,
+- refuse to start a restored account while recovery_pending,
 - refuse duplicate submissions,
 - refuse pre-latency quotes,
-- keep missing / stale / zero-size quotes distinct,
+- keep missing / stale / short-size / malformed quotes distinct,
 - block new entries while an exit is unresolved,
 - preserve risk-reducing exits,
+- require restart/re-bind after recovery, refusing stale-epoch operations,
 - reconcile the durable journal to cash, positions, working orders, fills and P&L,
-- never import PublicBroker or any broker order method.
+- never import PublicBroker or any broker order method (runner and CLI).
 
 These pins run OFFLINE over the real GuardedPaperRepository and execution
 transitions against fake in-memory Mongo collections (no Mongo, no network, no
@@ -22,7 +24,6 @@ from __future__ import annotations
 import sys
 import uuid
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -32,9 +33,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from services.agent.paper.execution import new_book  # noqa: E402
 from services.agent.paper.guarded_repository import GuardedPaperRepository  # noqa: E402
 from services.agent.paper.repository import (  # noqa: E402
-    PaperCapacity,
     PaperConflict,
-    PaperRepository,
     operation_id,
 )
 from services.agent.paper.runner import PaperRunner  # noqa: E402
@@ -42,7 +41,6 @@ from services.agent.paper.runner import PaperRunner  # noqa: E402
 OWNER = str(uuid.uuid4())
 ACCOUNT = str(uuid.uuid4())
 NOW = datetime(2026, 11, 6, 14, tzinfo=UTC)
-LATER = NOW + timedelta(seconds=5)
 
 # --- minimal frozen rule and explicit policy used by every case -------------
 
@@ -189,18 +187,15 @@ async def _fresh_repo():
     return repo, owner, account
 
 
-def _op(repo, owner, account, version=0):
-    return operation_id(version, epoch=repo.accounts.docs[0]["epoch"])
+async def _recovery_pending_repo():
+    repo, owner, account = await _fresh_repo()
+    doc = repo.accounts.docs[0]
+    doc["state"]["recovery_pending"] = True
+    return repo, owner, account
 
 
 def _quote_changes():
     return dict(QUOTE)
-
-
-def _parameters(**changes):
-    values = dict(RULE)
-    values.update(changes)
-    return values
 
 
 class TestPaperRunnerAcceptance:
@@ -321,3 +316,133 @@ class TestPaperRunnerAcceptance:
         assert len(report["working_orders"]) == 0
         assert len(report["fills"]) == 1
         assert report["fills"][0]["order_id"] == order_id
+        assert report["cash_reconciled"] is True, \
+            "journal fill cash and realized P&L must reconcile to the account"
+
+    @pytest.mark.asyncio
+    async def test_start_refuses_recovery_pending_account(self):
+        repo, owner, account = await _recovery_pending_repo()
+        runner = PaperRunner(repo, quote_reader=lambda: _quote_changes(), clock=lambda: NOW)
+        with pytest.raises(PaperConflict, match="recovery_pending"):
+            await runner.start(owner, account, RULE, POLICY)
+
+    @pytest.mark.asyncio
+    async def test_restart_requires_rebind_before_reuse(self):
+        repo, owner, account = await _fresh_repo()
+        runner = PaperRunner(repo, quote_reader=lambda: _quote_changes(), clock=lambda: NOW)
+        await runner.start(owner, account, RULE, POLICY)
+        entry_receipt, created = await runner.enter(owner, account, QUOTE)
+        assert created is True
+        # Simulate a restart: the prior entry operation is stale and must not
+        # be reused without an explicit re-bind.
+        runner._start_op = None
+        with pytest.raises(ValueError, match="restarted|rebind"):
+            await runner.enter(owner, account, QUOTE)
+        # Re-binding clears the stale operation and enables fresh work at the
+        # current account version.
+        await runner._rebind(owner, account)
+        again, created2 = await runner.enter(owner, account, QUOTE)
+        assert created2 is True, "rebind must allow fresh work at the current version"
+        assert again["order_id"] != entry_receipt["order_id"], \
+            "a restarted runner must not replay the pre-restart entry receipt"
+
+    @pytest.mark.asyncio
+    async def test_recovery_epoch_stale_operation_refused(self):
+        repo, owner, account = await _fresh_repo()
+        runner = PaperRunner(repo, quote_reader=lambda: _quote_changes(), clock=lambda: NOW)
+        await runner.start(owner, account, RULE, POLICY)
+        await runner.enter(owner, account, QUOTE)
+        # Advance the account to a new recovery epoch, mimicking a restored
+        # copy; the runner's bound epoch/operation is now stale.
+        doc = repo.accounts.docs[0]
+        doc["epoch"] = str(uuid.uuid4())
+        with pytest.raises(PaperConflict, match="epoch|recovery"):
+            await runner.enter(owner, account, QUOTE)
+
+    @pytest.mark.asyncio
+    async def test_short_size_refused(self):
+        repo, owner, account = await _fresh_repo()
+        runner = PaperRunner(repo, quote_reader=lambda: _quote_changes(), clock=lambda: NOW)
+        await runner.start(owner, account, RULE, POLICY)
+        quote = {**QUOTE, "bid_size": -1, "ask_size": 1}
+        with pytest.raises(ValueError, match="size"):
+            await runner.enter(owner, account, quote)
+
+    @pytest.mark.asyncio
+    async def test_non_int_size_refused(self):
+        repo, owner, account = await _fresh_repo()
+        runner = PaperRunner(repo, quote_reader=lambda: _quote_changes(), clock=lambda: NOW)
+        await runner.start(owner, account, RULE, POLICY)
+        quote = {**QUOTE, "bid_size": "ten", "ask_size": 1}
+        with pytest.raises(ValueError, match="whole count"):
+            await runner.enter(owner, account, quote)
+
+    @pytest.mark.asyncio
+    async def test_malformed_quote_fields_named_value_error(self):
+        repo, owner, account = await _fresh_repo()
+        runner = PaperRunner(repo, quote_reader=lambda: _quote_changes(), clock=lambda: NOW)
+        await runner.start(owner, account, RULE, POLICY)
+        with pytest.raises(ValueError, match="source quote identity"):
+            await runner.enter(owner, account, {**QUOTE, "source_id": ""})
+        with pytest.raises(ValueError, match="from the future"):
+            await runner.enter(owner, account,
+                               {**QUOTE, "observed_at": (NOW + timedelta(days=1)).isoformat()})
+
+    @pytest.mark.asyncio
+    async def test_naive_datetime_refused(self):
+        repo, owner, account = await _fresh_repo()
+        runner = PaperRunner(repo, quote_reader=lambda: _quote_changes(), clock=lambda: NOW)
+        await runner.start(owner, account, RULE, POLICY)
+        naive = {**QUOTE, "observed_at": "2026-11-06T14:00:00", "received_at": NOW.isoformat()}
+        with pytest.raises(ValueError, match="timezone"):
+            await runner.enter(owner, account, naive)
+
+    @pytest.mark.asyncio
+    async def test_no_fill_returns_none_false(self):
+        repo, owner, account = await _fresh_repo()
+        runner = PaperRunner(repo, quote_reader=lambda: _quote_changes(), clock=lambda: NOW)
+        await runner.start(owner, account, RULE, POLICY)
+        entry_receipt, _ = await runner.enter(owner, account, QUOTE)
+        order_id = entry_receipt["order_id"]
+        # A quote priced outside the limit produces no fill: (None, False).
+        out_of_limit = {**QUOTE, "ask": "9.99", "bid": "9.90"}
+        result, changed = await runner.enter_fill(owner, account, order_id, out_of_limit)
+        assert result is None and changed is False, \
+            "a quote that does not fill must return (None, False) and consume nothing"
+        report = await runner.reconcile(owner, account)
+        assert len(report["fills"]) == 0, "no fill may be recorded when nothing filled"
+        assert report["cash_reconciled"] is True
+
+    @pytest.mark.asyncio
+    async def test_exit_honors_passed_rule_not_entry_rule(self):
+        repo, owner, account = await _fresh_repo()
+        runner = PaperRunner(repo, quote_reader=lambda: _quote_changes(), clock=lambda: NOW)
+        await runner.start(owner, account, RULE, POLICY)
+        entry_receipt, _ = await runner.enter(owner, account, QUOTE)
+        order_id = entry_receipt["order_id"]
+        structure_id = entry_receipt["structure_id"]
+        await runner.enter_fill(owner, account, order_id, QUOTE)
+
+        exit_rule = {**RULE, "side": "sell", "structure_id": structure_id, "quantity": 1,
+                     "limit": "3.00", "proposal_digest": "c" * 64}
+        close_receipt, created = await runner.exit(owner, account, exit_rule, QUOTE)
+        assert created is True
+        assert close_receipt["status"] == "working"
+        report = await runner.reconcile(owner, account)
+        working = [o for o in report["working_orders"] if o["side"] == "sell"]
+        assert len(working) == 1
+        assert working[0]["quantity"] == exit_rule["quantity"], \
+            "exit must honor the passed rule quantity, not the entry rule"
+        assert working[0]["reserved_cash"] == "0", \
+            "a sell exit reserves no buying power"
+
+    @pytest.mark.asyncio
+    async def test_runner_and_cli_have_no_broker_import_path(self):
+        import services.agent.paper.runner as runner_module
+        runner_source = Path(runner_module.__file__).read_text(encoding="utf-8")
+        assert "PublicBroker" not in runner_source
+        assert "place_order" not in runner_source
+        cli_path = Path(__file__).resolve().parents[2] / "scripts" / "run_paper_run.py"
+        cli_source = cli_path.read_text(encoding="utf-8")
+        assert "PublicBroker" not in cli_source
+        assert "place_order" not in cli_source

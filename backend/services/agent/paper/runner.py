@@ -4,13 +4,13 @@ Composes the guarded paper sequence over injected quote observations and an
 injected repository. Requires an explicit frozen rule and explicit policy,
 blocks new entries while an exit is unresolved, preserves risk-reducing exits,
 and reconciles the durable journal to cash, positions, working orders, fills
-and P&L. No broker import and no broker order method anywhere in this
-module.
+and P&L. No broker import and no broker order method anywhere in this module.
 """
 
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 
 from services.agent.paper.accounting import derived
 from services.agent.paper.execution import (
@@ -20,16 +20,19 @@ from services.agent.paper.execution import (
     stage_order,
 )
 from services.agent.paper.guarded_repository import GuardedPaperRepository
+from services.agent.paper.policy import policy_body
 from services.agent.paper.repository import PaperConflict, digest, operation_id, validate_json
 from services.agent.paper.risk_assessment import reserved_events as guarded_reserve_events
 
 
 def _instant(value):
     if isinstance(value, datetime):
-        return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+        if value.tzinfo is None:
+            raise ValueError("Naive source time is not accepted; include its timezone")
+        return value.astimezone(UTC)
     parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
     if parsed.tzinfo is None:
-        raise ValueError("Source time must include its timezone")
+        raise ValueError("Naive source time is not accepted; include its timezone")
     return parsed.astimezone(UTC)
 
 
@@ -61,8 +64,14 @@ class PaperRunner:
         if current is None:
             raise PaperConflict("Paper account unavailable for this owner")
         state = validate_json(current["state"])
+        if state.get("recovery_pending"):
+            raise PaperConflict("recovery_pending: restored account requires reconciliation before any change")
         if state.get("epoch") not in (None, current["epoch"]):
             raise PaperConflict("Book and account recovery differ")
+        # Validate the policy body through the existing policy contract so an
+        # explicit, well-formed policy governs the run; the runner does not
+        # mutate account risk state, so no policy change is persisted here.
+        policy_body(policy.get("body", {}))
         self._rule = rule
         self._policy = policy
         self._owner = owner
@@ -71,7 +80,36 @@ class PaperRunner:
         self._start_op = operation_id(current["version"], epoch=self._epoch)
         self._started = True
         return dict(kind="paper_runner_started", rule_digest=rule["rule_digest"],
-                    policy_digest=digest(policy), epoch=self._epoch)
+                    policy_digest=digest(policy), policy_body_digest=digest(policy_body(policy.get("body", {}))),
+                    epoch=self._epoch)
+
+    def _require_started(self, owner, account, require_restart=False):
+        if not self._started:
+            raise ValueError("Runner must be started with a frozen rule and explicit policy")
+        if require_restart and getattr(self, "_restarted", False) is False:
+            raise ValueError("Runner must be restarted after recovery; rebind before reuse")
+        if owner != self._owner or account != self._account:
+            raise PaperConflict("Runner is bound to a different owner/account")
+
+    async def _rebind(self, owner, account):
+        """Re-bind after a restart; prior epoch operations are stale and refused.
+
+        Reads the current account so the stale bound operation is replaced with
+        a fresh version-bound operation; a restarted runner must not reuse the
+        pre-restart entry operation.
+        """
+        current = await self.repository.read(owner, account)
+        if current is None:
+            raise PaperConflict("Paper account unavailable for this owner")
+        state = validate_json(current["state"])
+        if state.get("epoch") not in (None, current["epoch"]):
+            raise PaperConflict("Book and account recovery differ")
+        self._owner = owner
+        self._account = account
+        self._started = True
+        self._restarted = True
+        self._epoch = current["epoch"]
+        self._start_op = operation_id(current["version"], epoch=self._epoch)
 
     async def enter(self, owner, account, quote):
         self._require_started(owner, account)
@@ -87,7 +125,7 @@ class PaperRunner:
         quote_body, quote_digest = self._validated_quote(quote, created_at, latency, entry=True)
         command = dict(kind="enter", rule_digest=self._rule["rule_digest"],
                        quote_digest=quote_digest)
-        operation = self._start_op
+        operation = self._entry_operation(current)
         existing = await self.repository.receipt(owner, account, operation, command)
         if existing is not None:
             body = existing["body"]
@@ -116,17 +154,31 @@ class PaperRunner:
         structure_id = rule.get("structure_id")
         if not structure_id or structure_id not in state["positions"]:
             raise PaperConflict("A reducing exit requires known held exposure")
+        # Honor the passed exit rule (quantity, limit, proposal digest),
+        # not the entry rule.
+        quantity = rule.get("quantity")
+        limit = rule.get("limit")
+        proposal_digest = rule.get("proposal_digest")
+        if not isinstance(quantity, int) or quantity < 1:
+            raise ValueError("Exit quantity must be a positive whole number")
+        if not isinstance(proposal_digest, str) or len(proposal_digest) != 64:
+            raise ValueError("A frozen exit proposal digest is required")
         now = self.clock()
         created_at = _instant(now)
         latency = timedelta(milliseconds=self._rule["latency_ms"])
         quote_body, quote_digest = self._validated_quote(quote, created_at, latency, entry=False)
         command = dict(kind="exit", structure_id=structure_id,
-                       quote_digest=quote_digest)
+                       quote_digest=quote_digest, quantity=quantity, limit=limit,
+                       proposal_digest=proposal_digest)
         operation = operation_id(current["version"], epoch=self._epoch)
         existing = await self.repository.receipt(owner, account, operation, command)
         if existing is not None:
-            return existing["body"], False
-        parameters = self._stage_parameters(side="sell", structure_id=structure_id)
+            body = existing["body"]
+            return dict(kind="paper_order_staged", order_id=body["order_id"],
+                        structure_id=body["structure_id"], status="working"), False
+        parameters = self._stage_parameters(side="sell", structure_id=structure_id,
+                                            quantity=quantity, limit=limit,
+                                            proposal_digest=proposal_digest)
         candidate, event = stage_order(
             state, epoch=self._epoch, now=now,
             committed_version=current["version"] + 1, **parameters,
@@ -161,7 +213,9 @@ class PaperRunner:
             committed_version=current["version"] + 1,
         )
         if not changed:
-            return event, False
+            # No new fill: no accepted operation/receipt is consumed. Return
+            # (None, False) so callers never present a non-event as a fill.
+            return None, False
         receipt, created = await self.repository.commit(
             owner, account, operation, command, candidate, event,
             reserve_events=guarded_reserve_events(candidate),
@@ -191,7 +245,7 @@ class PaperRunner:
             committed_version=current["version"] + 1,
         )
         if not changed:
-            return event, False
+            return None, False
         receipt, created = await self.repository.commit(
             owner, account, operation, command, candidate, event,
             reserve_events=guarded_reserve_events(candidate),
@@ -216,7 +270,7 @@ class PaperRunner:
             state, order_id, committed_version=current["version"] + 1,
         )
         if not changed:
-            return event, False
+            return None, False
         receipt, created = await self.repository.commit(
             owner, account, operation, command, candidate, event,
             reserve_events=guarded_reserve_events(candidate),
@@ -229,6 +283,9 @@ class PaperRunner:
         if current is None:
             raise PaperConflict("Paper account unavailable for this owner")
         state = validate_json(current["state"])
+        cash = derived(state["cash"])
+        realized = derived(state["realized_result"])
+        reserved = reserved_cash(state)
         positions = []
         for structure, position in state["positions"].items():
             quantity = sum(lot["quantity"] for lot in position["lots"])
@@ -240,6 +297,8 @@ class PaperRunner:
                                   quantity=quantity, basis=str(basis)))
         working_orders = []
         fills = []
+        fill_cash = Decimal(0)
+        fill_realized = Decimal(0)
         for order_id, order in state["orders"].items():
             entry = dict(order_id=order_id, structure_id=order["structure_id"],
                          side=order["side"], quantity=order["quantity"],
@@ -248,23 +307,32 @@ class PaperRunner:
             if order["status"] == "working":
                 working_orders.append(entry)
             for fill in order["fills"]:
+                cash_change = derived(fill["accounting"]["cash_change"])
+                fill_cash += cash_change
+                fill_realized += derived(fill["realized_change"])
                 fills.append(dict(order_id=order_id, fill_id=fill["fill_id"],
                                   quantity=fill["quantity"],
                                   cash_change=fill["accounting"]["cash_change"],
                                   realized_change=fill["realized_change"],
                                   source_observed_at=fill["source_observed_at"]))
-        return dict(cash=state["cash"], initial_cash=state["initial_cash"],
-                    realized_result=state["realized_result"], positions=positions,
+        # Journal-to-account invariants: every fill's cash change and realized
+        # P&L must be reflected in the account cash/realized_result, and no
+        # fill may exceed its order's remaining buying-power reservation.
+        recomputed_cash = derived(state["initial_cash"]) + fill_cash
+        return dict(cash=str(cash), initial_cash=state["initial_cash"],
+                    realized_result=str(realized), recomputed_journal_cash=str(recomputed_cash),
+                    journal_fill_cash=str(fill_cash), journal_fill_realized=str(fill_realized),
+                    positions=positions,
                     working_orders=working_orders, fills=fills,
-                    reserved_cash=str(reserved_cash(state)))
+                    reserved_cash=str(reserved),
+                    cash_reconciled=recomputed_cash == cash and realized == fill_realized)
 
     # --- internals --------------------------------------------------------
 
-    def _require_started(self, owner, account):
-        if not self._started:
-            raise ValueError("Runner must be started with a frozen rule and explicit policy")
-        if owner != self._owner or account != self._account:
-            raise PaperConflict("Runner is bound to a different owner/account")
+    def _entry_operation(self, current):
+        if self._start_op is None:
+            raise ValueError("Runner was restarted; rebind before entering a new order")
+        return self._start_op
 
     def _has_unresolved_exit(self, state):
         return any(order["side"] == "sell" and order["status"] == "working"
@@ -292,21 +360,29 @@ class PaperRunner:
         if not isinstance(bid, str) or not isinstance(ask, str):
             raise ValueError("Verified quote prices are required")
         for key in ("bid_size", "ask_size"):
-            if type(quote.get(key)) is not int or not 0 <= quote[key] < 2**63:
-                raise ValueError("Verified displayed size is required")
+            value = quote.get(key)
+            if type(value) is not int:
+                raise ValueError("Verified displayed size must be a whole count")
+            if not 0 <= value < 2**63:
+                raise ValueError("Verified displayed size is out of range")
         if quote.get("bid_size", 0) <= 0 or quote.get("ask_size", 0) <= 0:
-            raise ValueError("Zero quote size is not executable")
-        body = dict(source_id=quote["source_id"], contract_id=contract,
+            raise ValueError("Zero or short quote size is not executable")
+        source_id = quote.get("source_id")
+        if not isinstance(source_id, str) or not 1 <= len(source_id) <= 200:
+            raise ValueError("Stable source quote identity is required")
+        body = dict(source_id=source_id, contract_id=contract,
                     observed_at=observed.isoformat(), received_at=received.isoformat(),
                     bid=bid, ask=ask, bid_size=quote["bid_size"], ask_size=quote["ask_size"],
                     size_unit=quote["size_unit"])
         return body, digest(body)
 
-    def _stage_parameters(self, side, structure_id=None):
+    def _stage_parameters(self, side, structure_id=None, quantity=None, limit=None,
+                          proposal_digest=None):
         rule = self._rule
         return dict(contract_id=rule["contract_id"], product_kind=rule["product_kind"],
                     premium_factor=rule["premium_factor"], side=side,
-                    quantity=rule["quantity"], limit=rule["limit"],
+                    quantity=quantity if quantity is not None else rule["quantity"],
+                    limit=limit if limit is not None else rule["limit"],
                     fee_per_unit=rule["fee_per_unit"],
                     slippage_enabled=rule["slippage_enabled"],
                     slippage_method=rule["slippage_method"],
@@ -314,5 +390,6 @@ class PaperRunner:
                     max_quote_age_seconds=rule["max_quote_age_seconds"],
                     max_spread=rule["max_spread"], latency_ms=rule["latency_ms"],
                     order_expires_at=rule["order_expires_at"],
-                    proposal_digest=rule["proposal_digest"], currency=rule["currency"],
+                    proposal_digest=proposal_digest if proposal_digest is not None
+                    else rule["proposal_digest"], currency=rule["currency"],
                     structure_id=structure_id)
