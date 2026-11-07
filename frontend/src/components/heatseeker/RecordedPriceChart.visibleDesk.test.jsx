@@ -15,6 +15,28 @@ test('TPO periods name the engine letter and recorded New York start time',()=>{
   expect(titles.join(' ')).not.toMatch(/undefined/);
 });
 
+
+test('TPO retains every admitted period inside the visible chart bounds',()=>{
+  render(<RecordedPriceChart ticker="SPY" frames={frames} paneCfg={{tpo:{periodMinutes:30}}}/>);
+  const chart=screen.getByRole('img',{name:'SPY recorded price candles'});
+  const right=+chart.querySelector('clipPath rect').getAttribute('x')+ +chart.querySelector('clipPath rect').getAttribute('width');
+  const periods=screen.getAllByTestId('tpo-period-box');
+  expect(periods).toHaveLength(80);
+  for(const period of periods){
+    expect(+period.getAttribute('x')).toBeGreaterThanOrEqual(12);
+    expect(+period.getAttribute('x')+ +period.getAttribute('width')).toBeLessThanOrEqual(right);
+    expect(period.querySelector('title')).toHaveTextContent(/Period .*New York/);
+  }
+  expect(screen.getByTestId('tpo-session-facts')).toHaveTextContent(/bar-resolution/);
+});
+
+test('a wrapped candle readout reserves its measured height above the plotted series',()=>{
+  jest.spyOn(HTMLElement.prototype,'offsetHeight','get').mockImplementation(function(){return this.classList.contains('recorded-chart-readout-overlay')?96:0;});
+  render(<RecordedPriceChart ticker="SPY" frames={frames.slice(0,2)}/>);
+  const plot=screen.getByRole('img',{name:'SPY recorded price candles'}).querySelector('clipPath rect');
+  expect(+plot.getAttribute('y')).toBeGreaterThanOrEqual(106);
+});
+
 test.each([1,2,3,120])('axis labels have bounded unique anchors for %i candles',count=>{
   render(<RecordedPriceChart ticker="SPY" frames={frames.slice(0,count)}/>);
   const labels=[...screen.getByTestId('recorded-price-chart').querySelectorAll('.recorded-time-label')];
