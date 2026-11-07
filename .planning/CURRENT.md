@@ -1,12 +1,15 @@
 # FLOWW current work
 
-Updated for the latest direct takeover. The current chat owns implementation and integration.
-Read [the consolidated current plan](../docs/FLOWW-CURRENT-PLAN.md) for the complete queue and obligation crosswalk. It supersedes dated assignments, dispatch prompts and stale pending-release claims.
+Updated November 7, 2026. The current owner request is autonomous FLOWW research/paper/coding operations with minimal manual session continuation, plus Mac usability. See [autonomy specification](../docs/operations/AUTONOMY-SPEC.md) and [implementation plan](../docs/superpowers/plans/2026-11-07-floww-autonomy.md). The user explicitly requests parallel workers under one accountable integrator. Older no-worker rosters and retired controller prompts are historical and must not be resumed.
 
-The active source is the `integration/current` branch in `.worktrees/integration-candidate-20261025`. Stock chart is `heatseeker`; Market view is `trinity`. The normal frontend is port3000 and the managed read backend is8213. Verify the actual Git HEAD, backend version and served asset hashes against the delivery receipt before claiming a loaded release. Port3215 previews are retired.
+Canonical source is `/Users/nav/Documents/GitHub/floww-2`, local `main`. The old `.worktrees/integration-candidate-20261025` is retained historical material, not the current source. Stock chart is `heatseeker`; Market view is `trinity`. The managed frontend on `3000` and backend on `8213` were observed at release `3948b9c715c687ad89839ed884040c7dc7e8cced` before this operations-only change. Re-attest actual runtime/version/served assets; a newer documentation commit alone does not reload the app.
 
-The original primary checkout, original services, persistent records, paper jobs, watchdog-owned edits and older preserved product lane retain their protections. Capture, collection, price producer, notifications and trading activation remain off. Frozen model/calculation and Screener source remain unchanged.
+Current product delivery: `/Users/nav/floww-ui-correction-20261107/DELIVERY.md`. Current acceptance queue: `/Users/nav/floww-ui-correction-20261107/history/CURRENT-450-ROW-QUEUE.json`. All 450 rows remain present; acceptance and profitability are not inferred from green tests. Older ledger and the historical consolidated plan remain evidence.
 
-Recovery evidence and changing runtime receipts live in the consolidation workspace. Historical records remain dated and grant no current source ownership. Continue the ready queue directly; do not restart a former development controller.
+Native operations uses a new scoped graph/profiles. Initial research/audit cards are blocked until tool/model/evidence admission is verified. The model-free observer cannot trade, call models, edit source or restart services. Hermes board completion is not independent acceptance. Muse personal work stays separate.
 
-The latest user instruction ends all external and Codex worker activity. The current chat owns implementation, review and integration directly. Former role prompts and rosters are retained evidence and grant no current source authority. The changing continuation record and retirement receipt live in the consolidation workspace under work/review-20261103/RESUME.md and AGENT-RETIREMENT.json. No further agent launch or automatic resumption is authorized.
+Liquid Paper execution is requested, but cannot start until authentication, fresh simulated-destination/mode evidence, instrument policy, trusted risk at stage/fill, durable reconciliation and stop controls are verified. No live orders, paid fallback or stale-controller resumption. Existing capture/price producer/notification/account flags are not silently changed by this request.
+
+Preserve protected calculation/model/inference/Screener/TidehunterPro work, existing host-only dirty files, active stores, recovery copies and original service `8000`. One integration writer; isolated worker checkouts with exact path ownership. Do not stop or replace older recovery services from a dated prompt.
+
+Changing Mac and operations receipts: `/Users/nav/macbook-improvements-20261107/`. Source-level checks, installed configuration, running-service proof, account commissioning and prospective trading results are separate statuses.

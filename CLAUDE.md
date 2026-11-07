@@ -75,8 +75,8 @@ The live safety control is per-call: `submit_order(..., allow_market: bool = Fal
 is default-deny, and market orders require an explicit `allow_market=True`.
 
 **This path IS reachable.** `backend/discord_bot.py:77-80` builds
-`OrderRouter("discord-paper")` for its trade commands, and that router is the
-only paper-order path in the app. (An earlier version of this file claimed the
+`OrderRouter("discord-paper")` for its trade commands. This is separate from
+the mounted Alpaca route above and the internal simulation books. (An earlier version of this file claimed the
 router "has no callers outside its own module and its tests" — that was false
 and is exactly the kind of sentence that lets someone weaken a live gate.)
 No live caller passes `allow_market=True`, so MARKET orders are refused today;
@@ -86,14 +86,16 @@ Note: `backend/routes/live_trading.py` is **not** this route surface — its han
 `get_live_policy` / `update_live_policy` / `stop_live_tape` in `server.py` and never touch
 `OrderRouter`.
 
-**3. `PublicBroker.place_order` — UNGATED, points at a LIVE gateway, currently unreachable.**
+**3. `PublicBroker.place_order` — LIVE gateway, reachable through a gated mounted route.**
 `backend/services/public_api.py` → `PublicBroker.place_order` POSTs to
-`BASE_URL = "https://api.public.com"` — the real Public.com trading gateway, no sandbox host, **no
-gate of any kind**. It is referenced by nothing outside `public_api.py`'s own
-`place_limit_order` / `place_stop_order` helpers, so it is dead code right now. That is the only thing
-keeping it safe.
-**Wiring it — or any of its helpers — to a route, service, or agent without first putting a
-fail-closed gate in front of it is FORBIDDEN without Nav's explicit approval.** The Public.com data
+`BASE_URL = "https://api.public.com"`, the real Public.com trading gateway, not a sandbox.
+`backend/routes/public_brokerage.py` is mounted by `server.py`; its order handler
+requires `FLOWW_ENABLE_LIVE_PUBLIC` to equal `1`, a stored account policy and bound
+order admission, then consumes the single-use approval before broker submission.
+Missing admission infrastructure or policy refuses. Preserve these actual controls;
+older claims that this method was unreachable are historical and must not authorize a bypass.
+**Calling the broker or its helpers outside those fail-closed checks, or connecting
+research output directly to them, is FORBIDDEN without Nav's explicit approval.** The Public.com data
 adapter (`services/public_api_adapter.py`) is deliberately data-only and must stay that way; two tests
 enforce that it never references an order method.
 
