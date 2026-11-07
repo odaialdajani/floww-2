@@ -103,6 +103,38 @@ lease=m.WorkspaceLease(m.TaskContract(**json.loads(sys.argv[2])),sys.argv[3]);le
             with self.m.WorkspaceLease(self.contract(), self.root / "new-path"):
                 self.fail("crashed owner reclaimed")
 
+    def test_replayed_genuine_released_marker_cannot_admit_another_owner(self):
+        for other_process in (False, True):
+            with self.subTest(other_process=other_process):
+                with self.m.WorkspaceLease(self.contract()) as prior:
+                    pass
+                released = prior.path.read_bytes()
+                with self.m.WorkspaceLease(self.contract()) as current:
+                    current.path.unlink()
+                    fd = os.open(current.path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                    with os.fdopen(fd, "wb") as handle:
+                        handle.write(released)
+                    if other_process:
+                        script = """import importlib.util,json,sys
+s=importlib.util.spec_from_file_location('coding_admission',sys.argv[1]);m=importlib.util.module_from_spec(s);sys.modules[s.name]=m;s.loader.exec_module(m)
+try:
+    with m.WorkspaceLease(m.TaskContract(**json.loads(sys.argv[2]))): pass
+except m.Refusal:
+    sys.exit(42)
+"""
+                        result = subprocess.run(["/usr/bin/python3", "-I", "-B", "-c", script,
+                            str(Path(self.m.__file__)), json.dumps(self.m.asdict(self.contract()))],
+                            capture_output=True, timeout=3)
+                        self.assertEqual(result.returncode, 42, result.stderr.decode())
+                    else:
+                        with self.assertRaisesRegex(self.m.Refusal, "owned"):
+                            with self.m.WorkspaceLease(self.contract()):
+                                self.fail("genuine marker replay admitted a concurrent owner")
+                    with self.assertRaises(self.m.Refusal):
+                        current.assert_current()
+                    self.assertIsNotNone(current.fd)
+                self.assertEqual(prior.path.read_bytes(), released)
+
     def test_dirty_workspace_refused(self):
         (self.repo / "README.md").write_text("dirty")
         with self.assertRaisesRegex(self.m.Refusal, "dirty"):
@@ -433,6 +465,31 @@ lease=m.WorkspaceLease(m.TaskContract(**json.loads(sys.argv[2])),sys.argv[3]);le
                                 status = conn.recv(4096).split(b"\r\n", 1)[0]
                             self.assertIn(b"400", status)
                         self.assertEqual(calls, [])
+
+    def test_any_encoding_header_presence_refuses_before_transport(self):
+        for header, value, other_value in (("Transfer-Encoding", "chunked", "gzip"),
+                                           ("Content-Encoding", "gzip", "deflate")):
+            cases = ([""], [value], ["", ""], [value, value], ["", value],
+                     [value, ""], [value, other_value], [other_value, value])
+            for values in cases:
+                with self.subTest(header=header, values=values):
+                    calls = []
+                    def transport(*args, calls=calls):
+                        calls.append(args)
+                        return 200, "application/json", b'{}'
+                    with self.m.Gateway(self.m.RequestGate(self.contract()), None, transport) as gateway:
+                        data = json.dumps(self.envelope()).encode()
+                        lines = ["POST /" + gateway.nonce + "/v1/chat/completions HTTP/1.1",
+                                 "Host: 127.0.0.1:" + str(gateway.server.server_port),
+                                 "Authorization: Bearer " + gateway.nonce,
+                                 "Content-Length: " + str(len(data)), "Connection: close"]
+                        lines += [(header if i == 0 else header.swapcase()) + ": " + item
+                                  for i, item in enumerate(values)]
+                        with socket.create_connection(("127.0.0.1", gateway.server.server_port), timeout=2) as conn:
+                            conn.sendall("\r\n".join(lines + ["", ""]).encode() + data)
+                            status = conn.recv(4096).split(b"\r\n", 1)[0]
+                        self.assertIn(b"400", status)
+                    self.assertEqual(calls, [])
 
     def test_supervisor_kills_group_on_deadline_and_output_cap(self):
         process = subprocess.Popen(["/usr/bin/python3", "-c", "import time;time.sleep(5)"],

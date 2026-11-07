@@ -9,8 +9,12 @@ cases. The deterministic checker does not execute arbitrary model Python.
 The typed contract declares a full base SHA, canonical clean workspace, exact
 regular files, bounded generations, steps, correction count, runtime and bytes.
 An exclusive lease is derived from the canonical workspace, regardless of any
-proposed caller lock path. It uses a retained file and process lock outside the
-checkout. Normal release records `released`; a crash retains `owned`, so a new
+proposed caller lock path. It holds process locks on both the verified workspace
+directory inode and a retained marker outside the checkout. Replacing the marker
+with a genuine earlier `released` marker cannot admit another active owner.
+Held/named directory identity and marker identity are rechecked before marker
+writes, native launch/input, every generation transport and result acceptance.
+Normal release records `released`; a crash retains `owned`, so a new
 process refuses stale ownership. Cleanup never unlinks the file and never writes
 a replacement inode. Stale or replaced ownership requires review.
 
@@ -40,8 +44,10 @@ The worker has no provider credential. A fresh nonce protects one loopback
 gateway route. The gateway requires exactly one Host and Authorization header,
 and zero or one Origin header; repeated identical or conflicting values reject
 before transport. Native requests with no Origin remain valid. It rejects other
-paths, host/origin/auth/encoding/length violations, unknown fields and other
-models. It pins the complete edit/read/write catalog, including descriptions,
+paths, host/origin/auth/length violations, unknown fields and other
+models. Any Transfer-Encoding or Content-Encoding header rejects by presence,
+including empty values and duplicates in either order or casing. It pins the
+complete edit/read/write catalog, including descriptions,
 required fields, parameter types/properties and schema extras, to the reviewed
 OpenCode 2.2.5 catalog digest
 `67e1bb437fde5c8fc87349ab0e9862442bd66849de8f8a5c33c7404843fc32d2`

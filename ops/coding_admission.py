@@ -238,6 +238,7 @@ class WorkspaceLease:
         digest = hashlib.sha256(str(root).encode()).hexdigest()
         self.path = root.parent / (".floww-coding-lease-" + digest)
         self.fd, self.parent_fd, self.identity = None, None, None
+        self.workspace_fd, self.workspace_identity = None, None
         self.token = secrets.token_hex(32)
 
     def _current(self):
@@ -249,7 +250,25 @@ class WorkspaceLease:
         except FileNotFoundError:
             return False
 
+    def assert_current(self):
+        """Recheck the held directory anchor and named marker before effects."""
+        if self.workspace_fd is None or not self._current():
+            raise Refusal("workspace ownership replaced")
+        current_fd = None
+        try:
+            current_fd = _open_directory(self.contract.workspace)
+            held, named = os.fstat(self.workspace_fd), os.fstat(current_fd)
+            if ((held.st_dev, held.st_ino) != self.workspace_identity
+                    or (named.st_dev, named.st_ino) != self.workspace_identity):
+                raise Refusal("workspace directory identity changed")
+        except OSError as exc:
+            raise Refusal("workspace directory identity refused") from exc
+        finally:
+            if current_fd is not None:
+                os.close(current_fd)
+
     def _write(self, status):
+        self.assert_current()
         body = json.dumps({"status": status, "token": self.token, "pid": os.getpid(),
                            "workspace": self.contract.workspace, "task": self.contract.task_id,
                            "base_sha": self.contract.base_sha}).encode()
@@ -261,6 +280,15 @@ class WorkspaceLease:
     def __enter__(self):
         self.before = validate_workspace(self.contract)
         try:
+            # The directory inode remains a mutual-exclusion anchor even if a
+            # genuine old released marker is replayed on a replacement file.
+            self.workspace_fd = _open_directory(self.contract.workspace)
+            info = os.fstat(self.workspace_fd)
+            self.workspace_identity = (info.st_dev, info.st_ino)
+            try:
+                fcntl.flock(self.workspace_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError as exc:
+                raise Refusal("workspace owned") from exc
             self.parent_fd = _open_directory(self.path.parent)
             created = False
             try:
@@ -290,6 +318,7 @@ class WorkspaceLease:
             self._write("owned")
             if validate_workspace(self.contract) != self.before:
                 raise Refusal("workspace changed during admission")
+            self.assert_current()
         except BaseException:
             # A partially admitted/crashed owner remains parked, never reclaimed.
             self._close()
@@ -310,6 +339,9 @@ class WorkspaceLease:
         if self.parent_fd is not None:
             os.close(self.parent_fd)
             self.parent_fd = None
+        if self.workspace_fd is not None:
+            os.close(self.workspace_fd)
+            self.workspace_fd = None
 
 
 def changed_paths(workspace, before, contract):
@@ -476,7 +508,7 @@ class Gateway:
                             or self.headers.get("Origin") not in (None, owner.origin)
                             or self.headers.get("Authorization") != "Bearer " + owner.nonce):
                         raise Refusal("route origin or nonce refused")
-                    if self.headers.get("Transfer-Encoding") or self.headers.get("Content-Encoding"):
+                    if self.headers.get_all("Transfer-Encoding", []) or self.headers.get_all("Content-Encoding", []):
                         raise Refusal("request encoding refused")
                     lengths = self.headers.get_all("Content-Length", [])
                     if len(lengths) != 1 or not lengths[0].isdigit():
@@ -689,7 +721,12 @@ def canary(artifacts, credential_path=None, hostile=False):
             return 200, "text/event-stream", data
 
         transport = official_request if credential else offline_transport
-        with WorkspaceLease(contract, root / "lease") as lease, Gateway(gate, credential, transport) as gateway:
+
+        def leased_transport(body, key, timeout):
+            lease.assert_current()
+            return transport(body, key, timeout)
+
+        with WorkspaceLease(contract, root / "lease") as lease, Gateway(gate, credential, leased_transport) as gateway:
             config = native_config(contract, gateway.base_url, gateway.nonce)
             env = private_environment(root, config, secrets.token_urlsafe(32), gateway.nonce)
             profile = sandbox_profile(root, workspace, gateway.server.server_port, contract.allowed_paths)
@@ -701,6 +738,7 @@ def canary(artifacts, credential_path=None, hostile=False):
                                                   and outside.read_text() == "unchanged\n")
             if not receipt["os_outside_write_denied"]:
                 raise Refusal("OS write boundary unproven")
+            lease.assert_current()
             process = subprocess.Popen(["/usr/bin/sandbox-exec", "-p", profile, BINARY, "serve", "--stdio",
                                         "--port", "0", "--hostname", "127.0.0.1"], cwd=workspace,
                                        env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
@@ -775,6 +813,7 @@ def canary(artifacts, credential_path=None, hostile=False):
                           + 'Replace exactly "return a - b" with "return a + b". Then finish. '
                           + "Do not use read first; the complete file is supplied. Do not change README.md.")
                 receipt["prompt_bytes"] = len(prompt.encode())
+                lease.assert_current()
                 request("/api/session/" + session + "/prompt", {"text": prompt})
                 receipt["model_input_submitted"] = True
                 messages = None
@@ -791,6 +830,7 @@ def canary(artifacts, credential_path=None, hostile=False):
                 receipt["messages"] = messages
                 if gate.stopped or supervisor.reason or not completed:
                     raise Refusal("native request envelope or supervisor refused")
+                lease.assert_current()
                 receipt["changed_paths"] = changed_paths(workspace, lease.before, contract)
                 receipt["checker"] = check_pure_add(workspace)
                 if receipt["changed_paths"] != ["arithmetic.py"]:
