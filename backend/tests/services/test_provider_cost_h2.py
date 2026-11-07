@@ -118,7 +118,8 @@ def _make_broker(expiries, chains_per_expiry=0, quote_mid=100.0, calls=None):
         account_id = "acct"
         def get_trading_account(self):
             return self
-        async def get_quotes(self, symbols, account_id):
+        async def get_quotes(self, symbols, account_id, *, instrument_type):
+            assert instrument_type == "EQUITY"
             calls["n"] += 1  # the spot/quote leg counts in the 2+N model
             return [_FakeQuote(symbols[0], mid=quote_mid)]
         async def get_option_expirations(self, symbol, account_id):
