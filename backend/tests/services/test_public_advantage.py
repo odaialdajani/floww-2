@@ -101,6 +101,7 @@ async def test_adapter_preserves_last_mid_and_sizes():
     assert c["last"] == 2.65
     assert c["mid"] == pytest.approx(2.6)
     assert c["bid_size"] == 40 and c["ask_size"] == 35
+    assert type(c["bid_size"]) is int and type(c["ask_size"]) is int
 
 
 def test_parse_option_contract_reads_sizes():
@@ -1053,3 +1054,14 @@ def test_scan_payload_truncated_and_coverage():
         room = fs._scan_payload(rows, False, "asof", ["c"], limit=500)
         assert room["truncated"] is False
         assert room["cache_age_seconds"] == 0
+
+
+@pytest.mark.parametrize("raw, expected", [(0, 0), ("17", 17), (None, None), (True, None),
+                                           (-1, None), (1.5, None), (2**63, None)])
+def test_option_size_requires_a_valid_whole_count(raw, expected):
+    from services.public_api import PublicBroker
+
+    broker = PublicBroker.__new__(PublicBroker)
+    contract = broker._parse_option_contract({"symbol": "SPY261106P00500000"},
+                                             {"bidSize": raw, "askSize": raw})
+    assert (contract.bid_size, contract.ask_size) == (expected, expected)

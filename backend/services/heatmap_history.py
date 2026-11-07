@@ -18,6 +18,7 @@ import logging
 import math
 import threading
 from datetime import UTC, datetime
+from numbers import Integral
 from typing import Any
 
 from services.connection_guard import connection_lock, guarded_connection
@@ -53,6 +54,12 @@ def snapshot_digest(payload: dict[str, Any]) -> str:
     return content_digest(payload)
 
 
+def _stored_quote_size(value: object) -> int | None:
+    if isinstance(value, Integral) and not isinstance(value, bool) and 0 <= value < 2**63:
+        return int(value)
+    return None
+
+
 def normalize_stored_contract(row: dict[str, Any]) -> dict[str, Any]:
     """Lossless adapter: DB contract row → canonical contract identity (R5-B/R06).
 
@@ -68,6 +75,9 @@ def normalize_stored_contract(row: dict[str, Any]) -> dict[str, Any]:
     out["bid_timestamp"] = row.get("bid_timestamp") or row.get("bid_ts")
     out["ask_timestamp"] = row.get("ask_timestamp") or row.get("ask_ts")
     out["last_timestamp"] = row.get("last_timestamp") or row.get("last_ts")
+    for side_size in ("bid_size", "ask_size"):
+        if side_size in row:
+            out[side_size] = _stored_quote_size(row[side_size])
     try:
         out["strike"] = float(row.get("strike")) if row.get("strike") is not None else None
     except (TypeError, ValueError):
@@ -108,6 +118,7 @@ DDL = {
             snapshot_id VARCHAR, ticker VARCHAR, osi VARCHAR, expiry VARCHAR,
             strike DOUBLE, opt_type VARCHAR, multiplier DOUBLE,
             bid DOUBLE, ask DOUBLE, last DOUBLE,
+            bid_size BIGINT, ask_size BIGINT,
             bid_ts VARCHAR, ask_ts VARCHAR, last_ts VARCHAR, received_at VARCHAR,
             volume DOUBLE, oi DOUBLE, oi_effective_date VARCHAR,
             iv DOUBLE, delta DOUBLE, gamma DOUBLE, theta DOUBLE, vega DOUBLE,
@@ -221,6 +232,11 @@ def ensure_tables(conn) -> None:
     for col in ("strike_exact", "multiplier_source", "series", "window_inputs_json"):
         try:
             conn.execute(f"ALTER TABLE contract_observations_v2 ADD COLUMN IF NOT EXISTS {col} VARCHAR")
+        except Exception as e:
+            log.warning("heatmap_history contract migration %s failed: %s", col, e)
+    for col in ("bid_size", "ask_size"):
+        try:
+            conn.execute(f"ALTER TABLE contract_observations_v2 ADD COLUMN IF NOT EXISTS {col} BIGINT")
         except Exception as e:
             log.warning("heatmap_history contract migration %s failed: %s", col, e)
     # R8-05: policy_version keys outcome idempotency (decision/horizon/
@@ -502,7 +518,7 @@ def record_snapshot(conn, payload: dict[str, Any], query_key: str = "",
                     "INSERT INTO contract_observations_v2 (snapshot_id, ticker, osi, expiry, strike, opt_type, "
                     "multiplier, bid, ask, last, bid_ts, ask_ts, last_ts, received_at, volume, oi, oi_effective_date, "
                     "iv, delta, gamma, theta, vega, greeks_source, provider, exposure_basis, calculated_at, "
-                    "strike_exact, multiplier_source, series, window_inputs_json) VALUES ("
+                    "strike_exact, multiplier_source, series, window_inputs_json, bid_size, ask_size) VALUES ("
                     + ",".join([_esc(sid), _esc(payload.get("ticker")), _esc(c.get("osi")),
                                 _esc(c.get("expiry")), measurement("strike"), _esc(c.get("type")),
                                 _esc(multiplier), measurement("bid"), measurement("ask"),
@@ -515,7 +531,9 @@ def record_snapshot(conn, payload: dict[str, Any], query_key: str = "",
                                 _esc(c.get("exposure_basis", payload.get("exposure_basis"))),
                                 _esc(payload.get("asof")), _esc(c.get("strike_exact", c.get("strike"))),
                                 _esc(c.get("multiplier_source") or multiplier_reason), _esc(c.get("series")),
-                                _esc(json.dumps(_window_inputs(c), default=str, allow_nan=False))]) + ")")
+                                _esc(json.dumps(_window_inputs(c), default=str, allow_nan=False)),
+                                _esc(_stored_quote_size(c.get("bid_size"))),
+                                _esc(_stored_quote_size(c.get("ask_size")))]) + ")")
             # Hard COMMIT: a failed commit is never acknowledged — control
             # falls to ROLLBACK + None below, leaving zero half-records.
             conn.execute("COMMIT")
