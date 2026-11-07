@@ -232,6 +232,8 @@ class PaperRunner:
         else:
             self._validated_quote(request["quote"], _instant(self.clock()), entry=False)
             entry = (request["kind"] == "fill" and current["state"]["orders"][request["order_id"]]["side"] == "buy")
+            if entry:
+                await self.admission.require_entry_fill_attempt(owner, account, request["order_id"])
             if entry and current["state"]["risk_control"]["entry_credits"] < 2:
                 await self.admission.replenish(owner, account)
                 current = await self.repository.read(owner, account)

@@ -126,6 +126,10 @@ class _FakeCursor:
     def sort(self, _key, _direction):
         return self
 
+    def limit(self, count):
+        self._rows = self._rows[:count]
+        return self
+
     def __aiter__(self):
         return self
 

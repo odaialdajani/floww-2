@@ -5,7 +5,12 @@ risk verdict. Both positive displayed sizes are required on the common service
 path. The same-account commit fences durable execution generation and expiry;
 OS lease/callback checks add preflight evidence, without atomic file-stop claims.
 Immutable bounded artifacts and version-bound begin/resolve receipts reconcile
-original work. New entries prepay artifact capacity for finite fills and exits.
+original work. New entries prepay eight entry-fill ATTEMPTS (the unchanged
+MAX_FILLS_PER_ORDER) and existing exit liabilities. Every new immutable fill
+parent spends one attempt, including unchanged/refused outcomes; exact retries
+spend none. After eight, retain/cancel the working remainder while verified
+reductions remain protected. Fresh bounded artifact counts govern admission and
+replenishment; the funded state cache never grants or resets that allowance.
 No application adapter is installed by default.
 """
 from __future__ import annotations
@@ -38,20 +43,30 @@ MAX_ARTIFACTS = 128
 MAX_ARTIFACT_BYTES = 64 * 1024
 
 
-def artifact_liabilities(state):
+def artifact_liabilities(state, *, entry_attempts=None):
     """Protect every finite fill and funded exit attempt before new exposure.
 
-    No evidence is deleted. Admission stops before retained history plus these
-    prepaid liabilities reaches the unchanged global artifact limit.
+    Eight distinct immutable entry-fill parents are prepaid, regardless of
+    filled/unchanged/refused outcome. Operational callers supply freshly checked
+    artifact counts. The persisted field is only their funded read-view cache;
+    it cannot authorize another attempt or reset the actual retained history.
     """
     control = risk_assessment.control_of(state)
-    entries = sum(execution.MAX_FILLS_PER_ORDER-len(order["fills"])
-                  for order in state["orders"].values() if order["side"] == "buy" and order["status"] == "working")
+    attempts = state.get("entry_fill_attempts") if entry_attempts is None else entry_attempts
+    if attempts is None:
+        if any(order["side"] == "buy" and order["status"] == "working" for order in state["orders"].values()):
+            raise PaperConflict("Verified entry-fill attempt snapshot is unavailable")
+        attempts = {}
+    if (not isinstance(attempts, dict) or len(attempts) > execution.MAX_ORDERS
+            or any(type(value) is not int or not 0 <= value <= MAX_ARTIFACTS for value in attempts.values())):
+        raise PaperConflict("Verified entry-fill attempt snapshot is invalid")
+    entries = sum(max(0, execution.MAX_FILLS_PER_ORDER-attempts.get(order_id, 0))
+                  for order_id, order in state["orders"].items() if order["side"] == "buy" and order["status"] == "working")
     return entries, sum(control["exit_credits"].values())
 
 
-def require_artifact_capacity(state, retained, *, action, kind):
-    entries, exits = artifact_liabilities(state)
+def require_artifact_capacity(state, retained, *, action, kind, entry_attempts):
+    entries, exits = artifact_liabilities(state, entry_attempts=entry_attempts)
     if action == "entry" and kind == "stage":
         needed = retained+1+entries+exits+execution.MAX_FILLS_PER_ORDER+risk_assessment.EXIT_ASSESSMENT_CREDITS
     elif action == "entry":
@@ -133,6 +148,50 @@ class PaperAdmissionService:
             raise PaperConflict("Paper account unavailable or requires recovery")
         return validate_json(current)
 
+    async def _entry_attempt_counts(self, current):
+        """One bounded trusted scan, bound to account/epoch/exact opening order.
+
+        Parent/version uniqueness and immutable content validation count each
+        captured fill once, including lost replies and unsuccessful outcomes.
+        No request flag, cached counter, credit reset or fill count is authority.
+        """
+        binding = scope(current["owner"], current["account_id"], "internal")
+        orders = {key: value for key, value in current["state"]["orders"].items() if value["side"] == "buy"}
+        counts = dict.fromkeys(orders, 0)
+        seen = set()
+        query = {**binding, "epoch": current["epoch"], "action": "entry", "command.kind": "fill"}
+        async for record in self.repository.admissions.find(query).limit(MAX_ARTIFACTS):
+            parent = record.get("parent_operation")
+            if (record.get("artifact_digest") != digest({key: value for key, value in record.items() if key != "artifact_digest"})
+                    or record.get("_id") != digest([binding, parent])
+                    or not isinstance(parent, str) or parent.split(":", 1)[0] != current["epoch"]
+                    or record.get("starting_version") != operation_version(parent)):
+                raise PaperConflict("Retained entry-fill parent changed immutable identity")
+            if parent in seen:
+                raise PaperConflict("Retained entry-fill parent was duplicated")
+            seen.add(parent)
+            command = record["command"]
+            order_id = command.get("order_id")
+            if order_id not in orders:
+                continue  # Archived orders cannot create another fill or liability.
+            parameters = command.get("parameters") or {}
+            if (parameters.get("order_id") != order_id or parameters.get("structure_id") != order_id
+                    or parameters.get("side") != "buy"
+                    or record.get("structure_id") != order_id
+                    or risk.economics(parameters) != risk.economics(orders[order_id])):
+                raise PaperConflict("Retained fill attempt differs from its exact opening order")
+            counts[order_id] += 1
+        return counts
+
+    async def require_entry_fill_attempt(self, owner, account, order_id):
+        current = await self._current(owner, account)
+        counts = await self._entry_attempt_counts(current)
+        if order_id not in counts:
+            raise PaperConflict("Opening order is unavailable for an entry-fill attempt")
+        if counts[order_id] >= execution.MAX_FILLS_PER_ORDER:
+            raise PaperCapacity("The eight prepaid entry-fill attempts are exhausted; cancel or retain the remainder")
+        return counts
+
     async def _verify(self, current, artifact):
         command = artifact["command"]
         approved = await self._source(self.adapter.verify_admission(
@@ -179,6 +238,9 @@ class PaperAdmissionService:
         execution_claim = claim_of(current, self.authority, action, now=self.clock())
         if request["quote"] is not None:
             self._executable_quote(request["quote"], terms, self.clock())
+        entry_attempts = await self._entry_attempt_counts(current)
+        if kind == "fill" and action == "entry" and entry_attempts[order_id] >= execution.MAX_FILLS_PER_ORDER:
+            raise PaperCapacity("The eight prepaid entry-fill attempts are exhausted; cancel or retain the remainder")
         control = risk_assessment.control_of(current["state"])
         if action == "entry":
             if control["pending"]:
@@ -218,7 +280,7 @@ class PaperAdmissionService:
         await self._verify(current, artifact)
         self._require(action)
         retained = await self.repository.admissions.count_documents(binding, limit=MAX_ARTIFACTS)
-        require_artifact_capacity(current["state"], retained, action=action, kind=kind)
+        require_artifact_capacity(current["state"], retained, action=action, kind=kind, entry_attempts=entry_attempts)
         try:
             await self.repository.admissions.insert_one(artifact)
         except DuplicateKeyError:
@@ -258,6 +320,13 @@ class PaperAdmissionService:
                 current, operation, artifact["command"], action=artifact["action"],
                 structure_id=artifact["structure_id"], now=self.clock(),
             )
+            # This new artifact has already consumed its attempt. Cache only
+            # freshly derived immutable history, in the funded metadata write.
+            counts = await self._entry_attempt_counts(current)
+            if (artifact["action"] == "entry" and artifact["command"]["kind"] == "fill"
+                    and counts[artifact["command"]["order_id"]] > execution.MAX_FILLS_PER_ORDER):
+                raise PaperCapacity("Retained entry-fill attempts exceed the eight-attempt allowance")
+            state["entry_fill_attempts"] = counts
             self._require(artifact["action"])
             await self.repository.commit(owner, account, operation, begin_command, state, event,
                                          execution_claim=artifact["execution_claim"])
@@ -307,7 +376,9 @@ class PaperAdmissionService:
             raise PaperConflict("All saved assessment history must be projected before replenishment")
         state, event = risk_assessment.replenish(current["state"], now=self.clock())
         retained = await self.repository.admissions.count_documents(scope(owner, account, "internal"), limit=MAX_ARTIFACTS)
-        entries, exits = artifact_liabilities(state)
+        counts = await self._entry_attempt_counts(current)
+        entries, exits = artifact_liabilities(state, entry_attempts=counts)
+        state["entry_fill_attempts"] = counts
         if retained+entries+exits > MAX_ARTIFACTS:
             raise PaperCapacity("Projection cannot recreate artifact liabilities beyond retained capacity")
         operation = operation_id(current["version"], str(uuid.uuid5(uuid.NAMESPACE_URL,
