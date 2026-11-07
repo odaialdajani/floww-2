@@ -12,4 +12,12 @@ Liquid Paper execution is requested, but cannot start until authentication, fres
 
 Preserve protected calculation/model/inference/Screener/TidehunterPro work, existing host-only dirty files, active stores, recovery copies and original service `8000`. One integration writer; isolated worker checkouts with exact path ownership. Do not stop or replace older recovery services from a dated prompt.
 
-Changing Mac and operations receipts: `/Users/nav/macbook-improvements-20261107/`. Source-level checks, installed configuration, running-service proof, account commissioning and prospective trading results are separate statuses.
+Current execution receipts: `/Users/nav/floww-execution-20261107/REPORT.md`. Prior foundation/Mac receipts: `/Users/nav/macbook-improvements-20261107/`. Source-level checks, installed configuration, running-service proof, account commissioning and prospective trading results are separate statuses.
+
+
+November 7 execution: coding fixture, saved-research source, Liquid read-only gate
+and internal synthetic paper admission passed independent review. Native research
+remains parked; no real source adapter, generic product dispatcher or venue
+executor is commissioned. The added model-free consolidated receipt runs locally
+and reports those blockers. It cannot activate any task. The paired premium app
+remains 3948b9c71; this source change is not a new managed application release.

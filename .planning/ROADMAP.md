@@ -5,7 +5,15 @@ Derived from: deploy runbook (`deploy/free/README.md`), `docs/ROUND10_PLAN.md`
 Historical sequencing started with Oracle go-live. The current user priority is recorded first below; deployment is not active authorization.
 This file retains the live priority and historical phase tracker.
 
-## Current priority — 28 October direct cleanup
+## Current priority — November 7 autonomous operations
+
+Follow [CURRENT.md](CURRENT.md) and the scoped autonomous operations plan linked
+there. Source-level paper guards, fixed coding admission and retrospective
+research validation are integrated separately from runtime/venue commissioning.
+The stable premium desktop release is preserved. Future sessions, real source
+admission, atomic simulated-venue binding and historical acceptance stay open.
+
+## Historical priority — 28 October direct cleanup
 
 Use [CURRENT.md](CURRENT.md) for the consolidated queue, tested changes and
 runtime limits. The current task covers Stock chart and Market view performance,

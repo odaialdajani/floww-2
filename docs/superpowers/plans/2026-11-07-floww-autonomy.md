@@ -54,68 +54,70 @@ Current Task 1 evidence: `/Users/nav/macbook-improvements-20261107/autonomy/watc
 
 ## Task 3 — Admit sanitized research work
 
-**Files to create:** `ops/research_intake.py`, `ops/tests/test_research_intake.py`; task contract under `docs/operations/`.
+- [x] Compile actual saved SPY evidence; preserve stale, missing and unknown clocks. Closed citation/value/unit validation is accepted for retrospective copied facts only.
+- [x] Add bounded fixed-route intake, stable observation deduplication, private durable receipts, independent no-tool roles, one POST per role and explicit failure parking.
+- [x] Independently repair page-envelope laundering, failed-native acceptance, blocking startup writes and terminal timestamps. Frozen source `78b5d4b6b` accepted; both roles remain held.
+- [x] Perform and retain the actual bounded trial: two official POSTs total, no accepted closed JSON. Subsequent offline diagnosis does not identify the original cause. Cost remains unknown.
+- [ ] Accept a successful real native pair before installing/scheduling research. No further automatic retry, metadata fetch, thinking-parameter guess or timeout expansion is authorized by a green source test.
 
-**Interface:** `compile_snapshot(saved_input, decision_time)` returns a bounded versioned observation packet; `validate_research(packet, response)` returns accepted evidence fields or precise refusal codes. A model output is always `review_only` and `executable=false`.
-
-- [x] Added meaningful input/citation/refusal tests. Independent review reproduced extras-only-clock and timezone-overflow defects; regressions and fixes pass. Current operations suite: 58 tests on Python 3.9.6, including 32 intake cases.
-- [x] Built pure intake from the actual saved-observation endpoint shape; three retained SPY rows compile with stale/unknown clocks and no execution admission. No scanner refresh, alert-processing route or auto-clone/auto-port job ran.
-- [ ] Give no-tool research and audit sessions separate packets, pinned model, finite input/output/time budgets and no automatic fallback. Record actual call outcome/usage; unavailable quota parks work.
-- [x] Deterministically validate IDs, copied numeric fields, units and citations in a closed facts-only envelope. Independent code review and actual saved-data receipt passed; fabricated numeric values and confidence are refused. This does not claim native narrative/model research acceptance.
-- [ ] Promote only this card when source, tests, native tool envelope and observed outputs pass; retain all raw evidence outside active context.
+Evidence: `/Users/nav/floww-execution-20261107/research/0700/REPORT.md`, its `diagnosis/REPORT.md`, and `reviews/research-2/0700/REVIEW.md` under the same execution root.
 
 ## Task 4 — Compose internal execution gates before automation
 
-**Files to inspect/change only after caller review:** `backend/services/agent/paper/runner.py`, `risk.py`, `execution.py`, `guarded_repository.py`, `service.py`, `observation_service.py`, `risk_assessment.py` and `backend/services/execution_lease.py`, plus their exact callers/tests. Preserve the separate mounted Public and Alpaca account gates.
+- [x] Reproduce the original three risk bypasses; preserve their red proof as history, not a standalone release.
+- [x] Compose server-only source/confirmation admission with real persisted-policy risk checks before both stage and fill. Missing composition remains denied.
+- [x] Require strict positive bid AND ask sizes through supported direct service and runner paths; preserve unknown versus measured zero.
+- [x] Add same-account durable execution generation/owner/fence/mode/expiry predicates at Mongo CAS. Supported stop/revoke/takeover acknowledges durable ordering; raw file/callback edits alone are additional preflight checks.
+- [x] Preserve immutable funded parent/resolution identity across duplicates, lost acknowledgements, restart, actual valuation and history projection.
+- [x] Prepay retained artifact space for exits and eight entry-fill ATTEMPTS. Every new immutable fill parent consumes one attempt, including no-fill/refusal; exact retries do not. No global risk/storage limit was raised.
+- [x] Independently close the no-fill retry defect at `dfcae700c`: original failure and 32 independent probes pass. Three actual isolated Mongo CLIs and 12 Mongo write-boundary fault cases pass.
+- [x] Root Python 3.12 check: 261 affected paper/lease tests plus 50 subtests pass using isolated test dependencies. The installed app environment was not changed. Hosted/container CI was not run.
+- [ ] Commission a real trusted market/calendar/contract/lifecycle/cost adapter and application book before unattended operation. Synthetic factories are not application adapters. No active book, broker flag or venue was activated.
 
-**Interface:** trusted policy/observation admission must precede BOTH order staging and filling; the persistent book/lease/stop status governs restart admission.
-
-- [x] Reproduced three stage/fill risk bypasses in an isolated worktree, with 100 other tests and 50 subtests passing. Proof-only branch commit `4f86311ce` is intentionally red and must not merge. Production order modules are unchanged; trusted evidence-reader and funded assessment/commit recovery contracts remain required.
-- [ ] Reject stale/missing/zero-size quotes, caller-supplied equity, reused side events and missing trusted policy before every write.
-- [ ] Complete one simulated entry/exit/cash reconciliation, restart with an unresolved exit and verify entries stay blocked.
-- [ ] Exercise duplicate fills, concurrent owners, lost lease, shutdown, pause and cash/P&L arithmetic independently.
-- [ ] Run affected backend suites, independent accounting review and rollback proof. Keep separate from the real account routes and current active stores.
+Evidence: `paper/correction-2/REPORT.md`, `reviews/paper-3/0700/REPORT.md`, and `integration/paper-candidate-tests.txt` under `/Users/nav/floww-execution-20261107/`.
 
 ## Task 5 — Authenticate and admit Liquid Paper separately
 
-**Files to create after tool discovery:** `ops/liquid_paper_adapter.py`, `ops/tests/test_liquid_paper_adapter.py`, versioned venue policy under `docs/operations/`.
+- [x] Complete native OAuth in a fresh held `floww-paper` profile with credentials in its private native store. No personal Muse credentials/history were imported.
+- [x] Discover the actual 60-tool catalog. Enable Paper for this dedicated connection and read automation disabled. Preserve the first contradictory portfolio response (`paper=false` after status enabled) and later matching `paper=true` reads.
+- [x] Independently accept a current authenticated read-only destination gate and versioned closed venue policy. Preserve the existing simulated position. Order submission is unconditionally denied.
+- [ ] Establish server-enforced atomic simulated request/destination binding. The advertised `execute_order` schema has no execution-mode binding; status reads alone do not establish it.
+- [ ] Define and verify a separate Liquid instrument/cost/risk policy, durable intent/reconciliation ledger and stop/restart behavior. Internal option sizing is not a perpetual policy.
+- [ ] Commission and independently reconcile an explicitly simulated entry/exit only after these gates pass. No orders, closes, resets, deposits, withdrawals or automation policy were submitted.
 
-**Interface:** `attest_destination()` supplies current simulated account/mode/instrument capability evidence. `submit_paper(intent, attestation)` requires fresh mode evidence, deterministic policy and a persisted idempotency record; an ambiguous result becomes reconciliation-required.
-
-- [ ] Connect the official Computer MCP in a dedicated execution profile; keep OAuth credentials in its native store. Sign-in is an external dependency until observed.
-- [ ] Discover actual read/mode/paper order tools. Prove Paper mode and simulated destination; do not infer it from a browser banner or an older Co-Invest review link.
-- [ ] Define a separate Liquid instrument/cost/risk policy from verified supported markets. Do not reuse option sizing or map an option ID to a perpetual.
-- [ ] Test unknown/live/expired mode, arbitrary destination, unsupported instrument, duplicate request, stop, timeout-after-send and restart before any submission.
-- [ ] Execute only the explicitly simulated commissioning case, reconcile entry/exit/balance and independently audit the venue ledger. Leave any unsupported capability blocked and named.
+Evidence: `/Users/nav/floww-execution-20261107/liquid/REPORT.md` and [venue policy](../../operations/LIQUID-PAPER-POLICY.md).
 
 ## Task 6 — Add a constrained coding worker
 
-**Files to create:** reviewed OpenCode v2 agent/config template under `ops/templates/`, task contract and `ops/tests/test_coding_admission.py`.
+- [x] Verify native v2 deny boundaries, empty MCP/external plugins and exact pinned tool schemas.
+- [x] Complete the actual isolated arithmetic canary: two official NIM generations, only the approved file changed, independent AST and six numeric checks passed. Original service `49374` preserved.
+- [x] Close six independently reproduced boundaries: canonical ownership, safe file snapshots, full tool catalog, duplicate security headers, replayed release markers and encoding headers. Two correction rounds; final independent GO at `0ec14f561`.
+- [x] Integrate reviewable commits and retain offline/native receipts. No extra model calls were used for these corrections.
+- [ ] Admit a real product task/dispatcher separately. The fixed arithmetic fixture is not a persistent or general product writer, publication authority or release approval.
 
-**Interface:** a task declares base SHA, allowed paths, isolated checkout, acceptance commands and an artifact/commit output. Admission rejects dirty/in-use destinations and unproven permission schemas.
+Evidence: `coding/0700/REPORT.md`, `coding/0700/correction-2/REPORT.md`, and `reviews/coding-3/0700/REPORT.md` under `/Users/nav/floww-execution-20261107/`.
 
-- [x] Tested installed OpenCode 2.2.5 in a credential-free private sandbox: native parser accepted one deny-all agent, no MCP/external plugins; native permission checks refused ten operation classes despite a permissive session overlay. This is a deny-all admission canary, not an active coding worker. Native NIM/tool/output/retry commissioning remains below.
-- [ ] Deny account/order/credential tools, outside-workspace writes, arbitrary MCP tools, publication and service control. Verify an attempted out-of-scope operation is refused.
-- [ ] Run one bounded canary change in an isolated fixture repo. Require actual tests and changed-path comparison, then a fresh reviewer.
-- [ ] Cap corrections at three and return only the failing unit. Create a reviewable commit; use the existing managed updater only after product checks and rollback proof.
+## Task 7 — Repair retired model jobs deliberately
 
-## Task 7 — Repair the retired model jobs deliberately
-
-**State:** the seven enabled model-driven GLM jobs listed in `native-capabilities.md`; the eighth obsolete label is on a healthy `no_agent` script.
-
-- [x] Preserved consistent before state and classified all seven model-driven jobs without executing their prompts/scripts or sending a message.
-- [x] Replace only the retired model field in the four classified reminder jobs through supported scheduling APIs. Field diffs show provider, schedule, payload, destination, next fire, enabled state and historical errors unchanged; no execution or replay occurred. Receipt: `/Users/nav/macbook-improvements-20261107/autonomy/reminder-model-repair/receipt.json`.
-- [ ] Review source/artifact effects before repairing `deal-scraper` and `Dashboard Updates`; review external delivery/session/skill scope before `Morning Briefing`. These three remain enabled and unchanged, not paused. Do not treat a repaired pin as delivery proof.
-- [ ] Do not replay missed external actions. Test a no-delivery fixture; observe the next natural run before claiming repair.
-- [ ] Keep Muse personal work separate; migrate no personal history into FLOWW.
+- [x] Back up/classify all seven model-driven jobs and repair only the four previously accepted reminder model pins. Schedules, payloads, delivery and historical errors were preserved; no replay occurred.
+- [x] Review the remaining three jobs and exact skills. `deal-scraper` inherits broad artifact-writing tools; `Dashboard Updates` writes cross-project trackers/notes and has broad delivery; `Morning Briefing` attaches personal context and external delivery. Review receipt: `jobs/review.json` in the current execution root.
+- [ ] Supply bounded per-job source/effect/delivery contracts and a no-delivery fixture before restoring inference on those three jobs. They remain enabled with retired pins, unchanged; they are not described as paused or repaired.
+- [ ] Observe a successful natural run before claiming delivery. Never replay missed external actions.
+- [x] Preserve Muse personal work and original personal/deal/medical history and credentials.
 
 ## Task 8 — Operate and measure
 
-- [ ] Daily local receipt: admitted/active/blocked tasks, last substantive progress, accepted tests, refused evidence, unresolved paper positions, costs and next required action.
-- [ ] Track accepted output per intervention/cost, first-pass acceptance, repeat failures and rollback frequency. More parallel sessions is not the target metric.
-- [ ] Only accepted, independently checked failures may propose a permanent constraint/test; permission/risk/budget changes require a separate reviewed change.
-- [ ] Run the frozen research and prospective paper gates from the spec over actual future sessions. Publish losses, exclusions and zero-trade days beside gains.
+- [x] Add and independently review a model-free consolidated receipt. It reads only fixed private review metadata and observer status; all action capabilities are false.
+- [x] Install the hash-verified collector with a 300-second launchd interval, no KeepAlive, no RunAtLoad and no notifications. Manual and natural native runs publish expected blocked state; no worker or order is admitted.
+- [x] Show source/native/runtime scopes, last-review ages, refusal codes and nullable metrics. Unknown cost and ledger state stay unknown; stale evidence becomes unknown.
+- [x] Preserve confirmed failures as scoped regression checks. Permission/risk/model-budget changes remain separate reviewed changes.
+- [ ] Collect empirical accepted-output/intervention/cost/rollback measurements. The fields exist; unknown measurements are not fabricated.
+- [ ] Complete the frozen research and prospective paper gates over actual future sessions, including losses, exclusions, zero-trade days and unresolved exits. Source tests do not prove an edge.
 
-## External dependencies and completion limits
+Evidence: `/Users/nav/floww-execution-20261107/status/0700/` and the installed private `~/Library/Application Support/FLOWW/operations/operations-status.json`.
 
-Liquid OAuth and simulated-destination tooling; a writable Time Machine destination; future market sessions; native worker/tool and coding permission commissioning. Firewall is now enabled and verified through native settings. Full historical row acceptance and profitability remain open. The implementation receipt records which boxes actually passed; this plan is not evidence that unchecked tasks ran.
+## Current completion limits
+
+Real native research remains parked. Real internal source admission, atomic Liquid Paper binding, a separate venue policy/ledger, broader coding dispatch, three legacy job contracts, future market sessions and full historical acceptance remain open. Time Machine still has no writable supported destination. The Codex Ralph hook requires the owner's native trust click because Computer Use was denied access to Codex for safety reasons. Nothing bypasses that review.
+
+The paired premium app remains release `3948b9c715c687ad89839ed884040c7dc7e8cced` on 3000/8213. These operations and unmounted internal-paper changes do not claim a new application release. Original 8000, active stores, rollback releases and the 450-row history queue remain retained. Full execution receipt: `/Users/nav/floww-execution-20261107/REPORT.md`.
