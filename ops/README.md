@@ -57,3 +57,12 @@ Installation, activation and any deployment receipt belong to the root integrato
 ```
 
 Tests use temporary files, mocked HTTP transports and local child-process fixtures only. They cover matching/mismatched/unknown identity, redirected or oversized bodies, hard child timeout and reaping, pause during collection, resumed stale status, competing processes, private state and bounded retention. They do not contact the active app, provider or database. No backend/frontend suite is needed for this independent standard-library directory; its tests make no application acceptance claim.
+
+
+## Saved research intake
+
+`research_intake.py` is a separate pure module with no I/O, model or execution capability. `compile_snapshot(saved_input, decision_time)` consumes a bounded saved-observation page at an explicit decision time. `validate_research(packet, response)` accepts only closed, cited copies of supplied fields and units. Inputs to the compiler must come from the trusted saved-data intake; the packet digest is content identity, not authentication of a provider.
+
+The result is always `review_only`, `executable=false` and `internal_research`. Stale historical facts can be copied with their old clocks; unknown clocks, sizes, currency and contract multiplier stay unknown. Future observations, clocks after receipt, conflicting duplicate events, changed numeric values, invented citations and confidence/execution/venue claims are refused. Polling metadata cannot mint a fresh source event. Packet IDs bind a decision-time analysis; use observation/source identity rather than a new polling/decision packet ID when designing later deduplication.
+
+This is an evidence-copy gate, not an autonomous research strategy or a trusted execution admission service. A validated copied fact does not establish its provider authenticity, market freshness, predictive value or a permissible fill. Native worker dispatch and Liquid Paper remain separately gated. See `docs/operations/AUTONOMY-SPEC.md` and the linked implementation plan for the full contract.

@@ -36,7 +36,7 @@
 - [x] Implement these checks without any account/provider/model calls or service mutation.
 - [x] Run `/usr/bin/python3 -m unittest discover -s ops/tests -v`; obtain independent read-only review.
 - [x] Copy tested observer into its runtime; install a 300-second launchd job without KeepAlive retry storms. Run once, inspect the real receipt and verify original service PIDs.
-- [ ] Stop/pause test in isolated state; verify the installed source/runtime hashes and restart persistence. Commit only owned files.
+- [x] Stop/pause test in isolated state; verify installed source/runtime hashes and native launchd execution. Observer committed in `c33c45468`; the next natural five-minute run also passed. A full Mac reboot was not performed.
 
 ## Task 2 — Prepare native roles and a durable graph
 
@@ -58,10 +58,10 @@ Current Task 1 evidence: `/Users/nav/macbook-improvements-20261107/autonomy/watc
 
 **Interface:** `compile_snapshot(saved_input, decision_time)` returns a bounded versioned observation packet; `validate_research(packet, response)` returns accepted evidence fields or precise refusal codes. A model output is always `review_only` and `executable=false`.
 
-- [ ] Tests first: future receipt/source timestamps, duplicate source event, omitted strike, zero vs missing size, wrong expiry/provider, nonexistent citations and mismatched units must fail with exact reasons.
-- [ ] Build intake from saved observations or a dedicated paced read adapter. Do not call scanner refresh, alert-processing routes or the auto-clone/auto-port orchestrator.
+- [x] Added meaningful input/citation/refusal tests. Independent review reproduced extras-only-clock and timezone-overflow defects; regressions and fixes pass. Current operations suite: 58 tests on Python 3.9.6, including 32 intake cases.
+- [x] Built pure intake from the actual saved-observation endpoint shape; three retained SPY rows compile with stale/unknown clocks and no execution admission. No scanner refresh, alert-processing route or auto-clone/auto-port job ran.
 - [ ] Give no-tool research and audit sessions separate packets, pinned model, finite input/output/time budgets and no automatic fallback. Record actual call outcome/usage; unavailable quota parks work.
-- [ ] Deterministically validate IDs and copied numeric fields; independent audit attacks unsupported interpretation. Publish a local receipt, not a trade signal or confidence score.
+- [x] Deterministically validate IDs, copied numeric fields, units and citations in a closed facts-only envelope. Independent code review and actual saved-data receipt passed; fabricated numeric values and confidence are refused. This does not claim native narrative/model research acceptance.
 - [ ] Promote only this card when source, tests, native tool envelope and observed outputs pass; retain all raw evidence outside active context.
 
 ## Task 4 — Compose internal execution gates before automation
@@ -70,7 +70,7 @@ Current Task 1 evidence: `/Users/nav/macbook-improvements-20261107/autonomy/watc
 
 **Interface:** trusted policy/observation admission must precede BOTH order staging and filling; the persistent book/lease/stop status governs restart admission.
 
-- [ ] Reproduce the raw stage/fill bypass in an isolated regression. Read mounted Public/Alpaca order callers and preserve every live-account gate.
+- [x] Reproduced three stage/fill risk bypasses in an isolated worktree, with 100 other tests and 50 subtests passing. Proof-only branch commit `4f86311ce` is intentionally red and must not merge. Production order modules are unchanged; trusted evidence-reader and funded assessment/commit recovery contracts remain required.
 - [ ] Reject stale/missing/zero-size quotes, caller-supplied equity, reused side events and missing trusted policy before every write.
 - [ ] Complete one simulated entry/exit/cash reconciliation, restart with an unresolved exit and verify entries stay blocked.
 - [ ] Exercise duplicate fills, concurrent owners, lost lease, shutdown, pause and cash/P&L arithmetic independently.
@@ -94,7 +94,7 @@ Current Task 1 evidence: `/Users/nav/macbook-improvements-20261107/autonomy/watc
 
 **Interface:** a task declares base SHA, allowed paths, isolated checkout, acceptance commands and an artifact/commit output. Admission rejects dirty/in-use destinations and unproven permission schemas.
 
-- [ ] Test actual installed OpenCode v2 effective permissions; do not copy stale v1 `permission/bash/task` examples into v2.
+- [x] Tested installed OpenCode 2.2.5 in a credential-free private sandbox: native parser accepted one deny-all agent, no MCP/external plugins; native permission checks refused ten operation classes despite a permissive session overlay. This is a deny-all admission canary, not an active coding worker. Native NIM/tool/output/retry commissioning remains below.
 - [ ] Deny account/order/credential tools, outside-workspace writes, arbitrary MCP tools, publication and service control. Verify an attempted out-of-scope operation is refused.
 - [ ] Run one bounded canary change in an isolated fixture repo. Require actual tests and changed-path comparison, then a fresh reviewer.
 - [ ] Cap corrections at three and return only the failing unit. Create a reviewable commit; use the existing managed updater only after product checks and rollback proof.
@@ -103,7 +103,7 @@ Current Task 1 evidence: `/Users/nav/macbook-improvements-20261107/autonomy/watc
 
 **State:** the seven enabled model-driven GLM jobs listed in `native-capabilities.md`; the eighth obsolete label is on a healthy `no_agent` script.
 
-- [ ] Preserve consistent before state and check whether each job sends notifications, accesses personal data or performs external writes.
+- [x] Preserved consistent before state and classified all seven model-driven jobs without executing their prompts/scripts or sending a message.
 - [x] Replace only the retired model field in the four classified reminder jobs through supported scheduling APIs. Field diffs show provider, schedule, payload, destination, next fire, enabled state and historical errors unchanged; no execution or replay occurred. Receipt: `/Users/nav/macbook-improvements-20261107/autonomy/reminder-model-repair/receipt.json`.
 - [ ] Review source/artifact effects before repairing `deal-scraper` and `Dashboard Updates`; review external delivery/session/skill scope before `Morning Briefing`. These three remain enabled and unchanged, not paused. Do not treat a repaired pin as delivery proof.
 - [ ] Do not replay missed external actions. Test a no-delivery fixture; observe the next natural run before claiming repair.
@@ -118,4 +118,4 @@ Current Task 1 evidence: `/Users/nav/macbook-improvements-20261107/autonomy/watc
 
 ## External dependencies and completion limits
 
-Liquid OAuth and simulated-destination tooling; a writable Time Machine destination; administrator firewall unlock; future market sessions; native worker/tool and coding permission commissioning. Full historical row acceptance and profitability remain open. The implementation receipt records which boxes actually passed; this plan is not evidence that unchecked tasks ran.
+Liquid OAuth and simulated-destination tooling; a writable Time Machine destination; future market sessions; native worker/tool and coding permission commissioning. Firewall is now enabled and verified through native settings. Full historical row acceptance and profitability remain open. The implementation receipt records which boxes actually passed; this plan is not evidence that unchecked tasks ran.

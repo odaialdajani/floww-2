@@ -41,7 +41,7 @@ The router tracks objectives, source references, task dependencies and decisions
 
 `ops/watchdog.py` is an independent, model-free observer. It may GET only the fixed frontend page, backend version and health routes on loopback; it may read the fixed managed runtime pin/HTML and write its own private state. It accepts no browser-selected command, file path or URL. It has finite time/body limits, no proxies or redirects, an exclusive process lease, atomic status writes, bounded retention and a pause sentinel. It cannot restart services, change code/configuration, refresh provider scans, submit research, contact a model, connect an account or place an order. A green observation establishes availability and matching identity metadata only.
 
-Research and audit profiles begin with no exposed tools, no personal history/channels, no MCP servers, no fallback or mixture-of-agents route. The final installed tool resolver must prove that envelope; a configuration label alone is insufficient. Their initial cards remain blocked. Native workers may automatically add Kanban tools; Kanban includes URL retrieval and task creation, so its name is not a read-only boundary. If zero-tool enforcement is unproven, do not dispatch.
+Research and audit profiles begin with no exposed tools, no personal history/channels, no MCP servers, no fallback or mixture-of-agents route. The final installed tool resolver must prove that envelope; a configuration label alone is insufficient. Native rejection fixtures also verified that unexpected tool calls are stopped before executor/persistence. Both profiles explicitly set `agent.auto_recovery_cycles: 0` as well as zero API retries; these are separate retry layers. Their initial cards remain blocked. Native workers may automatically add Kanban tools; Kanban includes URL retrieval and task creation, so its name is not a read-only boundary. If zero-tool enforcement is unproven, do not dispatch.
 
 ## Research and execution contracts
 
@@ -73,7 +73,17 @@ Use the existing Mac launchd and Hermes durable board instead of installing a se
 
 Watchdog runtime/state: `~/Library/Application Support/FLOWW/operations`. Source and tests: `ops/`. Native profiles/board: `floww-research`, `floww-audit`, `floww-operations`. Existing app/source/store locations stay stable; shortcuts provide access without relocation churn.
 
-Time Machine remains blocked because no writable external or configured supported network destination exists. Do not use the internal disk as a claimed disaster-recovery backup or erase a newly attached drive automatically. Firewall enablement requires the administrator unlock macOS refused to the current non-admin process. FileVault is on.
+Time Machine remains blocked because no writable external or configured supported network destination exists. Do not use the internal disk as a claimed disaster-recovery backup or erase a newly attached drive automatically. Firewall was enabled through native System Settings and independently verified as on; the earlier sudo-only attempt failed but is no longer a current blocker. FileVault is on.
+
+## Current commissioning evidence
+
+The pure saved-research compiler and closed copied-fact validator passed 32 intake tests plus independent adversarial review; the combined operations suite passed 58. An actual three-row saved SPY page remains retrospective, partial and ineligible for trading. A constructed copied-fact fixture passed; invented numeric/confidence claims refused. No autonomous model research result was accepted.
+
+One native Hermes inference returned the expected marker with zero tools and a 512-token output cap. Its strict canary blocked two additional HTTP attempts. An offline replay attributed the same two-call pattern to NVIDIA pricing/model metadata reads, not a generation retry or telemetry; the original limited live trace remains preserved. The future request gateway must bound any permitted metadata reads explicitly. No native worker has been commissioned.
+
+Installed OpenCode 2.2.5 passed an isolated credential-free native parser/permission probe: ten forbidden operation classes were denied despite a permissive session overlay; MCP was empty and external plugins were excluded. Native NIM generation, final tool advertisement, output caps and retry behavior still need admission. No coding worker is active.
+
+Paper-admission regression proof is isolated on branch `agent/paper-risk-admission-20261107`, commit `4f86311ceb9b328ebf3a0b67b949c61ddd7325a5`. Three new regressions fail against unchanged production code: zero stored loss policy on entry, policy lowered to zero before fill, and missing full valuation at fill. The affected run also passed 100 tests and 50 subtests. This is intentionally red proof, not a release candidate; do not merge it. The exact trusted-evidence/funded-assessment/recovery design is in the private `paper-admission-review.md` receipt.
 
 ## Evidence and references
 
