@@ -73,7 +73,10 @@ export default function SavedCitations({visible=true}){
   });
   return()=>{if(detailRead.current===read)stop(detailRead);};
  },[open,visible,selected,detailReload]);
- const choose=row=>{stop(detailRead);setDetail({status:"loading"});setSelected(row);};
+ const choose=row=>{
+  if(selected && sameReading(row,selected))return;
+  stop(detailRead);setDetail({status:"loading"});setSelected(row);
+ };
  const row=detail.status==="ready"?detail.row:null;
  return <section className="assistant-citations" aria-label="Saved citations">
   <button type="button" aria-expanded={open} aria-controls={id} onClick={()=>open?close():setOpen(true)}>{open?"Close saved citations":"Saved citations"}</button>

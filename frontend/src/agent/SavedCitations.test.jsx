@@ -38,6 +38,17 @@ test("a closed citation read is aborted and its late response cannot refill the 
  expect(screen.queryByRole("button",{name:/SPY.*Raw GEX/})).toBeNull();
 });
 
+test("clicking the selected reading again keeps its in-flight request and loaded details",async()=>{
+ let complete;mount();open();const selection=await screen.findByRole("button",{name:/SPY.*Raw GEX/});
+ global.fetch.mockImplementationOnce(()=>new Promise(resolve=>{complete=resolve;}));fireEvent.click(selection);
+ await waitFor(()=>expect(complete).toBeDefined());const signal=global.fetch.mock.calls[1][1].signal;
+ fireEvent.click(selection);expect(signal.aborted).toBe(false);expect(global.fetch).toHaveBeenCalledTimes(2);
+ await act(async()=>complete(response({version:"agent-citation-index.v1",citation:first})));
+ const detail=await screen.findByRole("region",{name:"Saved citation reading"});expect(detail).toHaveTextContent("0 USD");
+ fireEvent.click(selection);expect(screen.getByRole("region",{name:"Saved citation reading"})).toBe(detail);
+ expect(screen.queryByText("Loading saved reading…")).toBeNull();expect(global.fetch).toHaveBeenCalledTimes(2);
+});
+
 test("selecting another citation cancels the previous detail and rejects late answer ownership",async()=>{
  let late;mount();open();await screen.findByRole("button",{name:/SPY.*Raw GEX/});
  global.fetch.mockImplementationOnce(()=>new Promise(resolve=>{late=resolve;}));fireEvent.click(screen.getByRole("button",{name:/SPY.*Raw GEX/}));
