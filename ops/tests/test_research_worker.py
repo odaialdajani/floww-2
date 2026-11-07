@@ -58,6 +58,81 @@ class WorkerTests(unittest.TestCase):
         return worker.run_once(self.state, saved=fixture() if saved is None else saved,
                                role_runner=runner or self.role, now=now)
 
+    def test_each_page_source_envelope_and_metadata_are_admitted_before_combining(self):
+        qqq = json.loads(json.dumps(fixture()).replace('SPY', 'QQQ'))
+        invalid = [('source', 'public-scan'), ('live', True), ('trade_eligible', True),
+                   ('count', 999), ('count', True), ('count', 1.0), ('columns', []),
+                   ('quote_truth', []), ('row_observations', []), ('observations_by_ticker', []),
+                   ('coverage', {'stored_tickers': -1}), ('offset', -1)]
+        for index, (field, value) in enumerate(invalid):
+            with self.subTest(field=field, value=value):
+                bad = copy.deepcopy(fixture())
+                bad[field] = value
+                for pages in ([bad], [bad, qqq], [qqq, bad]):
+                    state = self.state / ('case_' + str(index) + '_' + str(len(pages)) + '_' + str(pages[0]['rows'][0][0]))
+                    worker.set_paused(state, False)
+                    result = worker.run_once(state, producer=lambda pages=pages: pages, role_runner=self.role, now=1794085822)
+                    self.assertEqual(result['status'], 'parked')
+        self.assertEqual(len(self.calls), 0)
+
+    def test_valid_two_symbol_pages_are_independently_admitted_and_remain_review_only(self):
+        qqq = json.loads(json.dumps(fixture()).replace('SPY', 'QQQ'))
+        result = worker.run_once(self.state, producer=lambda: [fixture(), qqq],
+                                 role_runner=self.role, now=1794085822)
+        self.assertEqual(result['status'], 'accepted_retrospective_facts')
+        self.assertFalse(result['executable'])
+        self.assertEqual(len(self.calls[0][1]['observations']), 2)
+
+    def test_explicit_native_failure_overrides_valid_facts_and_success_flag(self):
+        def failed(role, packet, state):
+            result = self.role(role, packet, state)
+            result.update(native_failed=True, http_status=200, finish_reason='stop')
+            return result
+        result = self.run_worker(runner=failed)
+        self.assertEqual(result['status'], 'parked')
+        for role in result['roles'].values():
+            self.assertTrue(role['native_failed'])
+            self.assertFalse(role['validation']['accepted'])
+
+    def test_startup_input_is_nonblocking_and_deadline_supervised(self):
+        started = time.monotonic()
+        with self.assertRaises(worker.WorkerError) as caught:
+            worker.bounded_process([sys.executable, '-c', 'import time; time.sleep(.8)'],
+                                   b'x' * (128 * 1024), timeout=.1)
+        self.assertEqual(str(caught.exception), 'role_deadline')
+        self.assertLess(time.monotonic() - started, .5)
+
+    def test_startup_broken_pipe_is_a_stable_refusal_and_kills_descendants(self):
+        command = [sys.executable, '-c',
+                   'import os,time; os.close(0); pid=os.fork(); time.sleep(10) if pid==0 else os._exit(0)']
+        started = time.monotonic()
+        with self.assertRaises(worker.WorkerError) as caught:
+            worker.bounded_process(command, b'x' * (128 * 1024), timeout=.5)
+        self.assertEqual(str(caught.exception), 'role_stdin_closed')
+        self.assertLess(time.monotonic() - started, 2)
+
+    def test_every_persisted_terminal_path_records_actual_finish_clock(self):
+        for kind in ('producer_failure', 'duplicate', 'capacity'):
+            with self.subTest(kind=kind):
+                state = self.state / kind
+                worker.set_paused(state, False)
+                if kind == 'duplicate':
+                    worker.run_once(state, saved=fixture(), role_runner=self.role, now=1794085822)
+                self.calls.clear()
+                def producer(kind=kind):
+                    if kind == 'producer_failure':
+                        raise worker.WorkerError('saved_deadline')
+                    return [fixture()]
+                start, end = 1794085822, 1794085828
+                with mock.patch.object(worker.time, 'time', side_effect=[start, end]), \
+                        mock.patch.object(worker, 'MAX_RECEIPTS', 0 if kind == 'capacity' else 512):
+                    result = worker.run_once(state, producer=producer, role_runner=self.role)
+                self.assertEqual(result['started_at'], start)
+                self.assertEqual(result['finished_at'], end)
+                daily = json.loads(next((state / 'daily').glob('*.json')).read_text())
+                self.assertEqual(daily['updated_at'], end)
+                self.assertEqual(len(self.calls), 0)
+
     def test_real_clock_records_finish_and_daily_progress_after_long_role_pair(self):
         started, finished = 1794085822, 1794085883.697
         with mock.patch.object(worker.time, 'time', side_effect=[started, finished]):
@@ -121,7 +196,7 @@ class WorkerTests(unittest.TestCase):
         result = self.run_worker()
         self.assertEqual(result['status'], 'duplicate_no_call')
         self.assertEqual(result['previous_status'], 'started')
-        self.assertEqual(self.calls, [])
+        self.assertEqual(len(self.calls), 0)
 
     def test_pause_before_producer_and_pause_between_roles(self):
         worker.set_paused(self.state, True)
@@ -137,7 +212,7 @@ class WorkerTests(unittest.TestCase):
     def test_lease_excludes_second_owner(self):
         with worker.Lease(self.state):
             self.assertEqual(self.run_worker()['status'], 'busy')
-        self.assertEqual(self.calls, [])
+        self.assertEqual(len(self.calls), 0)
 
     def test_default_state_is_paused_and_status_is_model_free(self):
         other = self.state.parent / 'other'
@@ -155,7 +230,7 @@ class WorkerTests(unittest.TestCase):
                 saved['rows'][0][0] = 'AAPL'
             result = self.run_worker(saved=saved)
             self.assertEqual(result['status'], 'parked')
-        self.assertEqual(self.calls, [])
+        self.assertEqual(len(self.calls), 0)
 
     def test_receipts_are_private_atomic_and_local_daily_scope_is_explicit(self):
         result = self.run_worker()

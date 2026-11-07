@@ -228,11 +228,15 @@ def fetch_saved(symbols=('SPY', 'QQQ'), connection_factory=http.client.HTTPConne
 def compile_pages(pages, now):
     if not isinstance(pages, list) or not 1 <= len(pages) <= 2:
         raise WorkerError('saved_page_limit')
+    # Every original page must pass the pure source/envelope/count/metadata
+    # contract before any merge can supply aggregate values.
+    admitted = [compile_snapshot(validate_saved_page(page), now) for page in pages]
     if len(pages) == 1:
-        return compile_snapshot(validate_saved_page(pages[0]), now)
+        return admitted[0]
     # Compile as one page so the pure validator owns the packet digest.
     combined = {'columns': pages[0].get('columns'), 'rows': [], 'count': 0,
-                'source': 'public-scan-observations', 'live': False, 'trade_eligible': False,
+                'source': pages[0]['source'], 'live': pages[0]['live'],
+                'trade_eligible': pages[0]['trade_eligible'],
                 'row_observations': {}, 'quote_truth': {}, 'observations_by_ticker': {}, 'coverage': {}}
     for page in pages:
         validate_saved_page(page)
@@ -263,37 +267,51 @@ def _child_limits():
 
 
 def _kill_group(process):
-    with contextlib.suppress(ProcessLookupError):
+    try:
         os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    except PermissionError:
+        # Cleanup must not replace the original deadline/refusal exception.
+        with contextlib.suppress(OSError):
+            process.kill()
     with contextlib.suppress(subprocess.TimeoutExpired):
         process.wait(timeout=1)
 
 
 def bounded_process(command, initial, *, timeout=ROLE_SECONDS, output_limit=MAX_OUTPUT, env=None,
                     state=None, on_ready=None, cwd=None, memory_limit=2 * 1024 ** 3):
-    """Whole-process group deadline and combined stdout/stderr cap, no raw logs."""
+    """Supervise startup stdin, whole-group deadline, memory and output together."""
     started = time.monotonic()
     process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                               env=env, cwd=cwd, start_new_session=True, preexec_fn=_child_limits)
+                               env=env, cwd=cwd, start_new_session=True, preexec_fn=_child_limits, bufsize=0)
     selector = selectors.DefaultSelector()
     output, errors = bytearray(), bytearray()
     ready_seen = False
     memory_checked = 0.
+    pending = memoryview(initial)
+    close_after_write = on_ready is None
     try:
-        process.stdin.write(initial)
-        process.stdin.flush()
-        if on_ready is None:
-            process.stdin.close()
+        os.set_blocking(process.stdin.fileno(), False)
         for stream, target in ((process.stdout, output), (process.stderr, errors)):
             os.set_blocking(stream.fileno(), False)
             selector.register(stream, selectors.EVENT_READ, target)
+        if pending:
+            selector.register(process.stdin, selectors.EVENT_WRITE, None)
+        elif close_after_write:
+            process.stdin.close()
         while selector.get_map() or process.poll() is None:
-            if time.monotonic() - started >= timeout:
+            remaining = timeout - (time.monotonic() - started)
+            if remaining <= 0:
                 raise WorkerError('role_deadline')
             if state is not None and paused(state):
                 raise WorkerError('worker_paused')
             if process.poll() is None and time.monotonic() - memory_checked >= .2:
-                measured = subprocess.run(['/bin/ps', '-axo', 'pgid=,rss='], capture_output=True, timeout=1)
+                try:
+                    measured = subprocess.run(['/bin/ps', '-axo', 'pgid=,rss='], capture_output=True,
+                                              timeout=min(1, remaining))
+                except subprocess.TimeoutExpired:
+                    raise WorkerError('role_deadline') from None
                 if measured.returncode or len(measured.stdout) > 1024 * 1024:
                     raise WorkerError('role_memory_guard_unavailable')
                 rss = sum(int(fields[1]) * 1024 for line in measured.stdout.splitlines()
@@ -301,27 +319,47 @@ def bounded_process(command, initial, *, timeout=ROLE_SECONDS, output_limit=MAX_
                 if rss > memory_limit:
                     raise WorkerError('role_memory_limit')
                 memory_checked = time.monotonic()
-            for key, _ in selector.select(.05):
-                chunk = os.read(key.fileobj.fileno(), 8192)
+            remaining = timeout - (time.monotonic() - started)
+            if remaining <= 0:
+                raise WorkerError('role_deadline')
+            for key, mask in selector.select(min(.05, remaining)):
+                if mask & selectors.EVENT_WRITE:
+                    try:
+                        written = os.write(key.fileobj.fileno(), pending[:8192])
+                    except BlockingIOError:
+                        continue
+                    except BrokenPipeError:
+                        raise WorkerError('role_stdin_closed') from None
+                    pending = pending[written:]
+                    if not pending:
+                        selector.unregister(key.fileobj)
+                        if close_after_write:
+                            process.stdin.close()
+                    continue
+                try:
+                    chunk = os.read(key.fileobj.fileno(), 8192)
+                except BlockingIOError:
+                    continue
                 if not chunk:
                     selector.unregister(key.fileobj)
                     continue
                 key.data.extend(chunk)
                 if len(output) + len(errors) > output_limit:
                     raise WorkerError('role_output_limit')
-            if on_ready is not None and not ready_seen and b'\n' in output:
-                line = bytes(output).split(b'\n', 1)[0]
-                ready = parse_json(line)
+            if on_ready is not None and not ready_seen and not pending and b'\n' in output:
+                if time.monotonic() - started >= timeout:
+                    raise WorkerError('role_deadline')
+                ready = parse_json(bytes(output).split(b'\n', 1)[0])
                 on_ready(ready)
-                process.stdin.write(b'RUN\n')
-                process.stdin.flush()
-                process.stdin.close()
+                pending = memoryview(b'RUN\n')
+                close_after_write = True
+                selector.register(process.stdin, selectors.EVENT_WRITE, None)
                 ready_seen = True
         if process.returncode != 0:
             raise WorkerError('role_process_failed')
         return bytes(output)
     finally:
-        # Also stop descendants if the parent exited but a child retained pipes.
+        # Unbuffered pipes cannot flush a pending blocking write during cleanup.
         _kill_group(process)
         selector.close()
         for stream in (process.stdin, process.stdout, process.stderr):
@@ -419,12 +457,20 @@ def run_once(state=DEFAULT_STATE, *, saved=None, producer=None, role_runner=run_
     state = Path(state)
     real_clock = now is None
     now = time.time() if real_clock else now
+    def finish(result, receipt_path=None, persist=True):
+        result.setdefault('started_at', now)
+        result['finished_at'] = time.time() if real_clock else now
+        if receipt_path is not None:
+            atomic_json(receipt_path, result)
+        if persist:
+            _save_summary(state, result, result['finished_at'])
+        return result
     if paused(state):
-        return {'status': 'paused', 'executable': False}
+        return finish({'status': 'paused', 'executable': False}, persist=False)
     try:
         with Lease(state):
             if paused(state):
-                return {'status': 'paused', 'executable': False}
+                return finish({'status': 'paused', 'executable': False}, persist=False)
             ensure_dir(state / 'receipts')
             try:
                 pages = [saved] if saved is not None else (producer or fetch_saved)()
@@ -432,19 +478,16 @@ def run_once(state=DEFAULT_STATE, *, saved=None, producer=None, role_runner=run_
                 if not packet['observations']:
                     raise WorkerError('no_admissible_saved_observations')
             except (WorkerError, IntakeError) as exc:
-                result = {'status': 'parked', 'reason': str(exc), 'executable': False, 'finished_at': now}
-                _save_summary(state, result, now)
-                return result
+                return finish({'status': 'parked', 'reason': str(exc), 'executable': False})
             key = input_key(packet)
             receipt_path = state / 'receipts' / (key + '.json')
             if receipt_path.exists() or receipt_path.is_symlink():
                 old = parse_json(read_bytes(receipt_path))
                 duplicate = {'status': 'duplicate_no_call', 'input_key': key,
-                             'previous_status': old.get('status'), 'executable': False, 'finished_at': now}
-                _save_summary(state, duplicate, now)
-                return duplicate
+                             'previous_status': old.get('status'), 'executable': False}
+                return finish(duplicate)
             if len(list((state / 'receipts').glob('*.json'))) >= MAX_RECEIPTS:
-                return {'status': 'parked', 'reason': 'receipt_capacity_manual_archive_required', 'executable': False}
+                return finish({'status': 'parked', 'reason': 'receipt_capacity_manual_archive_required', 'executable': False})
             receipt = {'schema': 'floww-research-run.v1', 'input_key': key, 'packet_id': packet['packet_id'],
                        'status': 'started', 'started_at': now, 'model': MODEL, 'policy': POLICY,
                        'rule_hash': rule_digest(), 'executable': False, 'scope': 'internal_research',
@@ -467,7 +510,8 @@ def run_once(state=DEFAULT_STATE, *, saved=None, producer=None, role_runner=run_
                          'exception_type', 'refusal_code', 'wire_refusals', 'offline_replay', 'elapsed_seconds',
                          'transport_error_type', 'http_status', 'finish_reason', 'response_usage', 'native_failed', 'blocked_origins') if k in native}
                     receipt['roles'][role]['validation'] = validation
-                    if not (native.get('success') is True and not native.get('offline_replay') and native.get('http_request_count') == 1
+                    if not (native.get('success') is True and native.get('native_failed', False) is False
+                            and not native.get('offline_replay') and native.get('http_request_count') == 1
                             and native.get('blocked_http_attempt_count') == 0 and native.get('native_valid_tool_names') == []):
                         receipt['roles'][role]['validation'] = {'accepted': False, 'reason': 'native_envelope_refused'}
                 except (WorkerError, OSError, ValueError, TypeError) as exc:
@@ -477,13 +521,10 @@ def run_once(state=DEFAULT_STATE, *, saved=None, producer=None, role_runner=run_
             accepted = len(receipt['roles']) == 2 and all(r['validation'].get('accepted') for r in receipt['roles'].values())
             receipt['status'] = 'accepted_retrospective_facts' if accepted else 'parked'
             receipt['reason'] = 'independently_validated_copied_facts' if accepted else receipt.get('reason', 'role_refused')
-            receipt['finished_at'] = time.time() if real_clock else now
-            atomic_json(receipt_path, receipt)
-            _save_summary(state, receipt, receipt['finished_at'])
-            return receipt
+            return finish(receipt, receipt_path)
     except WorkerError as exc:
         if str(exc) == 'lease_busy':
-            return {'status': 'busy', 'executable': False}
+            return finish({'status': 'busy', 'executable': False}, persist=False)
         raise
 
 

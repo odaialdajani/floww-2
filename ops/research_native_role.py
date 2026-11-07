@@ -322,7 +322,7 @@ def main():
             raise NativeError('role_not_admitted')
         guard.phase = 'run'
         answer = agent.run_conversation(prompt, system_message=SYSTEM)
-        result['native_failed'] = answer.get('failed') is True
+        result['native_failed'] = answer.get('failed') is not False
         result['usage'] = {name: answer[name] for name in ('input_tokens', 'output_tokens', 'reasoning_tokens',
             'total_tokens', 'api_calls', 'cache_read_tokens', 'cache_write_tokens')
             if type(answer.get(name)) is int and 0 <= answer[name] <= 10 ** 7}
@@ -336,7 +336,7 @@ def main():
         result['usage'] = {name: answer[name] for name in ('input_tokens', 'output_tokens', 'reasoning_tokens',
             'total_tokens', 'api_calls', 'cache_read_tokens', 'cache_write_tokens')
             if type(answer.get(name)) is int and 0 <= answer[name] <= 10 ** 7}
-        result['success'] = guard.requests == 1 and guard.blocked == 0
+        result['success'] = result['native_failed'] is False and guard.requests == 1 and guard.blocked == 0
     except BaseException as exc:
         result['exception_type'] = type(exc).__name__
         if isinstance(exc, NativeError):
