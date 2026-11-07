@@ -293,6 +293,7 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
         content={"error": jsonable_encoder(exc.detail) if typed_reason else str(exc.detail),
                  "status_code": exc.status_code, "path": request.url.path},
         headers={
+            **(exc.headers or {}),
             "Access-Control-Allow-Origin": _get_cors_origin_for_handlers(),
             "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
             "Access-Control-Allow-Headers": "Content-Type, Authorization, X-API-Key",
@@ -713,13 +714,17 @@ async def fetch_spot_and_chains_merged(ticker: str, max_expiries: int = 4) -> di
       2. cvserver (CVForge) — 32 expiries, 171 strikes, all greeks included
       3. yfinance + Databento OI overlay (legacy path)
     """
+    from data_providers import market_data_policy
+
     # ── 0. Try Public API first (with timeout) ──
     PUBLIC_API_KEY = os.environ.get("PUBLIC_API_KEY", "")
     if PUBLIC_API_KEY:
+        from services.public_budget import BudgetExhausted
+
         try:
             from services.public_api_adapter import fetch_chain_from_public_api
             pub_data = await asyncio.wait_for(
-                fetch_chain_from_public_api(ticker, max_expiries=max_expiries),
+                fetch_chain_from_public_api(ticker, max_expiries=max_expiries, raise_budget_exhausted=True),
                 timeout=30.0
             )
             if pub_data and pub_data.get("contracts") and pub_data.get("spot", 0) > 0:
@@ -732,6 +737,13 @@ async def fetch_spot_and_chains_merged(ticker: str, max_expiries: int = 4) -> di
                     # payload we have already fetched successfully.
                     pass
                 return pub_data
+        except BudgetExhausted as exc:
+            if market_data_policy()["public_only"]:
+                from services.fetch_coordinator import degraded_response
+
+                detail = degraded_response("budget_exhausted", str(exc), retry_after=exc.retry_after)
+                detail["budget_reason"] = exc.reason
+                raise HTTPException(503, detail, headers={"Retry-After": str(exc.retry_after)}) from exc
         except TimeoutError:
             log.info(f"Public API timeout for {ticker}, falling back to cvserver")
             try:
@@ -753,7 +765,6 @@ async def fetch_spot_and_chains_merged(ticker: str, max_expiries: int = 4) -> di
                 # must not abort the cvserver fallback below.
                 pass
 
-    from data_providers import market_data_policy
     if market_data_policy()["public_only"]:
         raise HTTPException(503, "Public market data is unavailable; alternate sources are disabled")
 

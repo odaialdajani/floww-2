@@ -67,8 +67,21 @@ async def _read_both(env):
 
 
 @pytest.mark.asyncio
-async def test_two_tickers_are_read_concurrently(runtime_env):
+@pytest.mark.parametrize("spy_first", [False, True])
+async def test_two_tickers_are_read_concurrently(runtime_env, monkeypatch, spy_first):
     """AMD and SPY overlap in time; neither waits for the other's vendor read."""
+    if spy_first:
+        spy_started = asyncio.Event()
+        get_bars = runtime_env.broker.get_bars
+
+        async def reversed_start(symbol, *args, **kwargs):
+            if symbol == "AMD":
+                await asyncio.wait_for(spy_started.wait(), timeout=READ_TIMEOUT_S)
+            else:
+                spy_started.set()
+            return await get_bars(symbol, *args, **kwargs)
+
+        monkeypatch.setattr(runtime_env.broker, "get_bars", reversed_start)
     recorder = runtime_env.recorder
     results = await _read_both(runtime_env)
 
@@ -82,7 +95,9 @@ async def test_two_tickers_are_read_concurrently(runtime_env):
     assert len(windows) == 2, recorder.stage(PUBLIC_READ)
     assert recorder.any_overlap(PUBLIC_READ), (
         f"the two vendor reads did not overlap: {windows}")
-    assert runtime_env.broker.calls == ["AMD", "SPY"], runtime_env.broker.calls
+    if spy_first:
+        assert runtime_env.broker.calls == ["SPY", "AMD"], runtime_env.broker.calls
+    assert sorted(runtime_env.broker.calls) == ["AMD", "SPY"], runtime_env.broker.calls
     print(f"CONCURRENT vendor_windows={[[round(a, 3), round(b, 3)] for a, b in windows]}")
     print(f"CONCURRENT vendor_spans={_fmt(recorder.stage(PUBLIC_READ))} "
           f"read_walls={[round(wall, 6) for _response, wall in results]} "
