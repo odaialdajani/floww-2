@@ -431,3 +431,180 @@
   background: var(--floww-raised, var(--panel-2, #191919));
   color: var(--text, #d5dde5);
 }
+
+/* Market desktop finish: quiet surface hierarchy, with one command rail and
+   one comparison canvas. Keep signed cells and the shared theme untouched. */
+.trinity-layout.trinity-desktop {
+  padding: 0 0 12px;
+  background: var(--floww-surface, var(--panel, #111111));
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
+}
+.trinity-layout.trinity-desktop .tdk-head.tdk-command-bar {
+  padding: 10px 0 12px;
+  margin-bottom: 10px;
+  border: 0;
+  border-bottom: 1px solid var(--border, #282828);
+  border-radius: 0;
+  background: transparent;
+  gap: 8px;
+}
+.trinity-layout.trinity-desktop .tdk-head-row { gap: 8px; }
+.trinity-layout.trinity-desktop .tdk-head-group {
+  gap: 6px;
+  padding-right: 8px;
+  border-right-color: var(--border, #282828);
+}
+.trinity-layout.trinity-desktop .tdk-head-group > label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-dim);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.trinity-layout.trinity-desktop .tdk-head .tdk-chip {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+.trinity-layout.trinity-desktop .tdk-head :is(button, select, input, details > summary) {
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.4;
+  min-height: 30px;
+  border-radius: 5px;
+}
+.trinity-layout.trinity-desktop .tdk-head :is(select, input) {
+  background: var(--floww-raised, var(--panel-2, #191919));
+  border-color: var(--border, #282828);
+}
+.trinity-layout.trinity-desktop .tdk-head :is(.tdk-head-toggle, .triad-context-disclosure > summary) {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-dim);
+  padding: 5px 8px;
+}
+.trinity-layout.trinity-desktop .tdk-head :is(.tdk-head-toggle:hover, .triad-context-disclosure > summary:hover) {
+  background: var(--floww-raised, var(--panel-2, #191919));
+  color: var(--text);
+}
+.trinity-layout.trinity-desktop .tdk-head-toggle[aria-pressed="true"] {
+  background: var(--gold-dim, #c9a84c26);
+  color: var(--gold-bright, #e3c16a);
+}
+.trinity-layout.trinity-desktop .tdk-head-sub {
+  padding: 0;
+  gap: 6px 18px;
+  align-items: center;
+}
+.trinity-layout.trinity-desktop .tdk-observation .tdk-provenance-details > summary {
+  padding: 3px 6px;
+  min-height: 24px;
+  border: 0;
+  background: transparent;
+}
+.trinity-layout.trinity-desktop .triad-selection-cue {
+  padding: 2px 0;
+  color: var(--text-dim);
+  white-space: normal;
+}
+.trinity-layout.trinity-desktop .triad-pair {
+  padding: 0;
+  gap: 12px;
+}
+.trinity-layout.trinity-desktop .triad-pair .triad-pane {
+  border-color: var(--border, #282828);
+  border-radius: 7px;
+}
+.trinity-layout.trinity-desktop .triad-pair .triad-pane-header {
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  background: var(--floww-surface, var(--panel, #111111));
+  border-bottom-color: var(--border, #282828);
+}
+.trinity-layout.trinity-desktop .triad-pane-title {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+.trinity-layout.trinity-desktop .triad-pane-units > summary {
+  border-color: transparent;
+  font-size: 12px;
+  padding: 2px 4px;
+  color: var(--text-dim);
+}
+.trinity-layout.trinity-desktop .triad-workspace-tabs {
+  gap: 4px;
+  padding: 2px 0 0;
+}
+.trinity-layout.trinity-desktop .triad-workspace-tabs button {
+  min-height: 34px;
+  padding: 6px 10px;
+  font-family: inherit;
+}
+.trinity-layout.trinity-desktop .tdk-dock {
+  border-color: var(--border, #282828);
+  border-radius: 7px;
+}
+.trinity-layout.trinity-desktop .tdk-dock-head {
+  min-height: 48px;
+  padding: 10px 12px;
+  border-bottom-color: var(--border, #282828);
+}
+.trinity-layout.trinity-desktop .tdk-dock-title {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 12px;
+}
+.trinity-layout.trinity-desktop .tdk-dock-close {
+  border-color: transparent;
+  min-width: 30px;
+  min-height: 30px;
+}
+.trinity-layout.trinity-desktop .tdk-dock-tabs {
+  padding: 0 8px;
+  border-bottom-color: var(--border, #282828);
+}
+.trinity-layout.trinity-desktop .tdk-dock-tabs button {
+  min-height: 36px;
+  padding: 7px 8px;
+  font-family: inherit;
+}
+.trinity-layout.trinity-desktop .tdk-dock-body { padding: 12px; }
+.trinity-layout.trinity-desktop .tdk-values { gap: 0; }
+.trinity-layout.trinity-desktop .tdk-value {
+  flex: 1 1 90px;
+  border: 0;
+  border-radius: 0;
+  padding: 8px 8px 12px 0;
+}
+.trinity-layout.trinity-desktop .tdk-value-num { font-size: 17px; line-height: 1.5; }
+.trinity-layout.trinity-desktop .tdk-dock .triad-scenario {
+  padding: 12px 0;
+  border: 0;
+  border-top: 1px solid var(--border, #282828);
+  border-radius: 0;
+  gap: 10px;
+}
+.trinity-layout.trinity-desktop .tdk-empty {
+  border: 0;
+  padding: 14px 0;
+  gap: 8px;
+}
+.trinity-layout.trinity-desktop .tdk-empty strong { color: var(--text); }
+.trinity-layout.trinity-desktop .tdk-dock .triad-readiness small {
+  line-height: 1.6;
+}
+@media (max-width: 1280px) {
+  .trinity-layout.trinity-desktop .tdk-head-row { gap: 7px; }
+  .trinity-layout.trinity-desktop .tdk-head-group { flex-wrap: wrap; }
+  .trinity-layout.trinity-desktop .triad-pane-header { flex-wrap: wrap; }
+}
