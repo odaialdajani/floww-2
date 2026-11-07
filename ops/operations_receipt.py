@@ -7,12 +7,12 @@ import fcntl
 import json
 import math
 import os
-from pathlib import Path
 import re
 import signal
 import stat
 import sys
 import time
+from pathlib import Path
 
 DEFAULT_STATE = Path.home() / 'Library/Application Support/FLOWW/operations'
 SCHEMA = 'floww-operations-receipt.v1'
@@ -60,7 +60,7 @@ def _now(clock):
 
 
 def _iso(value):
-    return dt.datetime.fromtimestamp(value, dt.timezone.utc).isoformat().replace('+00:00', 'Z')
+    return dt.datetime.fromtimestamp(value, dt.timezone.utc).isoformat().replace('+00:00', 'Z')  # noqa: UP017 - installed macOS Python 3.9
 
 
 def _timestamp(value):

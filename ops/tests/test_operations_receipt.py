@@ -2,13 +2,13 @@
 import fcntl
 import json
 import os
-from pathlib import Path
 import stat
 import subprocess
 import sys
 import tempfile
 import time
 import unittest
+from pathlib import Path
 from unittest import mock
 
 OPS = Path(__file__).resolve().parents[1]
