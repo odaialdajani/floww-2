@@ -271,6 +271,8 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
         if (!mountedRef.current || genRef.current !== myGen) return;
         const next = replayId ? replayToDisplay(r.data, ticker) : r.data;
         if (!next || (next.ticker && next.ticker !== ticker) || (replayId && next.snapshotId !== replayId)) { setError("Snapshot identity mismatch — no substitution made"); setLoading(false); return; }
+        // Classify an error-source payload as a failure instead of rendering it.
+        if (next.data_source === "error") { setError("Market data source reported an error — no data displayed."); setLoading(false); return; }
         setPayload(next);
         setLoading(false);
         // Owner live request 2026-10-24 (ancestor scroll jumps): loading all

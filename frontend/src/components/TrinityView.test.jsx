@@ -126,6 +126,28 @@ test('a failed explicit refresh keeps its previous identified reading and offers
   expect(screen.getByRole('button', { name: 'Refresh Market reading' })).toBeEnabled();
 });
 
+test("market cold error shows an error and retries the same scope", async () => {
+  const errorPayload = { ...heatmapFixture(), data_source: "error", snapshotId: "snap-cold-error" };
+  axios.get.mockImplementation(async (url) => {
+    const u = String(url);
+    if (u.includes("/api/heatmap/")) return { data: errorPayload };
+    if (u.includes("solstice/scan/leaderboard")) return { data: { leaderboard: LEADERBOARD, status: "ready" } };
+    if (u.includes("/api/contract/")) return { data: { ticker: "SPY", contracts: [] } };
+    if (u.includes("/decisions")) return { data: { decisions: [] } };
+    return { data: {} };
+  });
+  await act(async () => { render(<TrinityView ticker="SPY" onFocusTicker={jest.fn()} />); });
+  await waitFor(() => expect(screen.getByTestId("triad-error")).toBeInTheDocument());
+  expect(screen.getByTestId("triad-error")).toHaveTextContent(/Error:/);
+  const heatmapCalls = () => axios.get.mock.calls.filter(([url]) => String(url).includes("/api/heatmap/"));
+  expect(heatmapCalls()).toHaveLength(1);
+  expect(String(heatmapCalls()[0][0])).toBe("/api/heatmap/SPY?mode=day&expiries=4");
+  await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Retry this stock" })); });
+  await waitFor(() => expect(heatmapCalls()).toHaveLength(2));
+  expect(String(heatmapCalls()[1][0])).toBe("/api/heatmap/SPY?mode=day&expiries=4");
+  expect(screen.queryByTestId("triad-source")).toBeNull();
+});
+
 test('comparison maps precede optional exposure profile in the desktop reading order', async () => {
   await act(async()=>render(<TrinityView ticker="SPY" />));
   await openTab('profile');

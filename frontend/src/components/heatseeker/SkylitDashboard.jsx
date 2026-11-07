@@ -1212,7 +1212,7 @@ function SkylitDashboard({
             context={<ReviewSelectionContext ticker={ticker} data={visibleData} wall={resolvedWall} cell={selectedCell} metric={activeMetric} replay={isReplay}/>}
             selectionKey={`${ticker}|${selectedCell?.wall_id || ""}|${contractScope}|${isReplay}|${reviewSelectionRevision}`}
             wall={<SelectedWallBlock
-              data={displayData} spot={displaySpot}
+              data={visibleData} spot={displaySpot}
               selectedCell={followWall && effectiveWallId
                 ? { ...selectedCell, wall_id: effectiveWallId }
                 : selectedCell}
