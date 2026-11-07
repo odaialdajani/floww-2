@@ -3,6 +3,7 @@ import {ArrowDown,ArrowUp,Settings} from "lucide-react";
 import {useAgent} from "./AgentProvider";
 import AgentPanelAnswer from "./AgentPanelAnswer";
 import AssistantSettingsDialog from "./AssistantSettingsDialog";
+import SavedCitations from "./SavedCitations";
 import {followUpQuestions,starterQuestions} from "./chatQuestions";
 import "./AssistantWorkspace.css";
 const SavedAnswer=memo(AgentPanelAnswer);
@@ -39,6 +40,7 @@ export default function AgentConversation({visible=true}){
   <div className="assistant-context-row"><div><p className="lodestar-context">{ctx?.scope==="market"?"Market scan":ctx?.ticker ? "Selected: "+ctx.ticker+" · "+(ctx.dte || "all"):"Choose a stock or ask about all stocks"}</p><small>{busy?"This question keeps the selection it started with.":a.parentTurn?"Your next question can refer to your last opened answer and this selection.":"Your next question uses the current selection."}</small></div><button type="button" className="assistant-icon-button" aria-label="Ask Flow settings" aria-haspopup="dialog" aria-expanded={a.settingsOpen} onClick={e=>{e.currentTarget.focus();a.setSettingsOpen(true);}}><Settings size={17} aria-hidden="true"/></button></div>
   {a.historyBrowsing && <div className="assistant-history-controls" aria-label="Saved answer pages"><small>{a.historyPageNumber>1?"Older saved answers":"Latest saved answers"}</small><div><button type="button" disabled={historyReadBusy} onClick={a.loadHistory}>Latest answers</button>{a.historyHasMore && <button type="button" disabled={historyReadBusy} onClick={a.loadOlderHistory}>Older answers</button>}<button type="button" disabled={historyReadBusy} onClick={a.returnToConversation}>Current questions</button></div></div>}
   <div ref={scroller} className="assistant-thread" aria-label="Questions and saved answers" onScroll={e=>{const n=e.currentTarget;stick.current=n.scrollHeight-n.scrollTop-n.clientHeight<80;if(stick.current)setNewAnswer(false);}}>
+   <SavedCitations visible={visible}/>
    {a.historyBrowsing && !thread.length && <p className="assistant-selection-note">No saved answers were returned for this page.</p>}
    {!a.historyBrowsing && !thread.length && !keptAnswer && !a.pendingTurn && <section className="assistant-welcome"><small>MAKE SENSE OF THE READING</small><h3>What do you want to understand?</h3><p>Ask Flow explains stock readings and checks unusual activity across the available market scan. It shows what is missing and what has changed.</p>{suggestions.length?<div className="assistant-starters">{suggestions.map(s=><button key={s.label} type="button" disabled={disabled} onClick={()=>fill(s.question)}>{s.label}</button>)}</div>:<p>Open Stock chart or Screener and choose a stock first.</p>}<p className="assistant-welcome-note">Try “open NVDA chart” or “open screener”, or ask about unusual activity across all stocks. Nothing is sent until you press Ask.</p></section>}
    {displayedTurns.map(row=>{
