@@ -134,6 +134,7 @@ async def execute(args):
         authority = PaperExecutionAuthority(lease_path, lease["token"], lambda: "running")
         runner = PaperRunner(repo, quote_reader=lambda: dict(QUOTE), clock=lambda: datetime.now(UTC),
                              admission_adapter=adapter, execution_authority=authority)
+        await runner.admission.bind_execution(owner, account)
         started = await runner.start(owner, account, RULE, policy)
         check(started["rule_digest"] == RULE["rule_digest"], "runner started with frozen rule")
         entry_receipt, created = await runner.enter(owner, account, QUOTE)

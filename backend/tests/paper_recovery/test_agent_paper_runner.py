@@ -151,6 +151,14 @@ class _FakeCollection:
         return None
 
     def matches(self, doc, query):
+        missing = object()
+        def field(path):
+            value = doc
+            for part in path.split("."):
+                if not isinstance(value, dict) or part not in value:
+                    return missing
+                value = value[part]
+            return value
         for key, value in query.items():
             if key == "$expr":
                 for predicate in value["$and"]:
@@ -160,9 +168,17 @@ class _FakeCollection:
                     if not ({"$gte": left >= right, "$lt": left < right}[op]):
                         return False
             elif isinstance(value, dict):
-                if "$gt" in value and not doc.get(key, -1) > value["$gt"]:
-                    return False
-            elif doc.get(key) != value:
+                actual = field(key)
+                for operator, operand in value.items():
+                    if operator == "$exists":
+                        if (actual is not missing) != operand:
+                            return False
+                    elif operator == "$gt":
+                        if actual is missing or not actual > operand:
+                            return False
+                    else:
+                        raise AssertionError("Unsupported fake selector: "+operator)
+            elif field(key) != value:
                 return False
         return True
 
@@ -225,6 +241,13 @@ def PaperRunner(repo, *, quote_reader, clock):
     runner = UnadmittedPaperRunner(repo, quote_reader=quote_reader, clock=clock,
                                    admission_adapter=adapter, execution_authority=authority)
     runner._test_lease_dir = lease_dir
+    actual_start = runner.start
+    async def trusted_synthetic_start(owner, account, rule, policy):
+        current = await repo.read(owner, account)
+        if current is not None and "execution_control" not in current:
+            await runner.admission.bind_execution(owner, account)
+        return await actual_start(owner, account, rule, policy)
+    runner.start = trusted_synthetic_start
     return runner
 
 

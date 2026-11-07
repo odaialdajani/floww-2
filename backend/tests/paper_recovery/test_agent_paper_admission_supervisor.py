@@ -131,6 +131,10 @@ async def test_lost_fill_ack_restart_returns_original_fill_once():
 @pytest.mark.asyncio
 async def test_expired_mongo_server_window_refuses_candidate_and_retains_intent():
     repo, owner, account, runner = await ready()
+    # Keep durable authority current so this isolates the ORIGINAL risk window.
+    runner.admission.authority = replace(runner.admission.authority, ttl_seconds=1200)
+    generation = (await repo.read(owner, account))["execution_control"]["generation"]
+    await runner.admission.bind_execution(owner, account, expected_generation=generation)
     repo.accounts.server_clock = lambda: NOW + timedelta(minutes=11)
     with pytest.raises(PaperConflict, match="server-time window"):
         await runner.enter(owner, account, QUOTE)

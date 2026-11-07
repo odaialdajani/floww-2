@@ -20,6 +20,7 @@ from services.agent.paper.execution import (
     cancel_order,
     reserved_cash,
 )
+from services.agent.paper.execution_control import claim_of
 from services.agent.paper.guarded_repository import GuardedPaperRepository
 from services.agent.paper.policy import policy_body
 from services.agent.paper.repository import PaperConflict, digest, operation_id, scope, validate_json
@@ -230,7 +231,8 @@ class PaperRunner:
             receipt, created = await self.admission.resume(owner, account, existing["parent_operation"])
         else:
             self._validated_quote(request["quote"], _instant(self.clock()), entry=False)
-            if current["state"]["risk_control"]["entry_credits"] < 2:
+            entry = (request["kind"] == "fill" and current["state"]["orders"][request["order_id"]]["side"] == "buy")
+            if entry and current["state"]["risk_control"]["entry_credits"] < 2:
                 await self.admission.replenish(owner, account)
                 current = await self.repository.read(owner, account)
             operation = operation_id(current["version"], str(uuid.uuid5(uuid.NAMESPACE_URL, request_key)), epoch=self._epoch)
@@ -247,6 +249,7 @@ class PaperRunner:
         current = await self.repository.read(owner, account)
         if current is None:
             raise PaperConflict("Paper account unavailable for this owner")
+        claim = claim_of(current, self.admission.authority, "reduce", now=self.clock())
         state = validate_json(current["state"])
         order = state["orders"].get(order_id)
         if order is None:
@@ -263,7 +266,7 @@ class PaperRunner:
             return None, False
         receipt, created = await self.repository.commit(
             owner, account, operation, command, candidate, event,
-            reserve_events=guarded_reserve_events(candidate),
+            reserve_events=guarded_reserve_events(candidate), execution_claim=claim,
         )
         self.admission.require_execution("reduce")
         return event, True

@@ -1,15 +1,18 @@
 """Server-only internal paper admission and funded durable risk assessment.
 
-Adapters establish source and confirmation provenance, never a risk verdict.
-No application adapter is installed by default. Immutable bounded artifacts and
-version-bound begin/resolve receipts make retries reconcile the original work.
+Adapters establish executable quote/source/confirmation provenance, never a
+risk verdict. Both positive displayed sizes are required on the common service
+path. The same-account commit fences durable execution generation and expiry;
+OS lease/callback checks add preflight evidence, without atomic file-stop claims.
+Immutable bounded artifacts and version-bound begin/resolve receipts reconcile
+original work. New entries prepay artifact capacity for finite fills and exits.
+No application adapter is installed by default.
 """
 from __future__ import annotations
 
 import asyncio
 import copy
 import uuid
-from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Protocol
@@ -18,6 +21,7 @@ from bson import BSON
 from pymongo.errors import DuplicateKeyError
 
 from services.agent.paper import execution, risk, risk_assessment
+from services.agent.paper.execution_control import PaperExecutionAuthority, claim_of
 from services.agent.paper.policy import binding_of, validate_policy
 from services.agent.paper.repository import (
     PaperCapacity,
@@ -29,10 +33,35 @@ from services.agent.paper.repository import (
     validate_json,
 )
 from services.agent.paper.valuation import observe
-from services.execution_lease import MULTIPROCESS_SAFE, heartbeat_lease
 
 MAX_ARTIFACTS = 128
 MAX_ARTIFACT_BYTES = 64 * 1024
+
+
+def artifact_liabilities(state):
+    """Protect every finite fill and funded exit attempt before new exposure.
+
+    No evidence is deleted. Admission stops before retained history plus these
+    prepaid liabilities reaches the unchanged global artifact limit.
+    """
+    control = risk_assessment.control_of(state)
+    entries = sum(execution.MAX_FILLS_PER_ORDER-len(order["fills"])
+                  for order in state["orders"].values() if order["side"] == "buy" and order["status"] == "working")
+    return entries, sum(control["exit_credits"].values())
+
+
+def require_artifact_capacity(state, retained, *, action, kind):
+    entries, exits = artifact_liabilities(state)
+    if action == "entry" and kind == "stage":
+        needed = retained+1+entries+exits+execution.MAX_FILLS_PER_ORDER+risk_assessment.EXIT_ASSESSMENT_CREDITS
+    elif action == "entry":
+        needed = retained+entries+exits
+    else:
+        # A reducing capture consumes one of its existing funded exit credits.
+        # Entry retry attempts cannot spend this protected allowance.
+        needed = retained+exits
+    if retained >= MAX_ARTIFACTS or needed > MAX_ARTIFACTS:
+        raise PaperCapacity("Retained artifacts must preserve all prepaid fill/exit capacity before new exposure")
 
 
 @dataclass(frozen=True)
@@ -41,6 +70,7 @@ class CapturedInputs:
     opening_trade_evidence: dict | None
     immutable_source_refs: list[str]
     confirmation_record: dict
+    executable_quote: dict | None = None
 
 
 class TrustedPaperAdapter(Protocol):
@@ -49,28 +79,6 @@ class TrustedPaperAdapter(Protocol):
 
     async def verify_admission(self, *, owner, current_account, frozen_parameters,
                                confirmation_record, immutable_source_refs) -> bool: ...
-
-
-@dataclass(frozen=True)
-class PaperExecutionAuthority:
-    """Constructor-only authority over an already acquired same-host lease.
-
-    The server supplies the stop reader; request/model JSON cannot instantiate
-    this object or change its policy. reduce_only preserves verified exits.
-    """
-    lease_path: str
-    lease_token: str
-    stop_reader: Callable[[], str]
-    ttl_seconds: float = 120
-
-    def require(self, action):
-        if not MULTIPROCESS_SAFE or not callable(self.stop_reader):
-            raise PaperConflict("Paper execution lease/stop authority is unavailable")
-        mode = self.stop_reader()
-        if mode not in ("running", "reduce_only") or (mode == "reduce_only" and action == "entry"):
-            raise PaperConflict("Paper execution is stopped or paused for new exposure")
-        if heartbeat_lease(self.lease_path, self.lease_token, self.ttl_seconds).get("ok") is not True:
-            raise PaperConflict("Paper execution lease was lost; reconciliation required")
 
 
 class PaperAdmissionService:
@@ -93,6 +101,25 @@ class PaperAdmissionService:
         if not isinstance(self.authority, PaperExecutionAuthority):
             raise PaperConflict("Paper execution lease/stop authority is not configured")
         self.authority.require(action)
+
+    async def bind_execution(self, owner, account, *, expected_generation=0, mode="running", expires_at=None):
+        return await self.repository.bind_execution_control(owner, account, self.authority,
+                    expected_generation=expected_generation, mode=mode, now=self.clock(), expires_at=expires_at)
+
+    async def set_execution_mode(self, owner, account, mode, *, expected_generation):
+        return await self.bind_execution(owner, account, expected_generation=expected_generation, mode=mode)
+
+    async def revoke_execution(self, owner, account, *, expected_generation):
+        # Durable revocation is acknowledged BEFORE the caller releases the OS
+        # lease. An arbitrary raw file/callback edit is only preflight evidence.
+        return await self.set_execution_mode(owner, account, "revoked", expected_generation=expected_generation)
+
+    @staticmethod
+    def _executable_quote(quote, terms, now):
+        execution._quote(quote, terms, execution.instant(now))
+        if any(type(quote.get(side)) is not int or quote[side] <= 0 for side in ("bid_size", "ask_size")):
+            raise PaperConflict("Fresh positive two-sided displayed size is required")
+        return validate_json(quote)
 
     async def _source(self, awaitable):
         try:
@@ -149,6 +176,9 @@ class PaperAdmissionService:
                 raise PaperConflict("Quote already filled; retrieve the original admission receipt")
         action = "entry" if terms.get("side") == "buy" else "reduce"
         self._require(action)
+        execution_claim = claim_of(current, self.authority, action, now=self.clock())
+        if request["quote"] is not None:
+            self._executable_quote(request["quote"], terms, self.clock())
         control = risk_assessment.control_of(current["state"])
         if action == "entry":
             if control["pending"]:
@@ -163,15 +193,19 @@ class PaperAdmissionService:
         ))
         if not isinstance(captured, CapturedInputs):
             raise PaperConflict("Trusted source adapter must return data-only captured inputs")
+        verified_quote = captured.executable_quote
+        if verified_quote is None or request["quote"] is not None and verified_quote != request["quote"]:
+            raise PaperConflict("Captured executable quote differs from its exact verified request")
+        verified_quote = self._executable_quote(verified_quote, terms, self.clock())
         command = validate_json(dict(kind=kind, parameters=terms,
-                                     order_id=order_id, quote=request["quote"], frame=captured.frame,
+                                     order_id=order_id, quote=verified_quote, frame=captured.frame,
                                      evidence=captured.opening_trade_evidence))
         refs = captured.immutable_source_refs
         if not isinstance(refs, list) or not refs or any(not isinstance(x, str) or not 1 <= len(x) <= 200 for x in refs):
             raise PaperConflict("Immutable verified source references are required")
         artifact = validate_json(dict(
             _id=key, **binding, epoch=current["epoch"], parent_operation=operation,
-            starting_version=current["version"], policy_digest=current["state"]["risk_policy"]["digest"],
+            starting_version=current["version"], execution_claim=execution_claim, policy_digest=current["state"]["risk_policy"]["digest"],
             request_digest=digest(request), command=command, action=action,
             structure_id=terms.get("structure_id"), immutable_source_refs=refs,
             confirmation_record=captured.confirmation_record,
@@ -183,8 +217,8 @@ class PaperAdmissionService:
             raise PaperCapacity("Captured admission artifact exceeds bounded storage")
         await self._verify(current, artifact)
         self._require(action)
-        if await self.repository.admissions.count_documents(binding, limit=MAX_ARTIFACTS) >= MAX_ARTIFACTS:
-            raise PaperCapacity("Retained admission artifact capacity reached; preserve reconciliation evidence")
+        retained = await self.repository.admissions.count_documents(binding, limit=MAX_ARTIFACTS)
+        require_artifact_capacity(current["state"], retained, action=action, kind=kind)
         try:
             await self.repository.admissions.insert_one(artifact)
         except DuplicateKeyError:
@@ -210,6 +244,8 @@ class PaperAdmissionService:
             return self._outcome(resolved, False)
         self._require(artifact["action"])
         current = await self._current(owner, account)
+        if claim_of(current, self.authority, artifact["action"], now=self.clock()) != artifact["execution_claim"]:
+            raise PaperConflict("Durable execution generation changed; retain original admission")
         await self._verify(current, artifact)
         begun = await self.repository.receipt(owner, account, operation, begin_command)
         if begun is None:
@@ -223,7 +259,8 @@ class PaperAdmissionService:
                 structure_id=artifact["structure_id"], now=self.clock(),
             )
             self._require(artifact["action"])
-            await self.repository.commit(owner, account, operation, begin_command, state, event)
+            await self.repository.commit(owner, account, operation, begin_command, state, event,
+                                         execution_claim=artifact["execution_claim"])
         current = await self._current(owner, account)
         if current["version"] != artifact["starting_version"] + 1:
             winner = await self.repository.receipt(owner, account, artifact["resolve_operation"], resolve_command)
@@ -248,6 +285,7 @@ class PaperAdmissionService:
         self._require(artifact["action"])
         receipt, created = await self.repository.commit(
             owner, account, artifact["resolve_operation"], resolve_command, state, event,
+            execution_claim=artifact["execution_claim"],
         )
         self._require(artifact["action"])
         return self._outcome(receipt, created)
@@ -268,6 +306,10 @@ class PaperAdmissionService:
         if current["pending_events"]:
             raise PaperConflict("All saved assessment history must be projected before replenishment")
         state, event = risk_assessment.replenish(current["state"], now=self.clock())
+        retained = await self.repository.admissions.count_documents(scope(owner, account, "internal"), limit=MAX_ARTIFACTS)
+        entries, exits = artifact_liabilities(state)
+        if retained+entries+exits > MAX_ARTIFACTS:
+            raise PaperCapacity("Projection cannot recreate artifact liabilities beyond retained capacity")
         operation = operation_id(current["version"], str(uuid.uuid5(uuid.NAMESPACE_URL,
                                  current["epoch"] + ":replenish:" + str(current["version"]))), epoch=current["epoch"])
         self._require("reduce")

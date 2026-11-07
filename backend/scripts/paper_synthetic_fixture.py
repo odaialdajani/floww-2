@@ -104,7 +104,7 @@ class SyntheticPaperAdapter:
         refs = ["synthetic-source:"+digest(quote), "synthetic-contract:"+digest(metadata)]
         if self.frame_transform:
             frame = self.frame_transform(copy.deepcopy(frame))
-        return CapturedInputs(frame, evidence, refs, confirmation)
+        return CapturedInputs(frame, evidence, refs, confirmation, quote)
 
     async def verify_admission(self, *, owner, current_account, frozen_parameters,
                                confirmation_record, immutable_source_refs):
@@ -149,8 +149,10 @@ class SyntheticPaperComposition:
 
     async def create(self, owner, account, cash="1000"):
         await self.repository.create(owner, account, new_book(cash, currency="USD"))
-        return await persist_synthetic_policy(self.repository, owner, account, self.body,
-                                              now=self.clock(), policy_id=self.policy_id)
+        policy = await persist_synthetic_policy(self.repository, owner, account, self.body,
+                                               now=self.clock(), policy_id=self.policy_id)
+        await self.service.admission.bind_execution(owner, account)
+        return policy
 
     async def operation(self, owner, account, *, entry=False):
         current = await self.repository.read(owner, account)

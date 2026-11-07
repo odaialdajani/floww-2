@@ -2,7 +2,10 @@
 
 Stage and fill delegate to funded admission: a server-constructed typed source
 adapter and lease/stop authority are required, followed by persisted-policy risk
-recomputation and guarded begin/resolve commits. The legacy admission_check alone
+recomputation and guarded begin/resolve commits. The executable quote (including
+both positive displayed sizes) comes from the exact request/captured source.
+Durable account generation/mode/expiry fences the economic CAS; raw file or
+callback changes alone are additional preflight checks. The legacy admission_check alone
 cannot authorize either path. No application adapter or action route is mounted.
 """
 
@@ -12,6 +15,7 @@ from datetime import UTC, datetime
 
 from services.agent.paper import execution
 from services.agent.paper.admission import PaperAdmissionService
+from services.agent.paper.execution_control import claim_of
 from services.agent.paper.guarded_repository import GuardedPaperRepository
 from services.agent.paper.repository import PaperConflict
 from services.agent.paper.risk_assessment import reserved_events as guarded_reserve
@@ -29,10 +33,11 @@ class PreparedPaperService:
     async def _existing(self, owner, account, operation, command):
         return await self.repository.receipt(owner, account, operation, command)
 
-    async def _save(self, owner, account, operation, command, state, event):
+    async def _save(self, owner, account, operation, command, state, event, *, execution_claim=None):
         receipt, created = await self.repository.commit(
             owner, account, operation, command, state, event,
             reserve_events=guarded_reserve(state) if isinstance(self.repository, GuardedPaperRepository) else execution.recovery_events(state),
+            **({"execution_claim": execution_claim} if execution_claim is not None else {}),
         )
         # State and pending history already committed together. Projection is
         # explicit and retryable; a slow/offline projector cannot repeat cash.
@@ -65,13 +70,14 @@ class PreparedPaperService:
         current = await self.repository.read(owner, account)
         if current is None:
             raise PaperConflict("Paper account unavailable")
+        claim = claim_of(current, self.admission.authority, "reduce", now=self.clock())
         state, event, changed = execution.cancel_order(
             current["state"], order_id, committed_version=current["version"] + 1,
         )
         if not changed:
             return event, False
         self.admission.require_execution("reduce")
-        saved = await self._save(owner, account, operation, command, state, event)
+        saved = await self._save(owner, account, operation, command, state, event, execution_claim=claim)
         self.admission.require_execution("reduce")
         return saved
 
