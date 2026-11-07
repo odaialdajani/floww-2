@@ -33,6 +33,17 @@ class GuardedPaperRepository(PaperRepository):
         concern = self.accounts.write_concern
         self.accounts = database.get_collection("agent_paper_guarded_accounts", write_concern=concern)
         self.events = database.get_collection("agent_paper_guarded_events", write_concern=concern)
+        self.admissions = database.get_collection("agent_paper_admission_artifacts", write_concern=concern)
+
+    async def initialize(self):
+        await super().initialize()
+        # One immutable parent may claim a book version. Together with the
+        # monotonic account CAS this prevents racing captures from overrunning
+        # retained-artifact capacity or fabricating an alternative retry.
+        await self.admissions.create_index(
+            [(key, 1) for key in ("owner", "account_id", "venue", "epoch", "starting_version")],
+            unique=True,
+        )
 
     async def create(self, owner, account, initial_state, *, venue="internal", reserve_events=None):
         state = validate_json(initial_state)

@@ -21,7 +21,9 @@ broker). They are invariant pins: every failure here is a real defect.
 
 from __future__ import annotations
 
+import copy
 import sys
+import tempfile
 import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -30,13 +32,18 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from pymongo.errors import DuplicateKeyError  # noqa: E402
+
+from scripts.paper_synthetic_fixture import SyntheticPaperAdapter, persist_synthetic_policy  # noqa: E402
+from services.agent.paper.admission import PaperExecutionAuthority  # noqa: E402
 from services.agent.paper.execution import new_book  # noqa: E402
 from services.agent.paper.guarded_repository import GuardedPaperRepository  # noqa: E402
 from services.agent.paper.repository import (  # noqa: E402
     PaperConflict,
     operation_id,
 )
-from services.agent.paper.runner import PaperRunner  # noqa: E402
+from services.agent.paper.runner import PaperRunner as UnadmittedPaperRunner  # noqa: E402
+from services.execution_lease import acquire_lease  # noqa: E402
 
 OWNER = str(uuid.uuid4())
 ACCOUNT = str(uuid.uuid4())
@@ -134,35 +141,62 @@ class _FakeCollection:
     def __init__(self):
         self.docs: list[dict] = []
         self.write_concern = None
+        self.server_now = NOW
+        self.unique_indexes = []
 
     async def find_one(self, query):
         for doc in self.docs:
-            if all(doc.get(k) == v for k, v in query.items()):
-                return doc
+            if self.matches(doc, query):
+                return copy.deepcopy(doc)
         return None
 
+    def matches(self, doc, query):
+        for key, value in query.items():
+            if key == "$expr":
+                for predicate in value["$and"]:
+                    op, operands = next(iter(predicate.items()))
+                    left = (self.server_clock() if hasattr(self, "server_clock") else self.server_now) if operands[0] == "$$NOW" else operands[0]
+                    right = operands[1]
+                    if not ({"$gte": left >= right, "$lt": left < right}[op]):
+                        return False
+            elif isinstance(value, dict):
+                if "$gt" in value and not doc.get(key, -1) > value["$gt"]:
+                    return False
+            elif doc.get(key) != value:
+                return False
+        return True
+
     def find(self, query, **_kwargs):
-        return _FakeCursor(self.docs, query)
+        return _FakeCursor([copy.deepcopy(doc) for doc in self.docs if self.matches(doc, query)], query)
 
     async def insert_one(self, doc):
-        self.docs.append(doc)
+        if any(item["_id"] == doc["_id"] for item in self.docs):
+            raise DuplicateKeyError("isolated duplicate")
+        for keys in self.unique_indexes:
+            if any(tuple(item.get(key) for key in keys) == tuple(doc.get(key) for key in keys) for item in self.docs):
+                raise DuplicateKeyError("isolated compound duplicate")
+        self.docs.append(copy.deepcopy(doc))
 
     async def update_one(self, query, update):
-        target = await self.find_one(query)
+        target = next((doc for doc in self.docs if self.matches(doc, query)), None)
         modified = 0
         if target is not None:
             modified = 1
             for key, value in update.get("$set", {}).items():
                 target[key] = value
             for key, value in update.get("$push", {}).items():
-                target.setdefault(key, []).append(value)
-        return type("R", (), {"modified_count": modified})()
+                target.setdefault(key, []).append(copy.deepcopy(value))
+            for key, value in update.get("$pull", {}).items():
+                target[key] = [row for row in target[key] if not all(row.get(k) == v for k, v in value.items())]
+        return type("R", (), {"modified_count": modified, "matched_count": modified})()
 
-    async def create_index(self, *args, **kwargs):
+    async def create_index(self, keys, **kwargs):
+        if kwargs.get("unique"):
+            self.unique_indexes.append(tuple(key for key, direction in keys))
         return None
 
     async def count_documents(self, query, **_kwargs):
-        return sum(1 for doc in self.docs if all(doc.get(k) == v for k, v in query.items()))
+        return sum(1 for doc in self.docs if self.matches(doc, query))
 
     async def delete_one(self, query):
         for i, doc in enumerate(self.docs):
@@ -179,11 +213,28 @@ class _FakeDatabase:
         return col
 
 
-async def _fresh_repo():
+# Acceptance cases explicitly install synthetic provenance and a real local
+# executor lease. Production PaperRunner still defaults to denied admission.
+def PaperRunner(repo, *, quote_reader, clock):
+    lease_dir = tempfile.TemporaryDirectory(prefix="floww-paper-test-")
+    acquired = acquire_lease(str(Path(lease_dir.name) / "executor.lease"), "synthetic-owner")
+    assert acquired["ok"] is True
+    repo.accounts.server_clock = clock
+    adapter = SyntheticPaperAdapter(repo, clock=clock)
+    authority = PaperExecutionAuthority(str(Path(lease_dir.name) / "executor.lease"), acquired["token"], lambda: "running")
+    runner = UnadmittedPaperRunner(repo, quote_reader=quote_reader, clock=clock,
+                                   admission_adapter=adapter, execution_authority=authority)
+    runner._test_lease_dir = lease_dir
+    return runner
+
+
+async def _fresh_repo(*, with_policy=True):
     repo = GuardedPaperRepository(_FakeDatabase())
     await repo.initialize()
     owner, account = str(uuid.uuid4()), str(uuid.uuid4())
     await repo.create(owner, account, new_book("1000", currency="USD"))
+    if with_policy:
+        await persist_synthetic_policy(repo, owner, account, POLICY["body"], now=NOW)
     return repo, owner, account
 
 
@@ -374,8 +425,17 @@ class TestPaperRunnerAcceptance:
         runner._start_op = None
         with pytest.raises(ValueError, match="restarted|rebind"):
             await runner.enter(owner, account, QUOTE)
+        # Retire the unfilled first intent through its real terminal history.
+        # Guarded accounts reserve finite recovery storage for each structure.
+        await runner.cancel(owner, account, entry_receipt["order_id"])
+        await repo.project(owner, account)
+        from services.agent.paper.repository import operation_id
+        from services.agent.paper.service import PreparedPaperService
+        current = await repo.read(owner, account)
+        await PreparedPaperService(repo).archive(owner, account,
+            operation_id(current["version"], epoch=current["epoch"]), entry_receipt["order_id"])
         # Re-binding clears the stale operation and enables fresh work at the
-        # current account version.
+        # current account version, after explicit history/credit recovery.
         await runner._rebind(owner, account)
         again, created2 = await runner.enter(owner, account, QUOTE)
         assert created2 is True, "rebind must allow fresh work at the current version"

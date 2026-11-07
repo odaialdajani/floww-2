@@ -1,13 +1,9 @@
-"""Red safety regressions: the isolated runner has no trusted admission seam.
+"""Persisted-policy and full-valuation regressions through funded admission.
 
-These tests intentionally expose the current bypass; do not mark xfail or
-inject an unconditional approval to obtain a green run. All state is fake Mongo
-in memory. Policy acceptance below is an explicit synthetic fixture, not an
-application account or production approval. The missing production composition
-must obtain trusted source frames and independently verified trade-risk evidence,
-then fund/persist assessment begin + actual observation + resolution before it
-can replace the raw stage/fill calls. A model/caller-provided risk result is not
-an implementation of that contract.
+Only explicit synthetic provenance/confirmation is installed. Refusals retain
+real assessment/valuation audit records and preserve cash, orders, positions,
+fill/liquidity consumption exactly. Missing composition has a separate exact
+whole-account no-write regression. No test grants risk or account authority.
 """
 from __future__ import annotations
 
@@ -20,11 +16,15 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from test_agent_paper_runner import NOW, POLICY, QUOTE, RULE, _fresh_repo  # noqa: E402
+from test_agent_paper_runner import NOW, POLICY, QUOTE, RULE, PaperRunner, _fresh_repo  # noqa: E402
 
 from services.agent.paper.policy import create_policy, prepare_policy_change  # noqa: E402
 from services.agent.paper.repository import PaperConflict, operation_id  # noqa: E402
-from services.agent.paper.runner import PaperRunner  # noqa: E402
+
+
+def economic_book(account):
+    return {key: copy.deepcopy(account["state"][key]) for key in
+            ("cash", "realized_result", "orders", "positions", "quotes")}
 
 
 async def persisted_synthetic_policy(repo, owner, account, *, per_trade="500", version=1):
@@ -52,7 +52,7 @@ async def persisted_synthetic_policy(repo, owner, account, *, per_trade="500", v
 
 
 async def started_runner(*, per_trade="500", clock=None):
-    repo, owner, account = await _fresh_repo()
+    repo, owner, account = await _fresh_repo(with_policy=False)
     policy = await persisted_synthetic_policy(repo, owner, account, per_trade=per_trade)
     runner = PaperRunner(repo, quote_reader=lambda: dict(QUOTE), clock=clock or (lambda: NOW))
     await runner.start(owner, account, RULE, policy)
@@ -60,12 +60,14 @@ async def started_runner(*, per_trade="500", clock=None):
 
 
 @pytest.mark.asyncio
-async def test_entry_refuses_zero_persisted_loss_limit_without_trusted_admission():
+async def test_entry_refuses_zero_persisted_loss_limit_despite_trusted_source_admission():
     repo, owner, account, runner = await started_runner(per_trade="0")
     before = copy.deepcopy(await repo.read(owner, account))
     with pytest.raises(PaperConflict, match="risk|policy|admission|valuation"):
         await runner.enter(owner, account, QUOTE)
-    assert await repo.read(owner, account) == before
+    after = await repo.read(owner, account)
+    assert economic_book(after) == economic_book(before)
+    assert after["state"]["valuation"]["equity"] == "1000"
 
 
 @pytest.mark.asyncio
@@ -78,19 +80,24 @@ async def test_fill_rechecks_current_policy_lowered_after_staging():
     with pytest.raises(PaperConflict, match="risk|policy|admission|valuation"):
         await runner.enter_fill(owner, account, entry["order_id"], QUOTE)
     after = await repo.read(owner, account)
-    assert after == before
+    assert economic_book(after) == economic_book(before)
     assert after["state"]["cash"] == "1000"
+    assert len(after["state"]["risk_control"]["pending"]) == 1
+    assert after["state"]["risk_policy"]["body"]["limits"]["per_trade_max_loss"] == "0"
 
 
 @pytest.mark.asyncio
 async def test_fill_refuses_unknown_full_valuation_even_with_well_formed_policy():
     repo, owner, account, runner = await started_runner()
     entry, _ = await runner.enter(owner, account, QUOTE)
-    assert "valuation" not in (await repo.read(owner, account))["state"]
+    assert (await repo.read(owner, account))["state"]["valuation"]["equity"] == "1000"
+    runner.admission.adapter.frame_transform = lambda frame: {**frame, "session": None}
     before = copy.deepcopy(await repo.read(owner, account))
     with pytest.raises(PaperConflict, match="risk|policy|admission|valuation"):
         await runner.enter_fill(owner, account, entry["order_id"], QUOTE)
-    assert await repo.read(owner, account) == before
+    after = await repo.read(owner, account)
+    assert economic_book(after) == economic_book(before)
+    assert len(after["state"]["risk_control"]["pending"]) == 1
 
 
 @pytest.mark.asyncio
@@ -122,4 +129,4 @@ async def test_existing_expired_order_control_preserves_cash_and_receipts():
     before = copy.deepcopy(await repo.read(owner, account))
     with pytest.raises(PaperConflict, match="expired"):
         await runner.enter_fill(owner, account, entry["order_id"], quote)
-    assert await repo.read(owner, account) == before
+    assert economic_book(await repo.read(owner, account)) == economic_book(before)
