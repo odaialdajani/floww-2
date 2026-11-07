@@ -211,6 +211,30 @@ export function computeRrData(rows, expiryList) {
   });
 }
 
+// A retry hint is admitted only for the typed shared-market budget refusal.
+// The later of the body and standard HTTP header wins; neither schedules a read.
+function marketBudgetWait(error, now) {
+  const body = error?.response?.data?.error;
+  if (error?.response?.status !== 503 || body?.status !== "degraded" || body?.reason !== "budget_exhausted") return null;
+  const headers = error.response.headers;
+  const header = typeof headers?.get === "function" ? headers.get("retry-after")
+    : headers?.["retry-after"] ?? headers?.["Retry-After"];
+  const bodySeconds = typeof body.retry_after === "number" && Number.isFinite(body.retry_after) && body.retry_after > 0
+    ? body.retry_after : 0;
+  let headerSeconds = 0;
+  if (typeof header === "string") {
+    const value = header.trim();
+    if (/^\d+$/.test(value)) headerSeconds = Number(value);
+    else if (value) {
+      const at = Date.parse(value);
+      if (Number.isFinite(at)) headerSeconds = Math.max(0, (at - now) / 1000);
+    }
+  }
+  const seconds = Math.ceil(Math.max(bodySeconds, Number.isFinite(headerSeconds) ? headerSeconds : 0));
+  return { seconds: Number.isSafeInteger(seconds) && seconds * 1000 <= Number.MAX_SAFE_INTEGER - now ? seconds : 0,
+    reason: body.budget_reason };
+}
+
 // ---- main component ----
 export default function TrinityVolatility({ ticker = "SPY", expiries = 8, loaderDeadlineMs = 10000 } = {}) {
   const [rows, setRows] = useState([]);
@@ -219,6 +243,9 @@ export default function TrinityVolatility({ ticker = "SPY", expiries = 8, loader
   const [selExpIdx, setSelExpIdx] = useState(0);
   const [loading, setLoading] = useState(true);          // data in flight
   const [err, setErr] = useState(null);                  // data failure
+  const [budgetReason, setBudgetReason] = useState(null);
+  const [retryUntil, setRetryUntil] = useState(0);
+  const [retryRemaining, setRetryRemaining] = useState(0);
   const [renderError, setRenderError] = useState(null); // renderer/draw failure (separate layer): {chart, message}
   const [plotlyReady, setPlotlyReady] = useState(!!window.Plotly); // CDN loaded
   const [plotlyLoadError, setPlotlyLoadError] = useState(false);   // CDN failed (loader layer)
@@ -238,6 +265,20 @@ export default function TrinityVolatility({ ticker = "SPY", expiries = 8, loader
   const failedChartRef = useRef(null);
   const redrawRef = useRef(null);
   redrawRef.current = null; // assigned below after callbacks are defined
+
+  // Count against the wall clock so background-tab timer throttling never
+  // grants an early retry. Expiry only enables the button; it never fetches.
+  useEffect(() => {
+    if (!retryUntil) { setRetryRemaining(0); return undefined; }
+    const update = () => {
+      const remaining = Math.max(0, Math.ceil((retryUntil - Date.now()) / 1000));
+      setRetryRemaining(remaining);
+      if (!remaining) clearInterval(timer);
+    };
+    const timer = setInterval(update, 250);
+    update();
+    return () => clearInterval(timer);
+  }, [retryUntil]);
 
   // Load Plotly CDN if not present (bounded loader deadline)
   useEffect(() => {
@@ -266,6 +307,9 @@ export default function TrinityVolatility({ ticker = "SPY", expiries = 8, loader
     ctrlRef.current = ctrl;
     setLoading(true);
     setErr(null);
+    setBudgetReason(null);
+    setRetryUntil(0);
+    setRetryRemaining(0);
     setRenderError(null);          // keep renderer state honest while data loads
     try {
       const r = await axios.get(`${API}/chain/${ticker}?expiries=${expiries}`, { signal: ctrl.signal, timeout: 20000 });
@@ -286,9 +330,17 @@ export default function TrinityVolatility({ ticker = "SPY", expiries = 8, loader
       setLoading(false);
       setErr(null);
     } catch (e) {
-      if (myId !== reqSeqRef.current) return;
-      if (e && e.name === "AbortError") return;
-      setErr(e.message || "Failed to load chain");
+      if (myId !== reqSeqRef.current || ctrl.signal.aborted) return;
+      if (e && (e.name === "AbortError" || e.code === "ERR_CANCELED")) return;
+      const wait = marketBudgetWait(e, Date.now());
+      if (wait) {
+        setBudgetReason(wait.reason || "unknown");
+        setRetryUntil(wait.seconds ? Date.now() + wait.seconds * 1000 : 0);
+        setRetryRemaining(wait.seconds);
+        setErr("Market data is busy.");
+      } else {
+        setErr(e.message || "Failed to load chain");
+      }
       setLoading(false);
     }
   }, [ticker, expiries]);
@@ -448,9 +500,10 @@ export default function TrinityVolatility({ ticker = "SPY", expiries = 8, loader
 
   // ---- actions (retry only the failing layer) ----
   const retryData = useCallback(() => {
+    if (Date.now() < retryUntil) return;
     setErr(null);
     fetchChain();
-  }, [fetchChain]);
+  }, [fetchChain, retryUntil]);
 
   // Bounded manual Retry per renderer layer: re-run only the chart that
   // failed. It runs as an effect keyed to the retry tick so the error-state
@@ -491,9 +544,15 @@ export default function TrinityVolatility({ ticker = "SPY", expiries = 8, loader
     return (
       <div className="tv-root">
         <div className="tv-error-panel" role="alert">
-          <div className="tv-error-title">Market data unavailable</div>
-          <div className="tv-error-msg">{err}</div>
-          <button type="button" className="tv-retry" onClick={retryData}>Retry data</button>
+          <div className="tv-error-title">{budgetReason ? "Market data is busy" : "Market data unavailable"}</div>
+          <div className="tv-error-msg">{budgetReason
+            ? retryRemaining > 0 ? `Try again in ${retryRemaining}s.` : "You can retry this reading now."
+            : err}</div>
+          {budgetReason && <div className="tv-error-note">{budgetReason === "inflight_cap"
+            ? "Other market reads are in progress."
+            : budgetReason === "host_cooldown" ? "The provider asked FLOWW to pause market reads."
+            : "The shared market-data request limit was reached."}</div>}
+          <button type="button" className="tv-retry" disabled={retryRemaining > 0} onClick={retryData}>Retry data</button>
           <div className="tv-error-note">Data failure is separate from renderer failure. Chain {fetchedAt ? `received ${fetchedAt} (receipt)` : "no receipt"} — quote observation clock unverified.</div>
         </div>
       </div>
