@@ -16,6 +16,7 @@ import socket
 import sys
 import threading
 import time
+import traceback
 import types
 from pathlib import Path
 
@@ -47,6 +48,7 @@ class WireGuard:
         self.http_status = None
         self.finish_reason = None
         self.response_usage = {}
+        self.blocked_origins = []
 
     def admit(self, url, method, content):
         try:
@@ -69,6 +71,10 @@ class WireGuard:
         except (NativeError, ValueError, TypeError, KeyError) as exc:
             self.blocked += 1
             self.refusals.append(str(exc) if isinstance(exc, NativeError) else 'invalid_wire_json')
+            if len(self.blocked_origins) < 8:
+                self.blocked_origins.append([{'module': str(Path(frame.filename).relative_to(NATIVE_SOURCE)),
+                    'function': frame.name, 'line': frame.lineno} for frame in traceback.extract_stack(limit=24)
+                    if frame.filename.startswith(str(NATIVE_SOURCE) + '/')][-8:])
             raise NativeError('wire_policy_refused') from None
 
 
@@ -171,6 +177,9 @@ def main():
             raise NativeError('role_input_limit')
         supplied = json.loads(body)
         role, packet = supplied['role'], supplied['packet']
+        fault = supplied.get('offline_fault') if offline else None
+        if fault not in (None, 'timeout', 'rate_limit'):
+            raise NativeError('offline_fault_refused')
         if role not in ('research', 'audit') or not isinstance(packet, dict):
             raise NativeError('role_input_refused')
         profile = Path(os.environ['HERMES_HOME'])
@@ -213,6 +222,15 @@ def main():
         def guarded_send(client, request, *args, **kwargs):
             guard.admit(str(request.url), request.method, request.content)
             if offline:
+                if fault == 'timeout':
+                    guard.transport_error_type = 'ReadTimeout'
+                    raise httpx.ReadTimeout('Offline fixture timeout', request=request)
+                if fault == 'rate_limit':
+                    guard.http_status = 429
+                    return httpx.Response(429, json={'error': {'message': 'Offline fixture rate limit',
+                        'type': 'rate_limit_error'}}, request=request)
+                guard.http_status = 200
+                guard.finish_reason = 'stop'
                 claims = [{'observation_id': obs['observation_id'], 'field': 'bid',
                     'value': obs['fields']['bid']['value'], 'unit': obs['fields']['bid']['unit'],
                     'citations': [{'observation_id': obs['observation_id'], 'field': 'bid'}]}
@@ -339,6 +357,7 @@ def main():
             result['http_status'] = guard.http_status
             result['finish_reason'] = guard.finish_reason
             result['response_usage'] = guard.response_usage
+            result['blocked_origins'] = guard.blocked_origins
         result['offline_replay'] = offline
         if '--self-test' not in sys.argv:
             protocol.write(json.dumps(result, sort_keys=True, separators=(',', ':')) + '\n')

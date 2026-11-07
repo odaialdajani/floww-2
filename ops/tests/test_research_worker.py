@@ -304,6 +304,34 @@ class WireTests(unittest.TestCase):
         self.assertTrue(intake.validate_research(packet, result['response'])['accepted'])
         self.assertEqual(before, (profile / 'ESTOP').read_bytes())
 
+    def test_native_offline_timeout_and_rate_limit_keep_safe_distinct_diagnostics(self):
+        packet = intake.compile_snapshot(fixture(), 1794085822)
+        for fault in ('timeout', 'rate_limit'):
+            with self.subTest(fault=fault), tempfile.TemporaryDirectory(dir='/Users/nav') as folder:
+                state = Path(folder) / 'state'
+                worker.set_paused(state, False)
+                profile = worker.HERMES_ROOT / 'profiles/floww-research'
+                before = (profile / 'ESTOP').read_bytes()
+                with worker.Lease(profile / '.floww-saved-research-lease'):
+                    result = worker._run_native_role_held('research', packet, state,
+                        offline_replay=True, offline_fault=fault)
+            self.assertFalse(result['success'])
+            self.assertEqual(result['http_request_count'], 1)
+            self.assertEqual(result['cost_status'], 'unknown')
+            if fault == 'timeout':
+                self.assertEqual(result['transport_error_type'], 'ReadTimeout')
+                self.assertIsNone(result['http_status'])
+            else:
+                self.assertEqual(result['http_status'], 429)
+                self.assertIsNone(result['transport_error_type'])
+            if result['blocked_http_attempt_count']:
+                self.assertTrue(result['blocked_origins'])
+            serialized = json.dumps(result)
+            self.assertNotIn('offline-fixture-secret', serialized)
+            self.assertNotIn('Authorization', serialized)
+            self.assertNotIn('Packet:', serialized)
+            self.assertEqual(before, (profile / 'ESTOP').read_bytes())
+
     def test_premature_wire_attempt_is_refused_without_consuming_quota(self):
         guard = native.WireGuard('test-secret', self.request()['messages'])
         with self.assertRaises(native.NativeError):

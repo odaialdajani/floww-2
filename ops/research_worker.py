@@ -338,7 +338,7 @@ def run_native_role(role, packet, state):
         return _run_native_role_held(role, packet, state)
 
 
-def _run_native_role_held(role, packet, state, *, offline_replay=False):
+def _run_native_role_held(role, packet, state, *, offline_replay=False, offline_fault=None):
     started = time.monotonic()
     if role not in ('research', 'audit'):
         raise WorkerError('role_not_allowed')
@@ -372,7 +372,7 @@ def _run_native_role_held(role, packet, state, *, offline_replay=False):
         preflight = message
     try:
         output = bounded_process([str(NATIVE_PYTHON), '-I', str(ROLE_HELPER)] + (['--offline-replay'] if offline_replay else []),
-                                 (canonical({'role': role, 'packet': packet}) + '\n').encode(),
+                                 (canonical({'role': role, 'packet': packet, 'offline_fault': offline_fault}) + '\n').encode(),
                                  env=env, state=state, on_ready=ready, cwd=str(scratch))
         lines = output.splitlines()
         if len(lines) != 2 or preflight is None:
@@ -464,7 +464,7 @@ def run_once(state=DEFAULT_STATE, *, saved=None, producer=None, role_runner=run_
                     receipt['roles'][role] = {k: native[k] for k in ('success', 'http_request_count',
                          'blocked_http_attempt_count', 'native_valid_tool_names', 'cost_status', 'usage', 'preflight',
                          'exception_type', 'refusal_code', 'wire_refusals', 'offline_replay', 'elapsed_seconds',
-                         'transport_error_type', 'http_status', 'finish_reason', 'response_usage', 'native_failed') if k in native}
+                         'transport_error_type', 'http_status', 'finish_reason', 'response_usage', 'native_failed', 'blocked_origins') if k in native}
                     receipt['roles'][role]['validation'] = validation
                     if not (native.get('success') is True and not native.get('offline_replay') and native.get('http_request_count') == 1
                             and native.get('blocked_http_attempt_count') == 0 and native.get('native_valid_tool_names') == []):
