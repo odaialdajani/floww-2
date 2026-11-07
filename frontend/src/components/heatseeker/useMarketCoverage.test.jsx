@@ -6,6 +6,17 @@ const body=()=>{const now=Date.now()/1000;return {status:"available",checked_at:
 beforeEach(()=>axios.get.mockReset());
 afterEach(()=>jest.useRealTimers());
 test("reads completed feed counts once, without starting a scan",async()=>{axios.get.mockResolvedValue({data:body()});const view=renderHook(()=>useMarketCoverage(true));await waitFor(()=>expect(view.result.current.status).toBe("ready"));expect(view.result.current.data.directory.total).toBe(3000);expect(view.result.current.fresh).toBe(2);expect(axios.get.mock.calls[0][0]).toContain("/market/status");expect(axios.get).toHaveBeenCalledTimes(1);view.unmount();});
+test("an unstarted scanner keeps verified directory counts and unknown scan coverage",async()=>{
+ const saved=body();saved.status="not_checked";saved.options={received_recently:null,receipt_times:null,window_seconds:null,scan_scope:null,scope_size:null};
+ axios.get.mockResolvedValue({data:saved});const view=renderHook(()=>useMarketCoverage(true));
+ await waitFor(()=>expect(view.result.current.status).toBe("ready"));
+ expect(view.result.current.data.directory.total).toBe(3000);expect(view.result.current.fresh).toBeNull();
+ expect(view.result.current.data.options.scan_scope).toBeNull();expect(view.result.current.lastSuccessAge).toBeGreaterThanOrEqual(0);
+ expect(axios.get).toHaveBeenCalledTimes(1);view.unmount();
+});
+test.each([false,2,{},[]])("a malformed non-null scan scope is refused (%p)",scope=>{
+ const saved=body();saved.options.scan_scope=scope;expect(()=>checkMarketCoverage(saved)).toThrow("Invalid scan scope");
+});
 test("receipt ages remove older readings even before the next count request",async()=>{jest.useFakeTimers();axios.get.mockResolvedValue({data:body()});const view=renderHook(()=>useMarketCoverage(true));await act(async()=>{});expect(view.result.current.fresh).toBe(2);await act(async()=>jest.advanceTimersByTime(5000));expect(view.result.current.fresh).toBe(1);view.unmount();});
 test("a failed refresh keeps the saved list but makes current checked counts unknown",async()=>{jest.useFakeTimers();axios.get.mockResolvedValueOnce({data:body()}).mockRejectedValueOnce(Error("unavailable"));const view=renderHook(()=>useMarketCoverage(true));await act(async()=>{});expect(view.result.current.fresh).toBe(2);await act(async()=>jest.advanceTimersByTime(30000));expect(view.result.current.status).toBe("unavailable");expect(view.result.current.fresh).toBeNull();expect(view.result.current.data.directory.total).toBe(3000);expect(view.result.current.lastSuccessAge).toBeNull();view.unmount();});
 test("unmount aborts delayed counts and disabled pickers do not request them",async()=>{let resolve;axios.get.mockImplementation(()=>new Promise(r=>{resolve=r;}));const disabled=renderHook(()=>useMarketCoverage(false));expect(axios.get).not.toHaveBeenCalled();disabled.unmount();const active=renderHook(()=>useMarketCoverage(true));const signal=axios.get.mock.calls[0][1].signal;active.unmount();expect(signal.aborted).toBe(true);await act(async()=>resolve({data:body()}));});
