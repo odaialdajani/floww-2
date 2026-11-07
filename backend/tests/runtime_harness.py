@@ -57,6 +57,24 @@ TICKERS = ("SPY", "AMD")
 PROBE_INTERVAL_S = 0.01
 PROBE_TIMEOUT_S = 5.0
 READ_TIMEOUT_S = 20.0
+# Steady-state liveness bound for /api/version while two tickers are read.
+# Sizing, and why each side is safe:
+#   * below the known synchronous hold. The first daily-bar read in a process
+#     builds the exchange calendar on the request thread; the cold-load probe
+#     measured that hold at 0.176s-0.197s (report: 1346x a warm read). A probe
+#     in flight during such a hold is delayed by all of it, so the bound has to
+#     sit well under ~0.18s or the hold would go unnoticed.
+#   * above the observed jitter. Across three full runs of the concurrency
+#     suite the worst probe was 0.004924s against an idle floor of ~0.001s, so
+#     0.05s keeps an order of magnitude of headroom over normal scheduling
+#     noise on a busy machine.
+# The bound's discriminating power is proved, not assumed:
+# test_a_known_loop_hold_trips_the_liveness_bound holds the loop for a known
+# 0.12s and asserts a probe in flight during it exceeds this bound.
+PROBE_LIVENESS_BOUND_S = 0.05
+# A synchronous burn on the event loop, i.e. what CPU work on the request thread
+# looks like to every other coroutine on that loop.
+LOOP_BURN_S = 0.12
 
 SNAPSHOT_SCHEMA = """
         CREATE TABLE IF NOT EXISTS heatmap_snapshots_v2 (
@@ -152,6 +170,49 @@ def _timed(recorder: StageRecorder, stage: str, function, *, label=None):
     return wrapper
 
 
+# A synchronous burn on the event loop, i.e. what CPU work on the request thread
+# looks like to every other coroutine on that loop. The liveness bound's
+# discriminating power is proved against it: see
+# test_a_known_loop_hold_trips_the_liveness_bound.
+LOOP_BURN_S = 0.12
+
+
+def _burn(seconds: float) -> None:
+    """Hold the event loop for `seconds`, the way CPU work on the loop does.
+
+    A spin, not a sleep: the point is that nothing else on this loop runs while
+    it lasts, which is exactly the effect being characterized.
+    """
+    deadline = time.perf_counter() + seconds
+    while time.perf_counter() < deadline:
+        pass
+
+
+async def hold_loop(seconds: float) -> None:
+    """Hold the event loop for `seconds` from a coroutine.
+
+    The stand-in for the ~0.18s synchronous calendar build the first daily-bar
+    read pays on its request thread (that build is measured by the cold-load
+    probe in a fresh interpreter). Queued ahead of another task it delays that
+    task by its whole duration, which is what makes the liveness bound testable
+    rather than merely asserted.
+    """
+    _burn(seconds)
+
+
+def warm_calendar():
+    """Pay the exchange-calendar build now, before any measurement starts.
+
+    The first daily-bar read in a process builds the calendar on the request
+    thread (~0.18s, measured). Tests that measure steady state call this first
+    so a one-time build is not mistaken for per-read cost; tests that measure
+    the cold path do it in a fresh interpreter instead.
+    """
+    from services.agent.access import horizon
+
+    horizon._calendar()
+
+
 def ticker_of(args, kwargs) -> str | None:
     """First argument that looks like a plain ticker (no path, no SQL)."""
     for value in list(args) + list(kwargs.values()):
@@ -164,11 +225,11 @@ def ticker_of(args, kwargs) -> str | None:
 class OfflineBroker:
     """Vendor double for the Public bars read: no socket, synthetic series.
 
-    `delay` is the wait a real round trip would occupy, so a request's event-loop
-    behaviour under load is observable. `gates` lets a test hold one ticker's
-    vendor read open (cancellation and shared-work evidence). The payload shape
-    is the real Bars-v2 shape, so the route's own normalization and evidence code
-    run unchanged.
+    `delay` is the wait a real round trip would occupy, so a request's
+    event-loop behaviour under load is observable. `gates` lets a test hold one
+    ticker's vendor read open (cancellation and shared-work evidence). The
+    payload shape is the real Bars-v2 shape, so the route's own normalization and
+    evidence code run unchanged.
     """
 
     def __init__(self, recorder: StageRecorder, delay: float = VENDOR_DELAY_S,
@@ -200,7 +261,7 @@ class OfflineBroker:
         try:
             gate = self.gates.get(symbol)
             if gate is not None:
-                # Held open on purpose: a real vendor read that never returns
+                # Held open off the loop: a real vendor read that never returns
                 # while a browser walks away.
                 await asyncio.get_running_loop().run_in_executor(None, gate.wait)
             else:
@@ -254,9 +315,10 @@ class EnvironmentPatch:
     """Manual save/restore of the module attributes this harness replaces.
 
     The pytest fixture uses monkeypatch; the standalone benchmark script has no
-    monkeypatch, so both go through this one restore path. An attribute that did
-    not exist before (a method shadowed on one instance) is removed again rather
-    than restored, so no instance keeps a permanent shadow of its class.
+    monkeypatch, so both go through this one restore path. An attribute the
+    owner did not have before is removed again on restore rather than written
+    back, so an instance never keeps a permanent shadow of its class. The
+    removal is pinned by a test, not just claimed here.
     """
 
     def __init__(self) -> None:
@@ -382,20 +444,6 @@ def greeks_env(monkeypatch, tmp_path):
     with contextlib.suppress(Exception):
         if path.exists():
             path.unlink()
-
-
-def store_slots(loop) -> int:
-    """Admission slots currently free on this loop's gate (0 when saturated)."""
-    from services import store_executor
-
-    return store_executor._slots_for(loop)._value
-
-
-def store_slots(loop) -> int:
-    """Admission slots currently free on this loop's gate (0 when saturated)."""
-    from services import store_executor
-
-    return store_executor._slots_for(loop)._value
 
 
 async def chart_read(client, ticker: str, days: int = 260, params: dict | None = None):

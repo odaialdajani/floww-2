@@ -35,6 +35,77 @@ from tests.runtime_harness import (
 STAGES = (PUBLIC_READ, DAILY_BARS, CALCULATION, DUCKDB)
 
 
+def test_the_environment_patch_removes_the_attributes_it_added():
+    """A restore must undo an added attribute, not shadow it forever.
+
+    The harness publishes private doubles under module names the route resolves
+    at call time. A patch that only ever wrote the previous value back would
+    leave a permanent shadow on any owner that did not have the attribute before,
+    and the next user of that owner would see the harness's double instead of
+    the class's own behaviour.
+    """
+    from tests.runtime_harness import EnvironmentPatch
+
+    class Owner:
+        def value(self) -> str:
+            return "class"
+
+    owner = Owner()
+    patch = EnvironmentPatch()
+    patch.setattr(owner, "value", lambda: "patch")
+    patch.setattr(owner, "added", "extra")
+    assert owner.value() == "patch"
+    assert owner.added == "extra"
+
+    patch.restore()
+
+    assert owner.value() == "class", (
+        "restore left the patched value in place of the owner's own")
+    assert not hasattr(owner, "added"), (
+        "restore wrote an added attribute back as a permanent shadow; the "
+        "owner must not keep an attribute it never had")
+
+
+def test_the_harness_restores_the_names_the_route_resolves():
+    """The published doubles are the ones the route resolves, and only during.
+
+    The route looks the vendor double and the budget governor up by name when it
+    runs, so a harness that published its private doubles anywhere else would
+    leave the process-wide instances in the request path — the admission
+    measurement would come back empty and the vendor read would reach for a real
+    socket. Restoring has to put the process values back.
+    """
+    import shutil
+    import tempfile
+    from pathlib import Path
+
+    import services.public_api_adapter as adapter
+    import services.public_budget as budget_module
+    from tests.runtime_harness import build_environment
+
+    original_budget = budget_module.budget
+    original_broker = adapter.BROKER
+    store = Path(tempfile.mkdtemp(prefix="floww-env-patch-"))
+    try:
+        recorder, broker, budget, _engine, _app, patch = build_environment(store)
+        assert budget_module.budget is budget, (
+            "the route resolved a different budget instance than the harness's")
+        assert adapter.BROKER is broker
+
+        patch.restore()
+
+        assert budget_module.budget is original_budget, (
+            "restore left the private budget published for later tests")
+        assert adapter.BROKER is original_broker, (
+            "restore left the vendor double published for later tests")
+        # The store the harness created is closed by the same restore, so no
+        # DuckDB instance is left registered for the next test's teardown.
+        assert not [span for span in recorder.stage(DUCKDB)], (
+            "no store read should have run in this test")
+    finally:
+        shutil.rmtree(store, ignore_errors=True)
+
+
 @pytest.mark.asyncio
 async def test_each_stage_of_the_cold_read_is_measured_separately(runtime_env):
     """All four stages run, and each keeps its own wall-clock span."""
