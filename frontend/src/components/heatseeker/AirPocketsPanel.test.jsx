@@ -40,8 +40,17 @@ describe("AirPocketsPanel", () => {
   });
 
   test("shows empty message when no pockets", () => {
+    // Measured-empty requires a known ladder: the panel distinguishes a
+    // measured "no pockets" from an unknown coverage (see the coverage test).
     useHeatseeker.mockReturnValue({
-      data: { air_pockets: [] },
+      data: {
+        air_pockets: [],
+        basis: "gross_exposure",
+        coverage_status: "ok",
+        strikes_observed: 11,
+        expected_step: 1,
+        n_omitted_strikes: 0,
+      },
       loading: false,
       error: null,
       refresh: jest.fn(),

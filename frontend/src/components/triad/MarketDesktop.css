@@ -256,6 +256,14 @@
   .tdk-head .triad-mobile-switch { display: flex; gap: 8px; }
 }
 
+/* Native 200% zoom ≈ 640px CSS height: keep the Market dock and paired grid
+   usable instead of letting the pair's min-height or the dock's max-height
+   collapse the working canvas on short viewports. Scoped to Market only. */
+@media (max-height: 640px) {
+  .trinity-desktop .triad-pair { min-height: 220px; }
+  .tdk-dock { max-height: calc(100vh - 90px - env(safe-area-inset-bottom)); }
+}
+
 /* Market main context header — the readable observation line (root 09:20):
    LIVE/REPLAY + quality + honest observation age outside; the exact
    snapshot id, full UTC clock, source and formula inside the NAMED CLOSED

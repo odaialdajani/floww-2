@@ -295,10 +295,9 @@ async def test_a_store_call_still_finishes_when_its_loop_is_closed():
 
     def _drive():
         asyncio.set_event_loop(loop)
-        try:
+        # The loop may be stopped while its physical store reader finishes.
+        with contextlib.suppress(RuntimeError):
             loop.run_until_complete(_read())
-        except RuntimeError:
-            pass  # the loop was stopped under the reader
 
     driver = threading.Thread(target=_drive)
     driver.start()

@@ -239,3 +239,21 @@ test('diagnosticsDisclosure option moves the truthful feed counts into a scoped 
   expect(disclosure.querySelector('summary')).toBeInTheDocument();
   expect(disclosure.contains(screen.getByTestId('stock-feed-counts'))).toBe(true);
 });
+
+test("selecting a directory symbol outside the 40-name scanner discloses it is outside the checked scope",async()=>{
+  const scanner=Array.from({length:40},(_,i)=>`T${String(i).padStart(4,"0")}`);
+  axios.get.mockImplementation(async(url,options)=>{
+    if(String(url).includes("/market/status"))return {data:feedCounts()};
+    if(String(url).includes("/market/catalog"))return {data:{instruments:[{symbol:"BEYOND",options:true}],matches:1,has_more:false,stale:false,page:1,limit:100}};
+    return {data:{}};
+  });
+  const change=jest.fn();
+  render(<TickerPicker value="T0000" tickers={scanner} onChange={change} className="floww-header-symbol-picker"/>);
+  await waitFor(()=>expect(screen.getByTestId("stock-feed-counts")).toHaveTextContent("2 stocks checked of 40 configured symbols"));
+  fireEvent.click(screen.getByRole("button",{name:"Browse stock list"}));
+  fireEvent.click(screen.getByRole("button",{name:"Full stock directory"}));
+  await screen.findByRole("button",{name:"BEYOND",exact:true});
+  fireEvent.click(screen.getByRole("button",{name:"BEYOND",exact:true}));
+  await waitFor(()=>expect(change).toHaveBeenCalledWith("BEYOND"));
+  await waitFor(()=>expect(screen.getByRole("alert")).toHaveTextContent(/outside the 40-symbol scanner scope/));
+});

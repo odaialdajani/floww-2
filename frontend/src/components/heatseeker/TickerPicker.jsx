@@ -47,6 +47,15 @@ const FEED_COUNTS_TITLE = "Checked stocks have received option data in the shown
 export default function TickerPicker({ value = "SPY", onChange, tickers = null, status = "unknown", onRetry, ariaLabel = "Search stocks", className = "", diagnosticsDisclosure = false }) {
   const universe = useMemo(() => buildTickerUniverse(tickers).filter(validSymbol), [tickers]);
   const active = normalizeTicker(value);
+  // Disclosure when a selected symbol lies outside the scanner's checked scope
+  // (the scope_size named beside the feed count). Directory picks and
+  // provider-resolved symbols that are not among the configured symbols are
+  // flagged so the count is never read as whole-market coverage.
+  const scopeNotice = (symbol) => {
+    const scopeSize = coverage.data?.options?.scope_size;
+    const scopePhrase = Number.isSafeInteger(scopeSize) ? `${scopeSize}-symbol scanner scope` : "checked scanner scope";
+    return universe.includes(symbol) ? null : `${symbol} is outside the ${scopePhrase} — recent option data may not cover it.`;
+  };
   const globalPicker = className.split(/\s+/).includes("floww-header-symbol-picker");
   const coverage = useMarketCoverage(globalPicker);
   const [category, setCategory] = useState("all"), [sector, setSector] = useState("");
@@ -179,6 +188,8 @@ export default function TickerPicker({ value = "SPY", onChange, tickers = null, 
     const current = epoch.current;
     const symbol = await pending;
     if (!symbol || epoch.current !== current) return;
+    const notice = scopeNotice(symbol);
+    if (notice) setMessage(notice);
     onChange?.(symbol); input.current?.focus(); setQuery(""); setOpen(false); setIndex(-1); setPage(0);
   };
   const toggleFavorite = async () => {
@@ -266,6 +277,6 @@ export default function TickerPicker({ value = "SPY", onChange, tickers = null, 
       {totalPages > 1 && <div className="ticker-picker-pages"><button type="button" disabled={safePage === 0 || filteredCatalog && catalogState === "loading"} onClick={() => { setPage(safePage - 1); setIndex((safePage - 1) * PAGE_SIZE); }}>Previous</button><button type="button" disabled={safePage >= totalPages - 1 || filteredCatalog && (!currentCatalog || catalogState !== "ready")} onClick={() => { setPage(safePage + 1); setIndex((safePage + 1) * PAGE_SIZE); }}>Next</button></div>}
     </div>, document.body)}
     {globalPicker && <StockDirectory open={directoryOpen} onOpenChange={setDirectoryOpen} showTrigger={false} returnFocusRef={directoryReturnFocus}
-      onSelect={symbol => { stopLookup(); onChange?.(symbol); setQuery(""); setIndex(-1); setPage(0); setOpen(false); }} />}
+      onSelect={symbol => { stopLookup(); onChange?.(symbol); const notice = scopeNotice(symbol); if (notice) setMessage(notice); setQuery(""); setIndex(-1); setPage(0); setOpen(false); }} />}
   </div>;
 }

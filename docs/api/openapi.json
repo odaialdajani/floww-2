@@ -5344,7 +5344,7 @@
     },
     "/api/data/status": {
       "get": {
-        "description": "Get status of all data providers.",
+        "description": "Get status of all data providers.\n\nEvery provider names its role and whether the active policy routes to\nit, and the policy itself is stated next to the labels: without it,\n\"in_use\" would be an unanchored claim.",
         "operationId": "get_api_data_status",
         "responses": {
           "200": {
@@ -9136,7 +9136,7 @@
     },
     "/api/heatseeker/air-pockets": {
       "get": {
-        "description": "Contiguous strike ranges with |GEX| below 20% of the local median.",
+        "description": "Contiguous gross-exposure runs below 20% of the local median.\n\nThe thin test uses GROSS exposure (call/put cancellation cannot fake a\nthin strike) and the expected strike spacing is carried from the same\nloaded observation, so a pocket never bridges a strike that was not\nloaded. The response discloses that ladder: ``basis``,\n``coverage_status``, ``strikes_observed``, ``expected_step`` and\n``n_omitted_strikes``.",
         "operationId": "get_api_heatseeker_air-pockets",
         "parameters": [
           {
@@ -10102,6 +10102,73 @@
         "summary": "Record Snapshot Now",
         "tags": [
           "price-node-history"
+        ]
+      }
+    },
+    "/api/heatseeker/replay-sessions/{ticker}": {
+      "get": {
+        "description": "Scope-aware replay session manifest for one ticker on one UTC day.\n\nA UTC-day row list is NOT one market session when the rows come from\ndifferent query scopes: snapshots from a 4-expiry query and a 12-expiry\nquery describe different observations, and heartbeat or gap arithmetic\nacross them would silently mix scopes. The rows are therefore grouped\nper scope, each scope keeps its own snapshot list and gap accounting,\nand the day-level certification is refused explicitly\n(``MIXED_QUERY_SCOPES``) instead of being asserted.\n\nRead-only: no provider request, no replay activation, no order path.",
+        "operationId": "get_api_heatseeker_replay-sessions_ticker",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ticker",
+            "required": true,
+            "schema": {
+              "title": "Ticker",
+              "type": "string"
+            }
+          },
+          {
+            "description": "UTC day as a stored YYYY-MM-DD prefix",
+            "in": "query",
+            "name": "day",
+            "required": false,
+            "schema": {
+              "default": "",
+              "description": "UTC day as a stored YYYY-MM-DD prefix",
+              "title": "Day",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Expected capture cadence in seconds; gap detection needs it",
+            "in": "query",
+            "name": "cadence_s",
+            "required": false,
+            "schema": {
+              "default": 300.0,
+              "description": "Expected capture cadence in seconds; gap detection needs it",
+              "exclusiveMinimum": 0,
+              "title": "Cadence S",
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Replay Sessions Route",
+        "tags": [
+          "heatseeker",
+          "heatseeker"
         ]
       }
     },
