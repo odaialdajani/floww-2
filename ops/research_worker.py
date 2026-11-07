@@ -417,7 +417,8 @@ def _save_summary(state, receipt, now):
 
 def run_once(state=DEFAULT_STATE, *, saved=None, producer=None, role_runner=run_native_role, now=None):
     state = Path(state)
-    now = time.time() if now is None else now
+    real_clock = now is None
+    now = time.time() if real_clock else now
     if paused(state):
         return {'status': 'paused', 'executable': False}
     try:
@@ -476,9 +477,9 @@ def run_once(state=DEFAULT_STATE, *, saved=None, producer=None, role_runner=run_
             accepted = len(receipt['roles']) == 2 and all(r['validation'].get('accepted') for r in receipt['roles'].values())
             receipt['status'] = 'accepted_retrospective_facts' if accepted else 'parked'
             receipt['reason'] = 'independently_validated_copied_facts' if accepted else receipt.get('reason', 'role_refused')
-            receipt['finished_at'] = time.time() if now is None else now
+            receipt['finished_at'] = time.time() if real_clock else now
             atomic_json(receipt_path, receipt)
-            _save_summary(state, receipt, now)
+            _save_summary(state, receipt, receipt['finished_at'])
             return receipt
     except WorkerError as exc:
         if str(exc) == 'lease_busy':

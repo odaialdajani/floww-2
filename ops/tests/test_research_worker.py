@@ -7,6 +7,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 OPS = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(OPS))
@@ -56,6 +57,16 @@ class WorkerTests(unittest.TestCase):
     def run_worker(self, saved=None, runner=None, now=1794085822):
         return worker.run_once(self.state, saved=fixture() if saved is None else saved,
                                role_runner=runner or self.role, now=now)
+
+    def test_real_clock_records_finish_and_daily_progress_after_long_role_pair(self):
+        started, finished = 1794085822, 1794085883.697
+        with mock.patch.object(worker.time, 'time', side_effect=[started, finished]):
+            result = worker.run_once(self.state, saved=fixture(), role_runner=self.role)
+        self.assertEqual(result['started_at'], started)
+        self.assertEqual(result['finished_at'], finished)
+        daily = json.loads(next((self.state / 'daily').glob('*.json')).read_text())
+        self.assertEqual(daily['updated_at'], finished)
+        self.assertEqual(daily['last_substantive_progress'], finished)
 
     def test_independent_roles_receive_identical_packet_without_other_answer(self):
         result = self.run_worker()
