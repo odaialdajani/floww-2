@@ -7,6 +7,14 @@ let width;
 beforeEach(()=>{width=800;jest.spyOn(HTMLElement.prototype,'getBoundingClientRect').mockImplementation(()=>({x:0,y:0,left:0,top:0,right:width,bottom:480,width,height:480,toJSON:()=>({})}));});
 afterEach(()=>jest.restoreAllMocks());
 
+test('TPO periods name the engine letter and recorded New York start time',()=>{
+  render(<RecordedPriceChart ticker="SPY" frames={frames.slice(0,2)} paneCfg={{tpo:{periodMinutes:30}}}/>);
+  const titles=screen.getAllByTestId('tpo-period-box').map(box=>box.querySelector('title').textContent);
+  expect(titles[0]).toMatch(/Period A.*10\/1, 09:30.*New York/);
+  expect(titles[1]).toMatch(/Period B.*10\/1, 10:00.*New York/);
+  expect(titles.join(' ')).not.toMatch(/undefined/);
+});
+
 test.each([1,2,3,120])('axis labels have bounded unique anchors for %i candles',count=>{
   render(<RecordedPriceChart ticker="SPY" frames={frames.slice(0,count)}/>);
   const labels=[...screen.getByTestId('recorded-price-chart').querySelectorAll('.recorded-time-label')];

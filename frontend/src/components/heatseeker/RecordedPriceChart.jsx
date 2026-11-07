@@ -315,7 +315,7 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
        return <g data-testid="tpo-context"><title>{'Bar-resolution TPO approximation · '+tpo.note}</title>
         {tpo.periods.map((p,pi)=>{const py0=y(p.high),py1=y(p.low);
          if(!Number.isFinite(py0)||!Number.isFinite(py1))return null;
-         return <rect key={'tpo:'+pi} data-testid="tpo-period-box" x={tbx+colW*pi+2} y={Math.min(py0,py1)} width={colW-2} height={Math.max(2,Math.abs(py1-py0))} fill="#7d6ac0" opacity="0.5"><title>{'Period '+p.period+' '+price(p.high)+'/'+price(p.low)+' · '+tpo.approximation}</title></rect>;})}
+         return <rect key={'tpo:'+pi} data-testid="tpo-period-box" x={tbx+colW*pi+2} y={Math.min(py0,py1)} width={colW-2} height={Math.max(2,Math.abs(py1-py0))} fill="#7d6ac0" opacity="0.5"><title>{'Period '+p.letter+' · '+axisTime(p.start)+' New York · '+price(p.high)+'/'+price(p.low)+' · '+tpo.approximation}</title></rect>;})}
         {tpo.sessionFacts&&<text x={tbx} y={top+38} fill="#7d6ac0" fontSize="10" data-testid="tpo-session-facts">{'TPO '+(cfgT?.periodMinutes??30)+'m · session '+price(tpo.sessionFacts.high)+'/'+price(tpo.sessionFacts.low)+' · '+(tpo.periods.length)+' periods · bar-resolution (tick-true needs the admitted tape)'}</text>}
        </g>;})()}
       {hover!==null&&selected&&<g data-export-layer="crosshair"><line x1={left+(hover+0.5)*spacing} x2={left+(hover+0.5)*spacing} y1={top} y2={bottom} stroke="#a8b3be" strokeDasharray="3 4"/><line x1={left} x2={right} y1={y(selected.close)} y2={y(selected.close)} stroke="#a8b3be" strokeDasharray="3 4"/></g>}
