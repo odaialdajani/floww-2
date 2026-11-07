@@ -12,6 +12,7 @@ from datetime import UTC, datetime, timedelta
 from bson import BSON
 
 from services.agent.paper.execution import instant
+from services.agent.paper.execution_control import IDENTITY_FIELDS, next_control, validate_control
 from services.agent.paper.repository import (
     MAX_EVENT_BYTES,
     MAX_RECOVERY_STATE_GROWTH,
@@ -33,6 +34,17 @@ class GuardedPaperRepository(PaperRepository):
         concern = self.accounts.write_concern
         self.accounts = database.get_collection("agent_paper_guarded_accounts", write_concern=concern)
         self.events = database.get_collection("agent_paper_guarded_events", write_concern=concern)
+        self.admissions = database.get_collection("agent_paper_admission_artifacts", write_concern=concern)
+
+    async def initialize(self):
+        await super().initialize()
+        # One immutable parent may claim a book version. Together with the
+        # monotonic account CAS this prevents racing captures from overrunning
+        # retained-artifact capacity or fabricating an alternative retry.
+        await self.admissions.create_index(
+            [(key, 1) for key in ("owner", "account_id", "venue", "epoch", "starting_version")],
+            unique=True,
+        )
 
     async def create(self, owner, account, initial_state, *, venue="internal", reserve_events=None):
         state = validate_json(initial_state)
@@ -45,6 +57,31 @@ class GuardedPaperRepository(PaperRepository):
             raise PaperConflict("Explicit creation must preserve all observation credits")
         return await super().create(owner, account, state, venue=venue, reserve_events=required)
 
+    async def bind_execution_control(self, owner, account, authority, *, expected_generation, mode, now, expires_at=None):
+        binding = scope(owner, account, "internal")
+        current = await self.accounts.find_one(binding)
+        if current is None:
+            raise PaperConflict("Paper account is unavailable for execution control")
+        previous = current.get("execution_control")
+        generation = current.get("execution_generation", 0)
+        if (previous is None and generation != 0
+                or previous is not None and previous.get("generation") != generation):
+            raise PaperConflict("Durable authority was lost; monotonic generation requires recovery")
+        control = next_control(previous, authority, expected_generation, mode, now=now, expires_at=expires_at)
+        self._size({**current, "execution_control": control})
+        selector = {**binding, "epoch": current["epoch"]}
+        if previous is None:
+            selector["execution_control"] = {"$exists": False}
+            selector["execution_generation"] = {"$exists": False}
+        else:
+            selector["execution_generation"] = previous["generation"]
+            selector["execution_control.generation"] = previous["generation"]
+            selector["execution_control.authority_id"] = previous["authority_id"]
+        changed = await self.accounts.update_one(selector, {"$set": {"execution_control": control, "execution_generation": control["generation"]}})
+        if changed.modified_count != 1:
+            raise PaperConflict("Durable execution generation changed during control write")
+        return copy.deepcopy(control)
+
     def _size(self, doc):
         control_of(doc["state"])
         if doc.get("reserve_events") != guarded_reserve(doc["state"]):
@@ -52,7 +89,7 @@ class GuardedPaperRepository(PaperRepository):
         super()._size(doc)
 
     async def commit(self, owner, account, operation, command, next_state, event_body,
-                     *, venue="internal", reserve_events=None, valid_after=None, valid_until=None):
+                     *, venue="internal", reserve_events=None, valid_after=None, valid_until=None, execution_claim=None):
         expected = operation_version(operation)
         command = validate_json(command)
         next_state = validate_json(next_state)
@@ -101,6 +138,24 @@ class GuardedPaperRepository(PaperRepository):
         self._size(candidate)
         selector = {**binding, "epoch": doc["epoch"], "version": expected}
         risk_decision = event_body.get("risk_decision", {})
+        economic = event_body.get("kind") in ("paper_order_staged", "paper_fill")
+        if economic and execution_claim is None:
+            raise PaperConflict("Economic writes require captured durable execution control")
+        predicates = []
+        if execution_claim is not None:
+            claim = validate_control(execution_claim)
+            if doc.get("execution_control") != claim or doc.get("execution_generation") != claim["generation"]:
+                raise PaperConflict("Durable execution generation or authority changed before commit")
+            side = next_state.get("orders", {}).get(event_body.get("order_id"), {}).get("side")
+            if (claim["mode"] not in ("running", "reduce_only")
+                    or economic and side == "buy" and claim["mode"] != "running"):
+                raise PaperConflict("Durable execution mode does not allow this economic action")
+            selector["execution_generation"] = claim["generation"]
+            for key in ("generation", "mode", "expires_at", *IDENTITY_FIELDS):
+                selector["execution_control."+key] = claim[key]
+            expiry = instant(claim["expires_at"])
+            expiry = expiry.replace(microsecond=expiry.microsecond // 1000 * 1000)
+            predicates.append({"$lt": ["$$NOW", expiry]})
         if risk_decision.get("status") == "pass":
             required_after, required_until = risk_decision["evaluated_at"], risk_decision["valid_until"]
             if ((valid_after is not None and instant(valid_after) != instant(required_after))
@@ -117,7 +172,9 @@ class GuardedPaperRepository(PaperRepository):
             latest = latest.replace(microsecond=latest.microsecond // 1000 * 1000)
             if latest <= earliest:
                 raise ValueError("A positive millisecond server-time validity window is required")
-            selector["$expr"] = {"$and": [{"$gte": ["$$NOW", earliest]}, {"$lt": ["$$NOW", latest]}]}
+            predicates.extend([{"$gte": ["$$NOW", earliest]}, {"$lt": ["$$NOW", latest]}])
+        if predicates:
+            selector["$expr"] = {"$and": predicates}
         result = await self.accounts.update_one(
             selector,
             {"$set": {"state": next_state, "version": expected + 1,
@@ -131,4 +188,4 @@ class GuardedPaperRepository(PaperRepository):
         receipt = await self._receipt(current, operation, command_digest) if current else None
         if receipt is not None:
             return receipt, False
-        raise PaperConflict("Account version or server-time window no longer matches; retain the unresolved assessment")
+        raise PaperConflict("Account version, durable execution fence or server-time window no longer matches; retain the unresolved assessment")

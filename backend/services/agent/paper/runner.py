@@ -1,7 +1,8 @@
-"""Isolated internal paper runner — Task 3.
+"""Isolated internal paper runner with funded stage/fill admission.
 
 Composes the guarded paper sequence over injected quote observations and an
-injected repository. Requires an explicit frozen rule and explicit policy,
+injected repository. Requires explicit frozen rules, persisted accepted policy,
+server-constructed source/confirmation evidence and lease/stop authority. It
 blocks new entries while an exit is unresolved, preserves risk-reducing exits,
 and reconciles the durable journal to cash, positions, working orders, fills
 and P&L. No broker import and no broker order method anywhere in this module.
@@ -9,19 +10,20 @@ and P&L. No broker import and no broker order method anywhere in this module.
 
 from __future__ import annotations
 
+import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
 
 from services.agent.paper.accounting import derived
+from services.agent.paper.admission import PaperAdmissionService
 from services.agent.paper.execution import (
     cancel_order,
-    fill_order,
     reserved_cash,
-    stage_order,
 )
+from services.agent.paper.execution_control import claim_of
 from services.agent.paper.guarded_repository import GuardedPaperRepository
 from services.agent.paper.policy import policy_body
-from services.agent.paper.repository import PaperConflict, digest, operation_id, validate_json
+from services.agent.paper.repository import PaperConflict, digest, operation_id, scope, validate_json
 from services.agent.paper.risk_assessment import reserved_events as guarded_reserve_events
 
 
@@ -48,7 +50,7 @@ def _require(rule, policy):
 class PaperRunner:
     """Deterministic internal paper runner over guarded preparation state."""
 
-    def __init__(self, repository, *, quote_reader, clock=None):
+    def __init__(self, repository, *, quote_reader, admission_adapter=None, execution_authority=None, clock=None):
         if not isinstance(repository, GuardedPaperRepository):
             raise ValueError("A guarded repository is required")
         if not callable(quote_reader):
@@ -56,6 +58,9 @@ class PaperRunner:
         self.repository = repository
         self.quote_reader = quote_reader
         self.clock = clock or (lambda: datetime.now(UTC))
+        self.admission = PaperAdmissionService(repository, adapter=admission_adapter,
+                                               authority=execution_authority, clock=self.clock)
+        self._fresh_entry = False
         self._started = False
 
     async def start(self, owner, account, rule, policy):
@@ -72,8 +77,8 @@ class PaperRunner:
         # explicit, well-formed policy governs the run; the runner does not
         # mutate account risk state, so no policy change is persisted here.
         policy_body(policy.get("body", {}))
-        self._rule = rule
-        self._policy = policy
+        self._rule = validate_json(rule)
+        self._policy = validate_json(policy)
         self._owner = owner
         self._account = account
         self._epoch = current["epoch"]
@@ -104,10 +109,14 @@ class PaperRunner:
         state = validate_json(current["state"])
         if state.get("epoch") not in (None, current["epoch"]):
             raise PaperConflict("Book and account recovery differ")
+        if state["risk_control"]["entry_credits"] < 2:
+            await self.admission.replenish(owner, account)
+            current = await self.repository.read(owner, account)
         self._owner = owner
         self._account = account
         self._started = True
         self._restarted = True
+        self._fresh_entry = True
         self._epoch = current["epoch"]
         self._start_op = operation_id(current["version"], epoch=self._epoch)
 
@@ -121,28 +130,29 @@ class PaperRunner:
             raise PaperConflict("Unresolved exit blocks new entries")
         now = self.clock()
         created_at = _instant(now)
-        quote_body, quote_digest = self._validated_quote(quote, created_at, entry=True)
-        command = dict(kind="enter", rule_digest=self._rule["rule_digest"],
-                       quote_digest=quote_digest)
+        quote_body, quote_digest = self._validated_quote(quote, created_at, entry=True, fresh=False)
         operation = self._entry_operation(current)
-        existing = await self.repository.receipt(owner, account, operation, command)
-        if existing is not None:
-            body = existing["body"]
-            return dict(kind="paper_order_staged", order_id=body["order_id"],
-                        structure_id=body["structure_id"],
-                        proposal_digest=body["proposal_digest"]), False
         parameters = self._stage_parameters(side=self._rule["side"])
-        candidate, event = stage_order(
-            state, epoch=self._epoch, now=now,
-            committed_version=current["version"] + 1, **parameters,
+        for pending in state["risk_control"]["pending"].values():
+            if pending["command"].get("parameters") == parameters and pending["command"].get("quote") == quote_body:
+                operation = self._start_op = pending["request_id"]
+        request = dict(kind="stage", parameters=parameters, order_id=None, quote=quote_body,
+                       confirmation=dict(rule_digest=self._rule["rule_digest"]))
+        captured = None
+        if not self._fresh_entry:
+            captured = await self.repository.admissions.find_one({**scope(owner, account, "internal"),
+                        "epoch": self._epoch, "request_digest": digest(request)})
+        if captured is not None:
+            operation = self._start_op = captured["parent_operation"]
+        elif not any(item["request_id"] == operation for item in state["risk_control"]["pending"].values()):
+            self._validated_quote(quote, created_at, entry=True)
+        receipt, created = await self.admission.execute(
+            owner, account, operation, kind="stage", parameters=parameters,
+            quote=quote_body, confirmation=dict(rule_digest=self._rule["rule_digest"]),
         )
-        receipt, created = await self.repository.commit(
-            owner, account, operation, command, candidate, event,
-            reserve_events=guarded_reserve_events(candidate),
-        )
+        event = receipt["body"]
         return dict(kind="paper_order_staged", order_id=event["order_id"],
-                    structure_id=event["structure_id"],
-                    proposal_digest=event["proposal_digest"]), created
+                    structure_id=event["structure_id"], proposal_digest=event["proposal_digest"]), created
 
     async def exit(self, owner, account, rule, quote):
         self._require_started(owner, account)
@@ -164,29 +174,12 @@ class PaperRunner:
             raise ValueError("A frozen exit proposal digest is required")
         now = self.clock()
         created_at = _instant(now)
-        quote_body, quote_digest = self._validated_quote(quote, created_at, entry=False)
-        command = dict(kind="exit", structure_id=structure_id,
-                       quote_digest=quote_digest, quantity=quantity, limit=limit,
-                       proposal_digest=proposal_digest)
-        operation = operation_id(current["version"], epoch=self._epoch)
-        existing = await self.repository.receipt(owner, account, operation, command)
-        if existing is not None:
-            body = existing["body"]
-            return dict(kind="paper_order_staged", order_id=body["order_id"],
-                        structure_id=body["structure_id"], status="working"), False
+        quote_body, quote_digest = self._validated_quote(quote, created_at, entry=False, fresh=False)
         parameters = self._stage_parameters(side="sell", structure_id=structure_id,
                                             quantity=quantity, limit=limit,
                                             proposal_digest=proposal_digest)
-        candidate, event = stage_order(
-            state, epoch=self._epoch, now=now,
-            committed_version=current["version"] + 1, **parameters,
-        )
-        receipt, created = await self.repository.commit(
-            owner, account, operation, command, candidate, event,
-            reserve_events=guarded_reserve_events(candidate),
-        )
-        return dict(kind="paper_order_staged", order_id=event["order_id"],
-                    structure_id=event["structure_id"], status="working"), created
+        return await self._assessed(owner, account, current, kind="stage", parameters=parameters,
+                                    quote=quote_body, confirmation=dict(proposal_digest=proposal_digest))
 
     async def enter_fill(self, owner, account, order_id, quote):
         self._require_started(owner, account)
@@ -199,25 +192,9 @@ class PaperRunner:
             raise PaperConflict("Order is absent or not an entry")
         now = self.clock()
         created_at = _instant(now)
-        quote_body, quote_digest = self._validated_quote(quote, created_at, entry=True)
-        command = dict(kind="enter_fill", order_id=order_id, quote_digest=quote_digest)
-        operation = operation_id(current["version"], epoch=self._epoch)
-        existing = await self.repository.receipt(owner, account, operation, command)
-        if existing is not None:
-            return existing["body"], False
-        candidate, event, changed = fill_order(
-            state, order_id, quote_body, now=now,
-            committed_version=current["version"] + 1,
-        )
-        if not changed:
-            # No new fill: no accepted operation/receipt is consumed. Return
-            # (None, False) so callers never present a non-event as a fill.
-            return None, False
-        receipt, created = await self.repository.commit(
-            owner, account, operation, command, candidate, event,
-            reserve_events=guarded_reserve_events(candidate),
-        )
-        return event, True
+        quote_body, quote_digest = self._validated_quote(quote, created_at, entry=True, fresh=False)
+        return await self._assessed(owner, account, current, kind="fill", order_id=order_id,
+                                    quote=quote_body, confirmation=dict(rule_digest=self._rule["rule_digest"]))
 
     async def exit_fill(self, owner, account, order_id, quote):
         self._require_started(owner, account)
@@ -230,29 +207,51 @@ class PaperRunner:
             raise PaperConflict("Order is absent or not an exit")
         now = self.clock()
         created_at = _instant(now)
-        quote_body, quote_digest = self._validated_quote(quote, created_at, entry=False)
-        command = dict(kind="exit_fill", order_id=order_id, quote_digest=quote_digest)
-        operation = operation_id(current["version"], epoch=self._epoch)
-        existing = await self.repository.receipt(owner, account, operation, command)
+        quote_body, quote_digest = self._validated_quote(quote, created_at, entry=False, fresh=False)
+        return await self._assessed(owner, account, current, kind="fill", order_id=order_id,
+                                    quote=quote_body, confirmation=dict(rule_digest=self._rule["rule_digest"]))
+
+    async def _assessed(self, owner, account, current, **request):
+        normalized = dict(kind=request["kind"], parameters=request.get("parameters"),
+                          order_id=request.get("order_id"), quote=request.get("quote"),
+                          confirmation=request.get("confirmation"))
+        request_key = digest([current["epoch"], normalized])
+        existing = await self.repository.admissions.find_one({**scope(owner, account, "internal"),
+                    "epoch": self._epoch, "request_digest": digest(normalized)})
+        # The parent artifact is immutable; a separate stable nonce plus pending
+        # intent lets a restarted runner recover without taking another action.
+        for pending in current["state"]["risk_control"]["pending"].values():
+            if (pending["command"]["kind"] == request["kind"]
+                    and pending["command"].get("order_id") == request.get("order_id")
+                    and pending["command"].get("quote") == request.get("quote")
+                    and (request["kind"] == "fill" or pending["command"].get("parameters") == request.get("parameters"))):
+                existing = dict(parent_operation=pending["request_id"])
+                break
         if existing is not None:
-            return existing["body"], False
-        candidate, event, changed = fill_order(
-            state, order_id, quote_body, now=now,
-            committed_version=current["version"] + 1,
-        )
-        if not changed:
-            return None, False
-        receipt, created = await self.repository.commit(
-            owner, account, operation, command, candidate, event,
-            reserve_events=guarded_reserve_events(candidate),
-        )
-        return event, True
+            receipt, created = await self.admission.resume(owner, account, existing["parent_operation"])
+        else:
+            self._validated_quote(request["quote"], _instant(self.clock()), entry=False)
+            entry = (request["kind"] == "fill" and current["state"]["orders"][request["order_id"]]["side"] == "buy")
+            if entry:
+                await self.admission.require_entry_fill_attempt(owner, account, request["order_id"])
+            if entry and current["state"]["risk_control"]["entry_credits"] < 2:
+                await self.admission.replenish(owner, account)
+                current = await self.repository.read(owner, account)
+            operation = operation_id(current["version"], str(uuid.uuid5(uuid.NAMESPACE_URL, request_key)), epoch=self._epoch)
+            receipt, created = await self.admission.execute(owner, account, operation, **request)
+        body = receipt["body"] if receipt else None
+        if body and request["kind"] == "stage":
+            body = dict(kind="paper_order_staged", order_id=body["order_id"],
+                        structure_id=body["structure_id"], status="working")
+        return body, created
 
     async def cancel(self, owner, account, order_id):
         self._require_started(owner, account)
+        self.admission.require_execution("reduce")
         current = await self.repository.read(owner, account)
         if current is None:
             raise PaperConflict("Paper account unavailable for this owner")
+        claim = claim_of(current, self.admission.authority, "reduce", now=self.clock())
         state = validate_json(current["state"])
         order = state["orders"].get(order_id)
         if order is None:
@@ -269,8 +268,9 @@ class PaperRunner:
             return None, False
         receipt, created = await self.repository.commit(
             owner, account, operation, command, candidate, event,
-            reserve_events=guarded_reserve_events(candidate),
+            reserve_events=guarded_reserve_events(candidate), execution_claim=claim,
         )
+        self.admission.require_execution("reduce")
         return event, True
 
     async def reconcile(self, owner, account):
@@ -334,7 +334,7 @@ class PaperRunner:
         return any(order["side"] == "sell" and order["status"] == "working"
                    for order in state["orders"].values())
 
-    def _validated_quote(self, quote, created_at, *, entry):
+    def _validated_quote(self, quote, created_at, *, entry, fresh=True):
         if not isinstance(quote, dict):
             raise ValueError("A source quote is required")
         expected_contract = self._rule["contract_id"] if entry else None
@@ -346,7 +346,7 @@ class PaperRunner:
         now = created_at
         if observed > now or received > now:
             raise ValueError("Quote is from the future")
-        if (now - observed).total_seconds() > self._rule["max_quote_age_seconds"]:
+        if fresh and (now - observed).total_seconds() > self._rule["max_quote_age_seconds"]:
             raise ValueError("Quote is stale")
         if received < observed:
             raise ValueError("Quote receipt precedes its source time")

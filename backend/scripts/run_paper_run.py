@@ -13,19 +13,23 @@ import asyncio
 import json
 import re
 import sys
+import tempfile
 import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from motor.motor_asyncio import AsyncIOMotorClient
 
+from scripts.paper_synthetic_fixture import SyntheticPaperAdapter, persist_synthetic_policy
+from services.agent.paper.admission import PaperExecutionAuthority
 from services.agent.paper.execution import new_book
 from services.agent.paper.guarded_repository import GuardedPaperRepository
 from services.agent.paper.runner import PaperRunner
+from services.execution_lease import acquire_lease, release_lease
 
 PREFIX = "floww_paper_run_"
 
-NOW = datetime(2026, 11, 6, 14, tzinfo=UTC)
+NOW = datetime.now(UTC)
 
 RULE = {
     "rule_id": "frozen-synthetic-rule",
@@ -107,6 +111,13 @@ def test_database(name):
 
 async def execute(args):
     connection = client()
+    lease_directory = tempfile.TemporaryDirectory(prefix="floww-paper-synthetic-")
+    lease_path = str(Path(lease_directory.name) / "executor.lease")
+    lease = acquire_lease(lease_path, "isolated-synthetic-cli")
+    if not lease.get("ok"):
+        connection.close()
+        lease_directory.cleanup()
+        raise ValueError("Isolated paper executor lease unavailable")
     try:
         await connection.admin.command("ping")
         report_path = Path(args.report)
@@ -118,8 +129,13 @@ async def execute(args):
         await repo.initialize()
         owner, account = str(uuid.uuid4()), str(uuid.uuid4())
         await repo.create(owner, account, new_book("1000", currency="USD"))
-        runner = PaperRunner(repo, quote_reader=lambda: dict(QUOTE), clock=lambda: NOW)
-        started = await runner.start(owner, account, RULE, POLICY)
+        policy = await persist_synthetic_policy(repo, owner, account, POLICY["body"], now=NOW)
+        adapter = SyntheticPaperAdapter(repo, clock=lambda: datetime.now(UTC))
+        authority = PaperExecutionAuthority(lease_path, lease["token"], lambda: "running")
+        runner = PaperRunner(repo, quote_reader=lambda: dict(QUOTE), clock=lambda: datetime.now(UTC),
+                             admission_adapter=adapter, execution_authority=authority)
+        await runner.admission.bind_execution(owner, account)
+        started = await runner.start(owner, account, RULE, policy)
         check(started["rule_digest"] == RULE["rule_digest"], "runner started with frozen rule")
         entry_receipt, created = await runner.enter(owner, account, QUOTE)
         check(created, "entry staged")
@@ -143,6 +159,8 @@ async def execute(args):
         report_path.write_text(json.dumps(result, indent=2), encoding="utf-8")
         return result
     finally:
+        release_lease(lease_path, lease["token"])
+        lease_directory.cleanup()
         connection.close()
 
 

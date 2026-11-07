@@ -13,14 +13,16 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from scripts.paper_synthetic_fixture import SyntheticPaperComposition, synthetic_policy_body
 from scripts.verify_paper_storage import check, client, refuses, test_database
-from services.agent.paper.execution import new_book
+from services.agent.paper.guarded_repository import GuardedPaperRepository as PaperRepository
 from services.agent.paper.observation_service import PreparedObservationService
-from services.agent.paper.repository import PaperCapacity, PaperConflict, PaperRepository, operation_id
-from services.agent.paper.service import PreparedPaperService
+from services.agent.paper.repository import PaperCapacity, PaperConflict
 from services.agent.paper.valuation import current_observation
 
-NOW = datetime(2026, 9, 25, 14, tzinfo=UTC)
+NOW = datetime.now(UTC)
+POLICY_ID = str(uuid.uuid5(uuid.NAMESPACE_URL, "floww-isolated-observation-fixture"))
+_FRAME_TIMES = {}
 
 
 async def synthetic_check(*_):
@@ -42,12 +44,15 @@ def quote(source="fill-one"):
 
 def frame(sequence=0):
     opened = NOW-timedelta(minutes=30)
+    if sequence not in _FRAME_TIMES:
+        _FRAME_TIMES[sequence] = NOW+timedelta(seconds=sequence) if sequence < 0 else datetime.now(UTC)
+    observed = _FRAME_TIMES[sequence]
     return dict(marks=[dict(contract_id="TEST", currency="USD", source_id=f"mark-{sequence}", bid="109", ask="111",
-                           observed_at=(NOW+timedelta(seconds=sequence)).isoformat(),
-                           received_at=(NOW+timedelta(seconds=sequence)).isoformat())],
+                           observed_at=observed.isoformat(),
+                           received_at=observed.isoformat())],
                 metadata=[dict(contract_id="TEST", product_kind="equity", premium_factor="1", currency="USD",
                                source_id="verified-contract", verified_at=opened.isoformat())],
-                policy=dict(policy_id="explicit-synthetic", mark_method="midpoint", max_mark_age_seconds=60,
+                policy=dict(policy_id=POLICY_ID+":1", mark_method="midpoint", max_mark_age_seconds=60,
                             max_spread="2", daily_loss_limit="50", drawdown_limit="40", max_gross_exposure="1000"),
                 session=dict(session_id="synthetic-session", calendar_version="synthetic-calendar", source_id="session-source",
                              opened_at=opened.isoformat(), closed_at=(NOW+timedelta(hours=6)).isoformat()),
@@ -57,6 +62,7 @@ def frame(sequence=0):
 
 async def execute(args):
     connection = client()
+    compositions = []
     try:
         await connection.admin.command("ping")
         if args.recover:
@@ -79,19 +85,30 @@ async def execute(args):
         owner, account = str(uuid.uuid4()), str(uuid.uuid4())
         checks = []
 
-        async def key(selected=account, repository=repo):
-            doc = await repository.read(owner, selected)
-            return operation_id(doc["version"], epoch=doc["epoch"])
+        async def key(selected=account, repository=repo, *, entry=False):
+            fixture = next(item for item in compositions if item.repository is repository
+                           and getattr(item, "selected", None) == selected)
+            return await fixture.operation(owner, selected, entry=entry)
 
-        async def opened(selected=account, repository=repo):
-            await repository.create(owner, selected, new_book("1000", currency="USD"))
-            fills = PreparedPaperService(repository, admission_check=synthetic_check, clock=lambda: NOW)
-            staged, _ = await fills.stage(owner, selected, await key(selected, repository), parameters(), {})
-            await fills.quote(owner, selected, await key(selected, repository), staged["body"]["order_id"], quote())
+        async def opened(selected=account, repository=repo, *, initial_frame=None):
+            body = synthetic_policy_body(valuation=dict(mark_method="midpoint", max_mark_age_seconds=60, max_spread="2"))
+            body["limits"].update(daily_loss_limit="50", observed_drawdown_limit="40", max_committed_exposure="1000")
+            # Initial risk uses a separately recorded prior mark. The first
+            # manual observation therefore remains a new source observation.
+            fixture = SyntheticPaperComposition(repository, clock=lambda: datetime.now(UTC), quote_reader=quote,
+                        frame_reader=lambda: initial_frame or frame(-1), body=body, policy_id=POLICY_ID)
+            fixture.selected = selected
+            compositions.append(fixture)
+            await fixture.create(owner, selected)
+            fills = fixture.service
+            quantity = 3 if selected == account else 2
+            staged, _ = await fills.stage(owner, selected, await key(selected, repository), parameters(quantity=quantity), {})
+            await fills.quote(owner, selected, await key(selected, repository, entry=True),
+                              staged["body"]["order_id"], {**quote(), "ask_size": 2})
             return fills, staged["body"]["order_id"]
 
         fills, opening = await opened()
-        service = PreparedObservationService(repo, evidence_check=synthetic_check, clock=lambda: NOW)
+        service = PreparedObservationService(repo, evidence_check=synthetic_check, clock=lambda: datetime.now(UTC))
         checks.append(await refuses(PreparedObservationService(repo).record(owner, account, await key(), frame()),
                                      PaperConflict, "default observation admission disabled"))
         checks.append(await refuses(service.record(str(uuid.uuid4()), account, await key(), frame()),
@@ -123,16 +140,21 @@ async def execute(args):
         check(child.returncode == 0, "reopen observation: "+child.stderr)
         checks.append("fresh process reopens exact observation and safely projects pending history")
 
-        staged, _ = await fills.stage(owner, account, await key(), parameters(quantity=1), {})
-        fill_operation = await key()
+        # The already confirmed residual share avoids allocating a second
+        # protected structure under the unchanged 8MiB reservation bound.
+        staged = {"body": {"order_id": opening}}
+        fills.admission.adapter.frame_reader = lambda: frame()
+        fill_operation = await key(entry=True)
         async def fill_during_observation(*_):
             await fills.quote(owner, account, fill_operation, staged["body"]["order_id"], quote("second-fill"))
             return True
-        racing = PreparedObservationService(repo, evidence_check=fill_during_observation, clock=lambda: NOW)
+        racing = PreparedObservationService(repo, evidence_check=fill_during_observation, clock=lambda: datetime.now(UTC))
         checks.append(await refuses(racing.record(owner, account, await key(), frame()), PaperConflict,
                                      "a concurrent fill prevents old-book valuation commit"))
         current = await repo.read(owner, account)
-        check(current_observation(current, now=NOW)["status"] == "stale", "saved marks stale after fill")
+        prior_book = {**current, "state": {**current["state"], "valuation": saved}}
+        check(current_observation(prior_book, now=datetime.now(UTC))["status"] == "stale", "prior book observation stale after fill")
+        check(current_observation(current, now=datetime.now(UTC))["status"] == "current", "new funded risk valuation is current")
         check(current["state"]["cash"] == "697", "fill retained correct cash")
         checks.append("later fill retains its economics and makes earlier observation stale")
 
@@ -145,7 +167,7 @@ async def execute(args):
             doc["state"]["cash"] = "0"
             return True
         frozen_service = PreparedObservationService(repo, evidence_check=mutate_during_check,
-                                                    clock=lambda: NOW+timedelta(seconds=1))
+                                                    clock=lambda: datetime.now(UTC))
         frozen, _ = await frozen_service.record(owner, account, await key(), mutable)
         check(frozen["body"]["observation"]["equity"] == "1027", "frozen mark inputs")
         checks.append("input or checker mutation cannot change saved prices and cash")
@@ -154,40 +176,44 @@ async def execute(args):
         # deduplication path must retain that transition rather than refreshing
         # or returning the earlier known result.
         selected = str(uuid.uuid4())
-        await opened(selected)
         closing_frame = frame()
-        closing_frame["session"]["closed_at"] = (NOW+timedelta(seconds=1)).isoformat()
+        closing_frame["session"]["closed_at"] = (NOW+timedelta(seconds=30)).isoformat()
+        initial_closing_frame = frame(-1)
+        initial_closing_frame["session"] = copy.deepcopy(closing_frame["session"])
+        await opened(selected, initial_frame=initial_closing_frame)
         await service.record(owner, selected, await key(selected), closing_frame)
         after_close = PreparedObservationService(repo, evidence_check=synthetic_check,
-                                                 clock=lambda: NOW+timedelta(seconds=2))
+                                                 clock=lambda: NOW+timedelta(seconds=31))
         doc = await repo.read(owner, selected)
-        check(current_observation(doc, now=NOW+timedelta(seconds=2))["status"] == "stale", "session validity deadline")
+        check(current_observation(doc, now=NOW+timedelta(seconds=31))["status"] == "stale", "session validity deadline")
         changed_status, created = await after_close.record(owner, selected, await key(selected), closing_frame)
         check(created and changed_status["body"]["observation"]["risk"]["limits_passed"] is None,
               "identical sources persist new time-dependent unknown risk")
         checks.append("session close expires saved readiness and identical input saves the unknown transition")
 
         # Genuine event pressure must not spend entry-prepaid exit capacity.
-        bounded = PaperRepository(connection[database], pending_limit=30)
+        bounded = PaperRepository(connection[database], pending_limit=64)
         selected = str(uuid.uuid4())
         bounded_fills, opened_id = await opened(selected, bounded)
         sequence = 0
         while True:
             doc = await bounded.read(owner, selected)
-            if len(doc["pending_events"])+doc["reserve_events"] == 30:
+            if len(doc["pending_events"])+doc["reserve_events"] == 64:
                 break
-            clock = NOW+timedelta(seconds=sequence)
-            observer = PreparedObservationService(bounded, evidence_check=synthetic_check, clock=lambda at=clock: at)
+            observer = PreparedObservationService(bounded, evidence_check=synthetic_check, clock=lambda: datetime.now(UTC))
             await observer.record(owner, selected, await key(selected, bounded), frame(sequence))
             sequence += 1
         before = copy.deepcopy(doc)
         observer = PreparedObservationService(bounded, evidence_check=synthetic_check,
-                                              clock=lambda: NOW+timedelta(seconds=sequence))
+                                              clock=lambda: datetime.now(UTC))
         checks.append(await refuses(observer.record(owner, selected, await key(selected, bounded), frame(sequence)),
                                      PaperCapacity, "observation cannot consume reserved exit capacity"))
         check(await bounded.read(owner, selected) == before, "capacity failure leaves state exact")
-        close_time = NOW+timedelta(seconds=sequence)
-        closing_fills = PreparedPaperService(bounded, admission_check=synthetic_check, clock=lambda: close_time)
+        bounded_fixture = next(item for item in compositions if item.repository is bounded)
+        closing_fills = bounded_fixture.service
+        closing_fills.clock = closing_fills.admission.clock = closing_fills.admission.adapter.clock = lambda: datetime.now(UTC)
+        # Use the exact latest independent observation for the reducing action.
+        closing_fills.admission.adapter.frame_reader = lambda: frame(sequence-1)
         closed, _ = await closing_fills.stage(owner, selected, await key(selected, bounded),
                                               parameters(side="sell", structure_id=opened_id, limit="99"), {})
         await closing_fills.quote(owner, selected, await key(selected, bounded), closed["body"]["order_id"], quote("exit"))
@@ -195,7 +221,7 @@ async def execute(args):
         checks.append("close stage and fill succeed at the cap using their previously reserved space")
 
         selected = str(uuid.uuid4())
-        await repo.create(owner, selected, new_book("1000", currency="USD"))
+        await opened(selected)
         original = await key(selected)
         await repo.accounts.update_one({"owner":owner,"account_id":selected}, {"$set":{"epoch":str(uuid.uuid4())}})
         checks.append(await refuses(service.record(owner, selected, original, frame()), PaperConflict,
@@ -206,6 +232,8 @@ async def execute(args):
         report.write_text(json.dumps(result, indent=2), encoding="utf-8")
         return result
     finally:
+        for composition in compositions:
+            composition.close()
         connection.close()
 
 
