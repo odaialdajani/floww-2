@@ -1,0 +1,14 @@
+{
+  "task_id": "fixture-example",
+  "base_sha": "0000000000000000000000000000000000000000",
+  "workspace": "/private/tmp/REPLACE_WITH_NEW_PRIVATE_FIXTURE/work",
+  "allowed_paths": ["arithmetic.py", "README.md"],
+  "acceptance": "pure-add-v1",
+  "max_generations": 3,
+  "max_output_tokens": 1024,
+  "max_seconds": 90,
+  "max_input_bytes": 65536,
+  "max_output_bytes": 262144,
+  "max_steps": 3,
+  "corrections": 0
+}
