@@ -8,8 +8,18 @@ cases. The deterministic checker does not execute arbitrary model Python.
 
 The typed contract declares a full base SHA, canonical clean workspace, exact
 regular files, bounded generations, steps, correction count, runtime and bytes.
-An exclusive lease blocks concurrent owners; stale leases require review.
-Snapshots reject symlinks/hardlinks and include untracked/deleted paths. A
+An exclusive lease is derived from the canonical workspace, regardless of any
+proposed caller lock path. It uses a retained file and process lock outside the
+checkout. Normal release records `released`; a crash retains `owned`, so a new
+process refuses stale ownership. Cleanup never unlinks the file and never writes
+a replacement inode. Stale or replaced ownership requires review.
+
+Snapshots open every directory component and file through no-follow descriptors.
+They verify regular type, one link, bounded bytes and stable name/descriptor
+identity, size and timestamps before returning. They reject FIFOs, sockets,
+devices, symlinks, hardlinks, concurrent file/directory replacement, ignored and
+untracked files, and undeclared directories. Traversal is capped at 256 entries
+and 262144 total bytes. The arithmetic checker uses the same safe reader. A
 changed head or undeclared path refuses the result. There is no free-form
 acceptance command or model-controlled shell.
 
@@ -27,8 +37,18 @@ plugin is loaded. Dispatch uses a separate session with the exact restrictive
 rules; the permissive overlay is used only for adversarial permission checks.
 
 The worker has no provider credential. A fresh nonce protects one loopback
-gateway route. The gateway rejects other paths, host/origin/auth/encoding/length
-violations, unknown fields, other models and forbidden advertised tools. It
+gateway route. The gateway requires exactly one Host and Authorization header,
+and zero or one Origin header; repeated identical or conflicting values reject
+before transport. Native requests with no Origin remain valid. It rejects other
+paths, host/origin/auth/encoding/length violations, unknown fields and other
+models. It pins the complete edit/read/write catalog, including descriptions,
+required fields, parameter types/properties and schema extras, to the reviewed
+OpenCode 2.2.5 catalog digest
+`67e1bb437fde5c8fc87349ab0e9862442bd66849de8f8a5c33c7404843fc32d2`
+and policy `opencode-2.2.5-pure-add-v1`. Missing, empty, altered, extra, duplicate
+or reordered tools reject. The exact saved catalog and binary digest appear in
+the example's `native_envelope` reference section, separate from its task fields.
+This is an illustration, not a generic JSON task loader. The gateway
 caps the actual outgoing body at 1024 tokens and three total generations,
 refuses duplicate requests, and closes admission after upstream failure. Its
 only external route is one HTTPS POST to

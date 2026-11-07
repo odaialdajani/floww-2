@@ -11,6 +11,7 @@ import argparse
 import ast
 import base64
 import contextlib
+import fcntl
 import hashlib
 import json
 import os
@@ -18,6 +19,7 @@ import re
 import secrets
 import selectors
 import signal
+import stat
 import subprocess
 import tempfile
 import threading
@@ -33,6 +35,8 @@ MODEL = "minimaxai/minimax-m3.1-flash"
 ENDPOINT = "https://integrate.api.nvidia.com/v1/chat/completions"
 BINARY = "/Users/nav/.opencode/bin/opencode"
 BINARY_SHA = "abe4d88594bffb12b364375b8a6732d2d1f7a977195ed1a35c5c76f8e89c9e0e"
+TOOL_POLICY_VERSION = "opencode-2.2.5-pure-add-v1"
+TOOL_CATALOG_SHA256 = "67e1bb437fde5c8fc87349ab0e9862442bd66849de8f8a5c33c7404843fc32d2"
 MANAGED = ("/Library/Application Support/opencode",
            "/Library/Managed Preferences/nav/ai.opencode.managed.plist",
            "/Library/Managed Preferences/ai.opencode.managed.plist")
@@ -91,21 +95,117 @@ def git(workspace, *args):
     return result.stdout.decode()
 
 
-def snapshot(workspace):
+def _identity(info):
+    return (info.st_dev, info.st_ino, info.st_mode, info.st_nlink, info.st_size,
+            info.st_uid, info.st_gid, info.st_mtime_ns, info.st_ctime_ns)
+
+
+def _open_directory(path):
+    """Open every absolute component without following a parent symlink."""
+    path = Path(path)
+    if not path.is_absolute() or ".." in path.parts:
+        raise Refusal("directory path is not absolute and normalized")
+    fd = os.open("/", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        for name in path.parts[1:]:
+            before = os.stat(name, dir_fd=fd, follow_symlinks=False)
+            child = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
+            if _identity(os.fstat(child)) != _identity(before):
+                os.close(child)
+                raise Refusal("directory identity changed while opening")
+            os.close(fd)
+            fd = child
+        return fd
+    except BaseException:
+        os.close(fd)
+        raise
+
+
+def _snapshot_bytes(workspace, allowed_paths=None):
+    """Bounded FD-relative walk; retain descriptors until the consistency check.
+
+    No read follows a symlink, including a swapped parent. Enumeration, open,
+    read and final name/FD identities must agree. Special files never reach read.
+    """
     root = Path(workspace)
-    result = {}
-    for path in root.rglob("*"):
-        rel = path.relative_to(root)
-        if ".git" in rel.parts:
-            continue
-        if path.is_symlink():
-            raise Refusal("symlink refused")
-        if path.is_file():
-            info = path.stat()
-            if info.st_nlink != 1 or info.st_size > 262144:
-                raise Refusal("linked or oversized fixture file")
-            result[str(rel)] = hashlib.sha256(path.read_bytes()).hexdigest()
-    return result
+    result, descriptors, entries = {}, [], []
+    total, count = 0, 0
+    allowed_directories = None if allowed_paths is None else {
+        str(parent) for name in allowed_paths for parent in PurePosixPath(name).parents if str(parent) != "."}
+    try:
+        root_fd = _open_directory(root)
+        descriptors.append(root_fd)
+        root_info = os.fstat(root_fd)
+
+        def walk(directory_fd, prefix):
+            nonlocal total, count
+            directory_before = os.fstat(directory_fd)
+            names = sorted(os.listdir(directory_fd))
+            for name in names:
+                count += 1
+                if count > 256:
+                    raise Refusal("snapshot entry cap")
+                before = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+                if not prefix and name == ".git":
+                    if not (stat.S_ISREG(before.st_mode) or stat.S_ISDIR(before.st_mode)):
+                        raise Refusal("nonregular Git metadata")
+                    continue
+                relative = prefix + name
+                if stat.S_ISDIR(before.st_mode):
+                    if allowed_directories is not None and relative not in allowed_directories:
+                        raise Refusal("undeclared fixture directory")
+                    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+                elif stat.S_ISREG(before.st_mode) and before.st_nlink == 1 and before.st_size <= 262144:
+                    flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
+                else:
+                    raise Refusal("nonregular, linked or oversized fixture entry")
+                fd = os.open(name, flags, dir_fd=directory_fd)
+                descriptors.append(fd)
+                opened = os.fstat(fd)
+                if _identity(opened) != _identity(before):
+                    raise Refusal("snapshot entry identity changed while opening")
+                entries.append((directory_fd, name, fd, _identity(opened)))
+                if stat.S_ISDIR(opened.st_mode):
+                    walk(fd, relative + "/")
+                else:
+                    chunks = []
+                    size = 0
+                    while True:
+                        block = os.read(fd, min(65536, 262145 - size))
+                        if not block:
+                            break
+                        size += len(block)
+                        total += len(block)
+                        if size > 262144 or total > 262144:
+                            raise Refusal("snapshot byte cap")
+                        chunks.append(block)
+                    if size != opened.st_size or _identity(os.fstat(fd)) != _identity(opened):
+                        raise Refusal("snapshot file changed during read")
+                    result[relative] = b"".join(chunks)
+            if sorted(os.listdir(directory_fd)) != names or _identity(os.fstat(directory_fd)) != _identity(directory_before):
+                raise Refusal("snapshot directory changed during walk")
+
+        walk(root_fd, "")
+        # Reopen the absolute root without following any replacement parent.
+        current_root = _open_directory(root)
+        descriptors.append(current_root)
+        if _identity(os.fstat(current_root)) != _identity(root_info):
+            raise Refusal("snapshot workspace identity changed")
+        for parent_fd, name, fd, identity in entries:
+            if (_identity(os.fstat(fd)) != identity
+                    or _identity(os.stat(name, dir_fd=parent_fd, follow_symlinks=False)) != identity):
+                raise Refusal("snapshot entry changed after read")
+        return result
+    except OSError as exc:
+        raise Refusal("snapshot no-follow filesystem check refused") from exc
+    finally:
+        for fd in reversed(descriptors):
+            os.close(fd)
+
+
+def snapshot(workspace, allowed_paths=None):
+    return {name: hashlib.sha256(data).hexdigest()
+            for name, data in _snapshot_bytes(workspace, allowed_paths).items()}
 
 
 def validate_workspace(contract):
@@ -119,43 +219,101 @@ def validate_workspace(contract):
         raise Refusal("workspace head mismatch")
     if git(root, "status", "--porcelain", "--untracked-files=all"):
         raise Refusal("dirty workspace")
-    files = snapshot(root)
+    files = snapshot(root, contract.allowed_paths)
     if set(files) != set(contract.allowed_paths):
         raise Refusal("fixture contains undeclared files")
     return files
 
 
 class WorkspaceLease:
-    """Exclusive lease outside the checkout; stale ownership requires review."""
+    """Canonical workspace lease; retained crash markers require manual review.
 
-    def __init__(self, contract, path):
-        self.contract, self.path, self.identity = contract, Path(path), None
+    proposed_path is retained for call compatibility but has no lock authority.
+    The canonical file persists after release, avoiding check-then-unlink races.
+    """
+
+    def __init__(self, contract, proposed_path=None):
+        self.contract = contract
+        root = Path(contract.workspace)
+        digest = hashlib.sha256(str(root).encode()).hexdigest()
+        self.path = root.parent / (".floww-coding-lease-" + digest)
+        self.fd, self.parent_fd, self.identity = None, None, None
+        self.token = secrets.token_hex(32)
+
+    def _current(self):
+        if self.fd is None:
+            return False
+        try:
+            info = os.stat(self.path.name, dir_fd=self.parent_fd, follow_symlinks=False)
+            return (info.st_dev, info.st_ino) == self.identity
+        except FileNotFoundError:
+            return False
+
+    def _write(self, status):
+        body = json.dumps({"status": status, "token": self.token, "pid": os.getpid(),
+                           "workspace": self.contract.workspace, "task": self.contract.task_id,
+                           "base_sha": self.contract.base_sha}).encode()
+        os.lseek(self.fd, 0, os.SEEK_SET)
+        os.ftruncate(self.fd, 0)
+        os.write(self.fd, body)
+        os.fsync(self.fd)
 
     def __enter__(self):
         self.before = validate_workspace(self.contract)
         try:
-            fd = os.open(self.path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        except FileExistsError as exc:
-            raise Refusal("workspace owned") from exc
-        with os.fdopen(fd, "w") as handle:
-            self.identity = os.fstat(handle.fileno()).st_ino
-            json.dump({"pid": os.getpid(), "task": self.contract.task_id,
-                       "workspace": self.contract.workspace, "base_sha": self.contract.base_sha}, handle)
-        try:
+            self.parent_fd = _open_directory(self.path.parent)
+            created = False
+            try:
+                self.fd = os.open(self.path.name, os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                                  0o600, dir_fd=self.parent_fd)
+                created = True
+            except FileExistsError:
+                self.fd = os.open(self.path.name, os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=self.parent_fd)
+            info = os.fstat(self.fd)
+            self.identity = (info.st_dev, info.st_ino)
+            if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_size > 4096 or info.st_uid != os.getuid()
+                    or info.st_mode & 0o077 or not self._current()):
+                raise Refusal("workspace ownership file refused")
+            try:
+                fcntl.flock(self.fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError as exc:
+                raise Refusal("workspace owned") from exc
+            if not created:
+                previous = os.read(self.fd, 4097)
+                try:
+                    previous = json.loads(previous)
+                except ValueError as exc:
+                    raise Refusal("workspace owned or stale") from exc
+                if (not isinstance(previous, dict) or previous.get("status") != "released"
+                        or previous.get("workspace") != self.contract.workspace):
+                    raise Refusal("workspace owned or stale")
+            self._write("owned")
             if validate_workspace(self.contract) != self.before:
                 raise Refusal("workspace changed during admission")
         except BaseException:
-            self.__exit__(None, None, None)
+            # A partially admitted/crashed owner remains parked, never reclaimed.
+            self._close()
             raise
         return self
 
     def __exit__(self, *_):
-        if self.identity is not None and self.path.exists() and self.path.lstat().st_ino == self.identity:
-            self.path.unlink()
+        try:
+            if self._current():
+                self._write("released")
+        finally:
+            self._close()
+
+    def _close(self):
+        if self.fd is not None:
+            os.close(self.fd)
+            self.fd = None
+        if self.parent_fd is not None:
+            os.close(self.parent_fd)
+            self.parent_fd = None
 
 
 def changed_paths(workspace, before, contract):
-    after = snapshot(workspace)
+    after = snapshot(workspace, contract.allowed_paths)
     changed = sorted(p for p in set(before) | set(after) if before.get(p) != after.get(p))
     if not set(changed) <= set(contract.allowed_paths):
         raise Refusal("changed path outside scope")
@@ -166,7 +324,7 @@ def changed_paths(workspace, before, contract):
 
 def check_pure_add(workspace):
     """Check a closed expression grammar before executing; no model code imports."""
-    source = (Path(workspace) / "arithmetic.py").read_text()
+    source = _snapshot_bytes(workspace)["arithmetic.py"].decode()
     if len(source.encode()) > 4096:
         raise Refusal("checker source too large")
     try:
@@ -221,17 +379,12 @@ class RequestGate:
             tools = body.get("tools", [])
             if not isinstance(tools, list):
                 raise Refusal("tool catalog malformed")
-            self.observed_catalogs.append([t.get("function", {}).get("name") if isinstance(t, dict) else None for t in tools])
-            names = []
-            for tool in tools:
-                if not isinstance(tool, dict) or tool.get("type") != "function":
-                    raise Refusal("tool catalog refused")
-                name = tool.get("function", {}).get("name")
-                if name not in ("read", "edit", "write"):
-                    raise Refusal("forbidden tool advertised")
-                names.append(name)
-            if len(names) != len(set(names)):
-                raise Refusal("duplicate tool catalog")
+            canonical = json.dumps(tools, sort_keys=True, separators=(",", ":")).encode()
+            catalog_sha = hashlib.sha256(canonical).hexdigest()
+            if catalog_sha != TOOL_CATALOG_SHA256:
+                raise Refusal("unreviewed native tool catalog or schema")
+            names = [tool["function"]["name"] for tool in tools]
+            self.observed_catalogs.append(names)
             result = dict(body)
             native_cap = result.pop("max_completion_tokens", result.get("max_tokens"))
             result["max_tokens"] = self.contract.max_output_tokens
@@ -239,6 +392,8 @@ class RequestGate:
             self.receipts.append({"attempt": len(self.receipts) + 1, "model": MODEL,
                                   "endpoint": ENDPOINT, "input_bytes": len(raw), "request_sha256": digest,
                                   "tools": names, "tool_schema": tools,
+                                  "tool_catalog_sha256": catalog_sha, "tool_policy_version": TOOL_POLICY_VERSION,
+                                  "native_binary_sha256": BINARY_SHA,
                                   "native_max_tokens": native_cap,
                                   "upstream_max_tokens": result["max_tokens"]})
             return result
@@ -312,6 +467,10 @@ class Gateway:
                 try:
                     if self.client_address[0] != "127.0.0.1":
                         raise Refusal("client refused")
+                    if (len(self.headers.get_all("Host", [])) != 1
+                            or len(self.headers.get_all("Authorization", [])) != 1
+                            or len(self.headers.get_all("Origin", [])) > 1):
+                        raise Refusal("security header cardinality refused")
                     if (self.path != "/" + owner.nonce + "/v1/chat/completions"
                             or self.headers.get("Host") != "127.0.0.1:" + str(owner.server.server_port)
                             or self.headers.get("Origin") not in (None, owner.origin)
