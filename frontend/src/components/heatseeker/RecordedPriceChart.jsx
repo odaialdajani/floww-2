@@ -5,6 +5,7 @@ import {volumeProfile} from './chart/indicators/profile';
 import { profileConfig, tpoConfig } from './chart/indicators/paneStudies';
 import './chart/stock-chrome.css';
 import './RecordedPriceChart.css';
+import './chart/PremiumStock.css';
 const price=value=>Number.isFinite(value)?value.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'Unavailable';
 const bound=(value,low,high)=>Math.max(low,Math.min(high,value));
 const axisTime=value=>new Date(value).toLocaleString('en-US',{timeZone:'America/New_York',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false});
@@ -14,7 +15,7 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
  const data=useMemo(()=>checkedCandles(frames),[frames]);
  const premiumCloses=useMemo(()=>contractClosesForFrames(data,contractBars),[data,contractBars]);
  const surface=useRef(null),pointers=useRef(new Map()),gesture=useRef(null),previousLength=useRef(0);
- const [size,setSize]=useState({width:800,height:480});
+ const [size,setSize]=useState({width:800,height:480,readoutHeight:0});
  const [view,setView]=useState(()=>({start:Math.max(0,data.length-80),count:80}));
  const [manualPrice,setManualPrice]=useState(null),[hover,setHover]=useState(null),[metrics,setMetrics]=useState(['gex','vex','charm']),[allNodes,setAllNodes]=useState(false);
  // UI-05 real fit: when the caller hands a fit-all history set, the price
@@ -53,7 +54,7 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
   // focus fold — update this box with NO window event, so the per-render rAF
   // below catches them the next frame (root-caused live: the surface read 865
   // while the candles stayed drawn at 1175 until a resize event).
-  const measure=()=>{const r=element.getBoundingClientRect();if(r.width>0&&r.height>0)setSize(prev=>(Math.abs(prev.width-r.width)<0.5&&Math.abs(prev.height-r.height)<0.5)?prev:{width:r.width,height:r.height});};
+  const measure=()=>{const r=element.getBoundingClientRect(),readoutHeight=element.querySelector('[data-testid="chart-reading-row"]')?.offsetHeight||0;if(r.width>0&&r.height>0)setSize(prev=>(Math.abs(prev.width-r.width)<0.5&&Math.abs(prev.height-r.height)<0.5&&prev.readoutHeight===readoutHeight)?prev:{width:r.width,height:r.height,readoutHeight});};
   measure();const observer=typeof ResizeObserver==='function'?new ResizeObserver(measure):null;observer?.observe(element);
   window.addEventListener('resize',measure);
   const raf=requestAnimationFrame(measure);
@@ -66,7 +67,7 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
  const range=manualPrice||priceRange(fitData&&fitData.length?fitData:visible,fitData&&fitData.length?fitLevels:allLevels),selected=visible[hover??Math.max(0,visible.length-1)];
  const selectedLevels=savedLevels(selected,metrics,allNodes);
  const availableMetrics=useMemo(()=>Object.keys(NODE_LABELS).filter(metric=>metricCoverage?.[metric]?.checked_candles>0||data.some(frame=>savedLevels(frame,[metric],true).length)),[data,metricCoverage]);
- const left=12,right=Math.max(left+1,size.width-76),top=16,bottom=Math.max(top+1,size.height-38),plotWidth=right-left,plotHeight=bottom-top;
+ const left=12,right=Math.max(left+1,size.width-76),top=Math.max(16,size.readoutHeight+10),bottom=Math.max(top+1,size.height-38),plotWidth=right-left,plotHeight=bottom-top;
  const spacing=plotWidth/Math.max(1,visible.length),y=value=>bottom-(value-range.low)/(range.high-range.low)*plotHeight;
  const notify=()=>onInteract?.();
  const point=event=>{const r=surface.current.getBoundingClientRect();return {x:(event.clientX-r.left)*size.width/r.width,y:(event.clientY-r.top)*size.height/r.height};};
@@ -239,10 +240,10 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
   </div>
   {!!data.length?<div ref={surface} className="recorded-chart-surface" role="region" aria-label={ticker+' candle chart'} aria-describedby={'chart-help-'+id} tabIndex={0} onKeyDown={keyboard} onPointerDown={begin} onPointerMove={move} onPointerUp={end} onPointerCancel={end} onPointerLeave={()=>{if(!pointers.current.size)setHover(null);}}>
   {/* the OHLC readout rides the CANVAS top-left as an overlay — off the command row so the row stays ONE compact line. */}
-        <div className="recorded-chart-readout-overlay" aria-live="off" data-testid="chart-reading-row"><strong>{selected?chartTime(selected.time,true):'Waiting for a candle'} <span>New York</span></strong>{selected&&<span>Open <b>{price(selected.open)}</b> High <b>{price(selected.high)}</b> Low <b>{price(selected.low)}</b> Close <b>{price(selected.close)}</b></span>}<details className="recorded-chart-popover recorded-chart-data"><summary role="button" aria-label="Chart data details">{readingStatus}</summary><div className="recorded-chart-popover-content">{dataDetails||<p>Prices and lines use their own stored times. Missing readings remain unavailable.</p>}<button type="button" onClick={event=>closeDetails(event.currentTarget)}>Close data details</button></div></details></div>
+        <div className="recorded-chart-readout-overlay" aria-live="off" data-testid="chart-reading-row"><strong>{selected?chartTime(selected.time,true):'Waiting for a candle'} <span>New York</span></strong>{selected&&<span className="recorded-chart-ohlc"><span>Open <b>{price(selected.open)}</b></span><span>High <b>{price(selected.high)}</b></span><span>Low <b>{price(selected.low)}</b></span><span>Close <b>{price(selected.close)}</b></span></span>}<details className="recorded-chart-popover recorded-chart-data"><summary role="button" aria-label="Chart data details" title={readingStatus}>{readingStatus}</summary><div className="recorded-chart-popover-content">{dataDetails||<p>Prices and lines use their own stored times. Missing readings remain unavailable.</p>}<button type="button" onClick={event=>closeDetails(event.currentTarget)}>Close data details</button></div></details></div>
    <svg viewBox={'0 0 '+size.width+' '+size.height} aria-label={ticker+' recorded price candles'} role="img">
     <defs><clipPath id={'chart-clip-'+id}><rect x={left} y={top} width={plotWidth} height={plotHeight}/></clipPath></defs>
-    {Array.from({length:6},(_,i)=>{const level=range.high-(range.high-range.low)*i/5,yy=y(level);return <g key={i}><line x1={left} x2={right} y1={yy} y2={yy} stroke="#27313c" strokeWidth="1"/><text x={right+10} y={yy+4} className="recorded-price-label">{price(level)}</text></g>;})}
+    {Array.from({length:6},(_,i)=>{const level=range.high-(range.high-range.low)*i/5,yy=y(level);return <g key={i}><line x1={left} x2={right} y1={yy} y2={yy} stroke="var(--border, #282828)" strokeWidth="1"/><text x={right+10} y={yy+4} className="recorded-price-label">{price(level)}</text></g>;})}
     <g clipPath={'url(#chart-clip-'+id+')'}>
      {visible.map((frame,index)=>{const center=left+(index+0.5)*spacing,up=frame.close>=frame.open,width=Math.max(1,Math.min(14,spacing*0.65)),bodyTop=y(Math.max(frame.open,frame.close)),bodyHeight=Math.max(1,Math.abs(y(frame.open)-y(frame.close)));return <g key={frame.time} className={up?'recorded-candle-up':'recorded-candle-down'} data-testid="price-candle"><title>{chartTime(frame.time,true)+' New York. Open '+price(frame.open)+', high '+price(frame.high)+', low '+price(frame.low)+', close '+price(frame.close)}</title><line x1={center} x2={center} y1={y(frame.high)} y2={y(frame.low)} stroke="currentColor" strokeWidth="1.5"/><rect x={center-width/2} y={bodyTop} width={width} height={bodyHeight} fill="currentColor"/></g>;})}
      {visible.flatMap((frame,index)=>savedLevels(frame,metrics,allNodes).map((node,n)=>{const seconds=typeof frame.duration_seconds==='number'&&frame.duration_seconds>0?frame.duration_seconds:60,fraction=Math.min(seconds,Math.max(0,900-(node.age_seconds??frame.node_age_seconds)))/seconds;
@@ -302,21 +303,27 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
         const inVa=va&&r.price>=va.low&&r.price<=va.high;
         return <rect key={'vp:'+ri} data-testid={isPoc?'profile-poc':(inVa?'profile-va-row':'profile-row')} x={bx+(bw-Math.max(1,(r.volume/peak)*bw))} y={y(r.price)-2} width={Math.max(1,(r.volume/peak)*bw)} height={4} fill={isPoc?'#e8bd65':(inVa?'#72a3c9':'#5a6b7d')} opacity={isPoc?0.95:0.6}><title>{'Volume '+price(r.price)+': '+Math.round(r.volume).toLocaleString('en-US')+' shares'+(inVa&&!isPoc?' · value area':'')}</title></rect>;})}
        {prof.facts&&<g data-testid="profile-facts">
-        <text x={bx} y={y(prof.facts.poc.price)-6} fill="#e8bd65" fontSize="10" data-testid="profile-fact-poc">POC {price(prof.facts.poc.price)}</text>
-        <text x={bx} y={y(prof.facts.vah)-16} fill="#72a3c9" fontSize="10" data-testid="profile-fact-vah">VAH {price(prof.facts.vah)}</text>
-        <text x={bx} y={y(prof.facts.val)+8} fill="#72a3c9" fontSize="10" data-testid="profile-fact-val">VAL {price(prof.facts.val)}</text>
+        <text x={right-6} textAnchor="end" y={y(prof.facts.poc.price)-6} fill="#e8bd65" fontSize="10" data-testid="profile-fact-poc">POC {price(prof.facts.poc.price)}</text>
+        <text x={right-6} textAnchor="end" y={y(prof.facts.vah)-16} fill="#72a3c9" fontSize="10" data-testid="profile-fact-vah">VAH {price(prof.facts.vah)}</text>
+        <text x={right-6} textAnchor="end" y={y(prof.facts.val)+8} fill="#72a3c9" fontSize="10" data-testid="profile-fact-val">VAL {price(prof.facts.val)}</text>
        </g>}</g>;})()}
       {showAtlas&&paneCfg&&(()=>{ // C124-126: bar-resolution TPO — REAL plotted period boxes + typed refusals
        const cfgT=paneCfg.tpo;
        const epochBars=visible.map(f=>{const ms=Date.parse(f.time);return Number.isFinite(ms)?{...f,time:ms}:null;}).filter(Boolean);
        const tpo=tpoConfig(epochBars,{mode:cfgT?.mode??'bar-resolution',periodMinutes:cfgT?.periodMinutes??30});
        if(tpo.status!=='ok')return <g data-testid="tpo-refused"><text x={left} y={top+26} fill="#d65656" fontSize="11" data-testid="tpo-refusal-text">{tpo.reason}</text></g>;
-       const colW=Math.max(3,10), tbx=Math.max(left,right-140);
+       // Fit every admitted period into its own bounded band, separate from
+       // the volume profile at the right edge. A fixed 10px column clipped
+       // most periods whenever the visible history contained more than 14.
+       const bandRight=Math.max(left+1,right-Math.min(84,plotWidth*0.18));
+       const bandWidth=Math.min(180,Math.max(1,(bandRight-left)*0.3));
+       const tbx=bandRight-bandWidth,colW=bandWidth/Math.max(1,tpo.periods.length);
+       const sessionFacts=tpo.sessionFacts?'TPO '+(cfgT?.periodMinutes??30)+'m · session '+price(tpo.sessionFacts.high)+'/'+price(tpo.sessionFacts.low)+' · '+tpo.periods.length+' periods · bar-resolution (tick-true needs the admitted tape)':null;
        return <g data-testid="tpo-context"><title>{'Bar-resolution TPO approximation · '+tpo.note}</title>
         {tpo.periods.map((p,pi)=>{const py0=y(p.high),py1=y(p.low);
          if(!Number.isFinite(py0)||!Number.isFinite(py1))return null;
-         return <rect key={'tpo:'+pi} data-testid="tpo-period-box" x={tbx+colW*pi+2} y={Math.min(py0,py1)} width={colW-2} height={Math.max(2,Math.abs(py1-py0))} fill="#7d6ac0" opacity="0.5"><title>{'Period '+p.letter+' · '+axisTime(p.start)+' New York · '+price(p.high)+'/'+price(p.low)+' · '+tpo.approximation}</title></rect>;})}
-        {tpo.sessionFacts&&<text x={tbx} y={top+38} fill="#7d6ac0" fontSize="10" data-testid="tpo-session-facts">{'TPO '+(cfgT?.periodMinutes??30)+'m · session '+price(tpo.sessionFacts.high)+'/'+price(tpo.sessionFacts.low)+' · '+(tpo.periods.length)+' periods · bar-resolution (tick-true needs the admitted tape)'}</text>}
+         return <rect key={'tpo:'+pi} data-testid="tpo-period-box" x={tbx+colW*(pi+0.1)} y={Math.min(py0,py1)} width={colW*0.8} height={Math.max(2,Math.abs(py1-py0))} fill="#7d6ac0" opacity="0.5"><title>{'Period '+p.letter+' · '+axisTime(p.start)+' New York · '+price(p.high)+'/'+price(p.low)+' · '+tpo.approximation}</title></rect>;})}
+        {sessionFacts&&<text x={bandRight} y={top+14} textAnchor="end" fill="#9c8ac7" fontSize="11" data-testid="tpo-session-facts"><title>{sessionFacts}</title>{'TPO '+(cfgT?.periodMinutes??30)+'m · '+tpo.periods.length+' bar periods'}</text>}
        </g>;})()}
       {hover!==null&&selected&&<g data-export-layer="crosshair"><line x1={left+(hover+0.5)*spacing} x2={left+(hover+0.5)*spacing} y1={top} y2={bottom} stroke="#a8b3be" strokeDasharray="3 4"/><line x1={left} x2={right} y1={y(selected.close)} y2={y(selected.close)} stroke="#a8b3be" strokeDasharray="3 4"/></g>}
     </g>
