@@ -255,3 +255,5 @@ html .legacy-theme button.tv-subtab.tv-subtab.on {
   border-radius: 5px;
   min-height: 30px;
 }
+
+.tv-root .tv-retry:disabled { opacity: 0.55; cursor: default; }
