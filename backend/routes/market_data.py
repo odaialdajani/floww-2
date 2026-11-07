@@ -98,14 +98,13 @@ async def list_all_tickers(
     refresh: bool = Query(False),
 ):
     """Provider stock/fund catalog; custom scan lists do not restrict browsing."""
-    from services.market_catalog import get_catalog
+    from services.market_catalog import get_catalog_page
 
-    catalog = await get_catalog(refresh=refresh)
-    symbols = [row["symbol"] for row in catalog["instruments"]]
-    start = (page - 1) * limit
-    return {**{k: v for k, v in catalog.items() if k != "instruments"},
-            "tickers": symbols[start:start + limit], "page": page, "limit": limit,
-            "has_more": start + limit < len(symbols), "cached": True}
+    result = await get_catalog_page(page=page, limit=limit, refresh=refresh)
+    result["tickers"] = [row["symbol"] for row in result.pop("instruments")]
+    result.pop("matches")
+    result["cached"] = True
+    return result
 
 
 @router.get("/heatmap/{ticker}")

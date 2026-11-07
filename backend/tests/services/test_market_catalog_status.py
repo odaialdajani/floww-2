@@ -83,12 +83,54 @@ def test_catalogue_preserves_only_supplied_sector_labels():
 
 @pytest.mark.asyncio
 async def test_catalogue_filter_keeps_full_count_and_matches_only_supplied_sector(monkeypatch):
-    async def fake():
+    async def fake(*, refresh=False):
         return {"total": 3, "optionable_total": 2, "instruments": [
             {"symbol": "AMD", "options": True, "sector": "Technology"},
             {"symbol": "SPY", "options": True, "sector": None},
             {"symbol": "BOND", "options": False, "sector": "Finance"}]}
-    monkeypatch.setattr(routes, "get_catalog", fake)
+    monkeypatch.setattr(catalog, "_catalog_snapshot", fake)
     result = await routes.catalog_page(page=1, limit=30, q="", options_only=True, sector="Technology")
     assert result["total"] == 3 and result["matches"] == 1
     assert [row["symbol"] for row in result["instruments"]] == ["AMD"]
+
+
+@pytest.mark.asyncio
+async def test_large_directory_routes_copy_only_the_page_and_share_refresh(monkeypatch):
+    from unittest.mock import AsyncMock
+
+    from routes import market_data
+
+    records = [
+        {"instrument": {"symbol": f"X{index:05}", "type": "EQUITY"},
+         "optionTrading": "BUY_AND_SELL" if index % 2 else "DISABLED"}
+        for index in range(30_000)
+    ]
+    fetch = AsyncMock(return_value=records)
+    monkeypatch.setattr(catalog, "_fetch_instruments", fetch)
+    monkeypatch.setattr(catalog, "_cache", None)
+    monkeypatch.setattr(catalog, "_loaded_at", 0.0)
+    monkeypatch.setattr(catalog, "_retry_at", 0.0)
+    deepcopy = catalog.copy.deepcopy
+    copy_sizes = []
+
+    def tracked_copy(value):
+        if isinstance(value, dict) and "instruments" in value:
+            copy_sizes.append(len(value["instruments"]))
+        elif isinstance(value, list):
+            copy_sizes.append(len(value))
+        return deepcopy(value)
+
+    monkeypatch.setattr(catalog.copy, "deepcopy", tracked_copy)
+    page = await routes.catalog_page(page=2, limit=100, q=" x ", options_only=True, sector="")
+    symbols = await market_data.list_all_tickers(page=3, limit=100, refresh=False)
+    assert page["total"] == symbols["total"] == 30_000
+    assert page["matches"] == page["optionable_total"] == 15_000
+    assert page["asof"] == symbols["asof"] and page["has_more"] and symbols["has_more"]
+    assert page["instruments"][0]["symbol"] == "X00201"
+    assert symbols["tickers"][0] == "X00200" and len(symbols["tickers"]) == 100
+    assert max(copy_sizes, default=0) <= 100
+    fetch.assert_awaited_once()
+
+    page["instruments"][0]["symbol"] = "mutated"
+    again = await routes.catalog_page(page=2, limit=100, q="X", options_only=True, sector="")
+    assert again["instruments"][0]["symbol"] == "X00201"
