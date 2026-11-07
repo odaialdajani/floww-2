@@ -570,11 +570,6 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
             </button>
             {replayId && !replayDisplay && <button type="button" onClick={() => onReplayDisplay(null)}>Leave recorded observation · Live</button>}
           </div>
-          {!inspectorOpen && !cell && !selectedWall && (
-            <span className="triad-selection-cue" data-testid="triad-selection-cue" role="status">
-              Select a strike or wall to open its inspector
-            </span>
-          )}
           <div className="triad-mobile-switch"><button onClick={() => setMobilePane("raw")}>Raw</button><button onClick={() => setMobilePane("adjusted")}>Adjusted</button></div>
         </div>
         <div className="tdk-head-sub">
@@ -593,6 +588,11 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
             {loadedExpiries.invalid > 0 && ` · ${loadedExpiries.invalid} invalid expiry value${loadedExpiries.invalid === 1 ? "" : "s"} excluded — not complete`}
           </span>
           <MarketObservationLine replay={isReplay} data={payload} quality={quality} />
+          {!inspectorOpen && !cell && !selectedWall && (
+            <span className="triad-selection-cue" data-testid="triad-selection-cue" role="status">
+              Select a strike or wall to open its inspector
+            </span>
+          )}
         </div>
       </header>
       {payload?.scope_selection?.status === "unavailable" && <div role="status" data-testid="triad-empty-scope" className="triad-band-note">No listed expiry in the server's 30-day bound — no substitution made.</div>}
