@@ -4,6 +4,36 @@
 // per-instrument sync resolution and a top-level panesReducer for the mounted
 // pane manager. All B06-era helper semantics are preserved verbatim.
 export const LINK_DIMS = ['interval', 'crosshair', 'time', 'price', 'session'];
+// Visibility is separate from data/scope links. Unknown keys and non-booleans
+// refuse the whole transaction, so a settings event cannot carry market facts.
+export const DEFAULT_PANE_SETTINGS = Object.freeze({ vwap: true, bands: false, profile: true, cvd: true, volume: true });
+export function cleanPaneSettings(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const keys = Object.keys(value);
+  if (!keys.length || keys.some(key => !Object.prototype.hasOwnProperty.call(DEFAULT_PANE_SETTINGS, key)
+    || typeof value[key] !== 'boolean')) return null;
+  return Object.fromEntries(keys.map(key => [key, value[key]]));
+}
+
+export function applyPaneSettings(panes, states, binding, epoch, value, linked) {
+  const origin = binding && panes.find(pane => pane.id === binding.id);
+  if (!origin || binding.epoch !== epoch || origin.symbol !== binding.symbol
+    || origin.generation !== binding.generation || origin.focused !== binding.focused) return states;
+  // React setters also accept functional updates (the Indicators hide/show
+  // controls use them). Resolve only after ownership checks and against the
+  // latest state, not the value captured by an earlier pane render.
+  const currentSettings = { ...DEFAULT_PANE_SETTINGS, ...cleanPaneSettings(states[origin.id]?.settings) };
+  const settings = cleanPaneSettings(typeof value === 'function' ? value(currentSettings) : value);
+  if (!settings) return states;
+  const next = { ...states };
+  for (const pane of panes) {
+    if (pane.id !== origin.id && !linked) continue;
+    const current = states[pane.id] || {};
+    next[pane.id] = { ...current, settings: { ...DEFAULT_PANE_SETTINGS, ...cleanPaneSettings(current.settings), ...settings } };
+  }
+  return next;
+}
+
 export const LAYOUT_PRESETS = [
   { id: 'single', panes: 1 },
   { id: 'split', panes: 2 },
