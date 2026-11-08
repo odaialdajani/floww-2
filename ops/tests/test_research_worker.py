@@ -708,17 +708,73 @@ class WireTests(unittest.TestCase):
         after = real_marker.stat()
         self.assertEqual((before.st_ino, before.st_mtime_ns), (after.st_ino, after.st_mtime_ns))
 
-    def test_native_rejection_fixture_is_exercised_without_model_or_network(self):
-        interpreter = Path('/Users/nav/.hermes/tools/python-3.14.9+20261021-darwin-arm64/bin/python3')
-        if not interpreter.exists():
-            self.fail('Native commissioned interpreter missing')
-        result = subprocess.run([str(interpreter), '-I', str(OPS / 'research_native_role.py'), '--self-test'],
-                                capture_output=True, timeout=20)
+    def guarded_selftest(self, interpreter):
+        # Independent outer guard records attempted effects before allowing the
+        # helper to install its own guard; success must still use native fixture.
+        wrapper = r"""
+import json, os, runpy, sys
+from pathlib import Path
+root = Path('/Users/nav/.hermes')
+allowed = (root / 'hermes-agent', Path(sys.prefix), Path(sys.base_prefix))
+events = []
+def audit(event, args):
+    if event in ('subprocess.Popen', 'os.system', 'os.exec', 'os.spawn', 'socket.connect', 'socket.getaddrinfo'):
+        events.append(event)
+        raise RuntimeError('test_denied_effect')
+    if event in ('open', 'os.remove', 'os.rename', 'os.mkdir', 'os.rmdir', 'os.chmod'):
+        for value in args[:2] if event == 'os.rename' else args[:1]:
+            if not isinstance(value, (str, bytes, os.PathLike)):
+                continue
+            path = Path(os.fsdecode(value)).resolve()
+            if path.name.startswith('hermes_bootstrap.') and path.is_relative_to(root / 'hermes-agent'):
+                events.append('bootstrap_source_access')
+                raise RuntimeError('test_denied_bootstrap')
+            if path.is_relative_to(root):
+                writing = event != 'open' or args[2] & (os.O_WRONLY | os.O_RDWR | os.O_CREAT | os.O_TRUNC)
+                if writing or not any(path.is_relative_to(p.resolve()) for p in allowed):
+                    events.append(event + ':private:' + str(path.relative_to(root)))
+                    raise RuntimeError('test_denied_private')
+sys.addaudithook(audit)
+sys.argv = [sys.argv[1], '--self-test']
+try:
+    runpy.run_path(sys.argv[0], run_name='__main__')
+except SystemExit as exc:
+    status = exc.code
+except BaseException as exc:
+    status = type(exc).__name__
+os.write(1, (json.dumps({'guard_events': events, 'exit_status': status, 'bootstrap_source_loaded': getattr(sys.modules.get('hermes_bootstrap'), '__file__', None) is not None, 'native_rejection_loaded': 'agent.turn_tool_round' in sys.modules}) + '\n').encode())
+"""
+        with tempfile.TemporaryDirectory() as folder:
+            script = Path(folder) / 'guarded.py'
+            script.write_text(wrapper)
+            return subprocess.run([str(interpreter), '-I', str(script), str(OPS / 'research_native_role.py')],
+                                  capture_output=True, timeout=20)
+
+    def test_guarded_selftest_uses_native_fixture_without_production_or_bootstrap_effects(self):
+        result = self.guarded_selftest(worker.OFFLINE_PYTHON)
         self.assertEqual(result.returncode, 0, result.stderr[:200])
-        proof = json.loads(result.stdout)
+        lines = list(map(json.loads, result.stdout.splitlines()))
+        self.assertEqual(lines[-1]['guard_events'], [])
+        self.assertFalse(lines[-1]['bootstrap_source_loaded'])
+        self.assertTrue(lines[-1]['native_rejection_loaded'])
+        self.assertEqual(lines[-1]['exit_status'], 0)
+        proof = lines[0]
         self.assertTrue(proof['all_passed'])
         self.assertEqual(proof['executor_calls'], 0)
         self.assertEqual(proof['models_called'], 0)
+        self.assertEqual(proof['cases'], 7)
+
+    def test_selftest_without_installed_dependencies_refuses_without_implicit_install(self):
+        result = self.guarded_selftest(worker.NATIVE_PYTHON)
+        self.assertEqual(result.returncode, 0, result.stderr[:200])
+        lines = list(map(json.loads, result.stdout.splitlines()))
+        self.assertEqual(lines[-1]['guard_events'], [])
+        self.assertEqual(lines[-1]['exit_status'], 1)
+        self.assertFalse(lines[-1]['bootstrap_source_loaded'])
+        self.assertFalse(lines[-1]['native_rejection_loaded'])
+        self.assertEqual(len(lines), 2)
+        self.assertFalse(lines[0]['all_passed'])
+        self.assertEqual(lines[0]['refusal_code'], 'offline_preinstalled_dependencies_required')
 
 
 if __name__ == '__main__':

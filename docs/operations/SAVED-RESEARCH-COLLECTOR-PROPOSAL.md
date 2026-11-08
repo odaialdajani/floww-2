@@ -65,6 +65,13 @@ creation and real sockets are refused, and an audit guard refuses production
 private-state reads and all production writes. The live helper still requires the
 exact dedicated production profile. Parallel offline tests monitor real marker
 presence throughout and require unchanged production file identities/timestamps.
+The rejection self-test is also offline from entry and refuses a standalone
+interpreter without preinstalled dependencies. It executes the actual native
+rejection functions with disposable home/runtime metadata. It never executes
+bootstrap source; the incidental networking import receives an always-denied
+fixture hook. Independent outer audit tests observe no production private-state
+access or write, subprocess or real network attempt, including when dependencies
+are absent.
 
 Before scheduling, the integrator must freeze and independently review the exact
 source/wire envelope, separately admit the fresh two-POST trial, inspect both

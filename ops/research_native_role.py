@@ -14,6 +14,7 @@ import os
 import signal
 import socket
 import sys
+import tempfile
 import threading
 import time
 import traceback
@@ -161,7 +162,8 @@ def main():
     # protocol lines use the original stdout; no request/response headers are logged.
     if sys.argv[1:] not in ([], ['--self-test'], ['--offline-replay']):
         return 1
-    offline = '--offline-replay' in sys.argv
+    self_test = '--self-test' in sys.argv
+    offline = self_test or '--offline-replay' in sys.argv
     protocol = sys.stdout
     null = open(os.devnull, 'w')  # noqa: SIM115 - closed by protocol finally
     sys.stdout = sys.stderr = null
@@ -179,9 +181,11 @@ def main():
               'blocked_http_attempt_count': 0, 'cost_usd': None, 'cost_status': 'unknown', 'usage': {}}
     agent, guard = None, None
     sentinel, sentinel_bytes = None, None
+    diagnostic_home = None
     try:
         sys.path.insert(0, str(NATIVE_SOURCE))
         if offline:
+            sys.dont_write_bytecode = True
             # The existing venv supplies dependencies. Never bootstrap/install or
             # recover the production checkout for an isolated fake-SDK fixture.
             real_root = Path('/Users/nav/.hermes')
@@ -201,6 +205,35 @@ def main():
                             if writing or not any(path.is_relative_to(p.resolve()) for p in permitted):
                                 raise NativeError('offline_production_state_refused')
             sys.addaudithook(fixture_audit)
+            if sys.prefix == sys.base_prefix:
+                raise NativeError('offline_preinstalled_dependencies_required')
+            if self_test:
+                diagnostic_home = tempfile.TemporaryDirectory(prefix='floww-native-selftest-')
+                for name in list(os.environ):
+                    if name.startswith('HERMES_') or any(word in name.upper() for word in
+                            ('KEY', 'TOKEN', 'SECRET', 'PASSWORD', 'CREDENTIAL', 'AUTHORIZATION')):
+                        del os.environ[name]
+                os.environ['HOME'] = diagnostic_home.name
+                os.environ['HERMES_HOME'] = str(Path(diagnostic_home.name) / 'profile')
+                Path(os.environ['HERMES_HOME']).mkdir(mode=0o700)
+                # Native module imports may discover a payload beside the source.
+                # This fixture already has its libraries and owns no deployment.
+                import pm.environments as fixture_environments
+                fixture_environments._payload_manifest = lambda *a, **k: None
+                fixture_environments.store_root = lambda *a, **k: Path(diagnostic_home.name) / 'runtime'
+                # process_bootstrap imports one networking helper from bootstrap.
+                # Supply an always-denied fixture hook without executing bootstrap.
+                bootstrap = types.ModuleType('hermes_bootstrap')
+                def no_fixture_connection(*args, **kwargs):
+                    raise NativeError('offline_socket_refused')
+                bootstrap._happy_eyeballs_create_connection = no_fixture_connection
+                sys.modules['hermes_bootstrap'] = bootstrap
+                # Actual native rejection logic needs existing libraries only;
+                # no bootstrap source or PM startup/recovery is executed here.
+                proof = rejection_fixture()
+                protocol.write(json.dumps(proof) + '\n')
+                protocol.flush()
+                return 0 if proof['all_passed'] else 1
             import hermes_cli._early_recovery as recovery
             import hermes_cli.venv_sync as venv_sync
             import pm.environments as environments
@@ -210,11 +243,6 @@ def main():
             recovery.restore_interrupted_pull = lambda *a, **k: False
         import hermes_bootstrap  # noqa: F401
         import httpx
-        if '--self-test' in sys.argv:
-            proof = rejection_fixture()
-            protocol.write(json.dumps(proof) + '\n')
-            protocol.flush()
-            return 0 if proof['all_passed'] else 1
         body = sys.stdin.buffer.readline(MAX_INPUT + 1)
         if len(body) > MAX_INPUT or not body.endswith(b'\n'):
             raise NativeError('role_input_limit')
@@ -391,6 +419,14 @@ def main():
         result['exception_type'] = type(exc).__name__
         if isinstance(exc, NativeError):
             result['refusal_code'] = str(exc)
+        if self_test:
+            protocol.write(json.dumps({'all_passed': False, 'exception_type': type(exc).__name__,
+                'refusal_code': result.get('refusal_code'),
+                'frames': [{'module': str(Path(frame.filename).relative_to(NATIVE_SOURCE)),
+                            'function': frame.name, 'line': frame.lineno}
+                           for frame in traceback.extract_tb(exc.__traceback__)
+                           if frame.filename.startswith(str(NATIVE_SOURCE) + '/')][-5:]}) + '\n')
+            protocol.flush()
     finally:
         if sentinel is not None and sentinel_bytes is not None:
             with contextlib.suppress(Exception):
@@ -414,8 +450,10 @@ def main():
         if '--self-test' not in sys.argv:
             protocol.write(json.dumps(result, sort_keys=True, separators=(',', ':')) + '\n')
             protocol.flush()
+        if diagnostic_home is not None:
+            diagnostic_home.cleanup()
         null.close()
-    return 0
+    return 1 if self_test else 0
 
 
 if __name__ == '__main__':
