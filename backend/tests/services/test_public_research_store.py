@@ -12,7 +12,7 @@ import pytest
 
 MANIFEST = {
     "schema": "public-raw-research.v1",
-    "parser_id": "public-option-contract+strict-research.v1",
+    "parser_id": "public-option-contract+strict-research.v2",
     "symbols": ["SPY", "QQQ"],
     "expiries": ["2026-11-13"],
     "research_only": True, "trusted_for_admission": False, "executable": False,
@@ -53,6 +53,7 @@ def metadata(body):
     return {"http_status": 200, "source_delivery": "network",
             "media_type": "json", "content_encoding": "identity",
             "started_at": AT, "body_completed_at": AT,
+            "response_closed_at": AT, "closure_gate_reason": None,
             "wall_clock_regressed": False, "body_complete": True,
             "bytes_observed": len(body), "source_body_sha256": hashlib.sha256(body).hexdigest(),
             "withholding_reason": None, "error_code": None}
@@ -299,3 +300,25 @@ def test_parsed_observations_must_be_objects(tmp_path):
         with pytest.raises(m.ResearchRefusal, match="parsed_payload_invalid"):
             store.record_parsed(attempt, ["not-an-observation"],
                                 {"status": "parsed", "parsed_at": AT, "errors": 0, "truncated": False})
+
+
+def test_full_retained_capacity_refuses_next_reservation_without_spending_an_attempt(tmp_path):
+    m = module()
+    body = b"{}" + b" " * 510
+    with m.ResearchStore(tmp_path / "research", manifest(max_body_bytes=512, max_total_body_bytes=512)) as store:
+        attempt = reserved(store)
+        store.record_response(attempt, metadata(body), body)
+        with pytest.raises(m.ResearchRefusal, match="retained_byte_cap"):
+            store.reserve_attempt("cycle-1", {"kind": "quotes", "symbol": "QQQ", "expiry": None})
+        assert store.status()["reserved_attempts"] == 1
+        assert store.status()["retained_body_bytes"] == 512
+        assert store.attempts("cycle-1")[0]["body"] == body
+
+
+def test_old_parser_manifest_cannot_silently_receive_corrected_identity_semantics(tmp_path):
+    m = module()
+    old = manifest()
+    old["parser_id"] = "public-option-contract+strict-research.v1"
+    with pytest.raises(m.ResearchRefusal, match="manifest_invalid"):
+        m.ResearchStore(tmp_path / "research", old)
+    assert not (tmp_path / "research").exists()

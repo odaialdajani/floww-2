@@ -19,7 +19,7 @@ except ImportError:  # no thread-only ownership fallback
     fcntl = None
 
 APP_ID = 0x46575231
-PARSER_ID = "public-option-contract+strict-research.v1"
+PARSER_ID = "public-option-contract+strict-research.v2"
 DEFAULT_LIMITS = {
     "max_attempts": 8, "max_body_bytes": 1048576, "max_total_body_bytes": 8388608,
     "max_rows": 4000, "max_db_pages": 4096, "max_chunk_bytes": 65536,
@@ -340,7 +340,10 @@ class ResearchStore:
             cycle = self._conn.execute("SELECT status FROM cycles WHERE cycle_id=?", (cycle_id,)).fetchone()
             if not cycle or cycle[0] != "collecting":
                 raise ResearchRefusal("cycle_not_collecting")
-            count, read_bytes = self._conn.execute("SELECT count(*),coalesce(sum(read_reserved),0) FROM attempts").fetchone()
+            count, read_bytes, retained = self._conn.execute(
+                "SELECT count(*),coalesce(sum(read_reserved),0),coalesce(sum(length(body)),0) FROM attempts").fetchone()
+            if retained >= self._limits["max_total_body_bytes"]:
+                raise ResearchRefusal("retained_byte_cap")
             if count >= self._limits["max_attempts"]:
                 raise ResearchRefusal("attempt_cap")
             if read_bytes + reservation > self._limits["max_total_read_bytes"]:
@@ -369,7 +372,7 @@ class ResearchStore:
     def record_response(self, attempt_id, metadata, body):
         allowed = {"http_status", "source_delivery", "media_type", "content_encoding", "started_at",
                    "body_completed_at", "wall_clock_regressed", "body_complete", "bytes_observed",
-                   "source_body_sha256", "withholding_reason", "error_code"}
+                   "source_body_sha256", "withholding_reason", "error_code", "response_closed_at", "closure_gate_reason"}
         reasons = {None, "body_limit_exceeded", "chunk_limit_exceeded", "incomplete_body",
                    "unsupported_encoding", "unsupported_media", "invalid_utf8", "sensitive_body"}
         errors = {None, "transport_failed", "body_limit", "chunk_limit", "timeout", "http_error", "clock_invalid"}
@@ -381,10 +384,13 @@ class ResearchStore:
                 or metadata["content_encoding"] not in {"identity", "unsupported"}
                 or type(metadata["body_complete"]) is not bool or type(metadata["wall_clock_regressed"]) is not bool
                 or type(metadata["bytes_observed"]) is not int or not 0 <= metadata["bytes_observed"] < 2**63
+                or metadata["closure_gate_reason"] not in {None, "clock_invalid", "clock_regressed", "cycle_deadline",
+                                                         "gate_unknown", "paused", "session_closed_or_unknown"}
                 or metadata["withholding_reason"] not in reasons or metadata["error_code"] not in errors):
             raise ResearchRefusal("metadata_invalid")
         _stamp(metadata["started_at"])
         _stamp(metadata["body_completed_at"], True)
+        _stamp(metadata["response_closed_at"], True)
         source_hash = metadata["source_body_sha256"]
         if source_hash is not None and (not isinstance(source_hash, str) or not SHA.fullmatch(source_hash)):
             raise ResearchRefusal("metadata_invalid")

@@ -232,8 +232,9 @@ def _parse(request, body, response_hash, maximum):
                 raw_sizes = {name: item.get(name) for name in ("bidSize", "askSize")}
                 record["raw_sizes"] = raw_sizes
                 if request.kind == "chain":
-                    match = re.fullmatch(r"(SPY|QQQ)(\d{6})[CP]\d{8}", str(symbol or ""))
-                    if not match or match[1] != request.symbol or match[2] != request.expiry[2:].replace("-", ""):
+                    match = re.fullmatch(r"(SPY|QQQ)(\d{6})([CP])\d{8}", str(symbol or ""))
+                    if (not match or match[1] != request.symbol or match[2] != request.expiry[2:].replace("-", "")
+                            or match[3] != ("C" if side == "calls" else "P")):
                         raise ValueError
                     for key in ("bid", "ask", "last", "volume", "openInterest"):
                         _number(item.get(key))
@@ -246,6 +247,8 @@ def _parse(request, body, response_hash, maximum):
                     for key in ("impliedVolatility", "delta", "gamma", "theta", "vega"):
                         _number(greeks.get(key))
                     contract = asdict(PublicBroker._parse_option_contract(None, item["instrument"], item))
+                    if contract["expiration"] != request.expiry:
+                        raise ValueError
                     for key in ("last", "bid", "ask", "volume", "open_interest", "iv", "delta", "gamma", "theta", "vega", "strike"):
                         if contract[key] is not None and not math.isfinite(float(contract[key])):
                             raise ValueError
@@ -336,19 +339,23 @@ class ResearchCollector:
             return "paused"
         return None if opened else "session_closed_or_unknown"
 
-    async def _receive(self, request, attempt_id, started_at, started_mono, cycle_mono, cycle_wall):
+    async def _receive(self, request, attempt_id, deadline_mono, deadline_real, cycle_mono, cycle_wall):
+        self.store._check_owner()
+        # Filesystem checks and durable intent precede the final fresh gate.
         reason = self._gate(cycle_mono, cycle_wall)
         if reason:
             raise _Stopped("pre_dispatch_stopped", reason)
-        self.store._check_owner()
+        started_at, dispatch_mono = self._clock()
+        if dispatch_mono >= deadline_mono or asyncio.get_running_loop().time() >= deadline_real:
+            raise _Stopped("pre_dispatch_stopped", "request_deadline")
         # Same event-loop turn, no suspension: preserve precise injected time,
         # including subsecond cooldowns that status() intentionally rounds.
-        if self.budget._cooldown_left_locked(HOST, self._clock()[1]) > 0:
+        if self.budget._cooldown_left_locked(HOST, dispatch_mono) > 0:
             raise _Stopped("budget_refused", "public_cooldown")
         status = None
         buffer = bytearray()
         seen, complete, error, withholding = 0, False, None, None
-        completed = None
+        completed = closed = None
         source, media, encoding = "unknown", "unsupported", "unsupported"
         try:
             self._invoked += 1
@@ -383,6 +390,9 @@ class ResearchCollector:
             if status is None:
                 raise _Stopped("transport_failed", "transport_failed") from None
             error = "transport_failed"
+        else:
+            closed = self._clock()[0]
+        closure_reason = self._gate(cycle_mono, cycle_wall)
         if not complete:
             withholding = withholding or "incomplete_body"
         elif encoding != "identity":
@@ -400,6 +410,8 @@ class ResearchCollector:
         metadata = {"http_status": status, "source_delivery": source, "media_type": media,
                     "content_encoding": encoding, "started_at": started_at.isoformat(),
                     "body_completed_at": completed.isoformat() if completed else None,
+                    "response_closed_at": closed.isoformat() if closed else None,
+                    "closure_gate_reason": closure_reason,
                     "wall_clock_regressed": completed is not None and completed < started_at,
                     "body_complete": complete, "bytes_observed": seen,
                     "source_body_sha256": hashlib.sha256(body).hexdigest() if complete else None,
@@ -427,10 +439,12 @@ class ResearchCollector:
             if reason:
                 raise _Stopped("pre_dispatch_stopped", reason)
             now, mono = self._clock()
+            deadline_mono = min(mono + self.limits["request_timeout_s"], cycle_mono + self.limits["cycle_timeout_s"])
+            deadline_real = min(asyncio.get_running_loop().time() + self.limits["request_timeout_s"], self._cycle_deadline)
             self.store.mark_dispatch(attempt["attempt_id"], now.isoformat())
             self.store.retain_transport()
             retained = True
-            task = asyncio.create_task(self._receive(request, attempt["attempt_id"], now, mono, cycle_mono, cycle_wall))
+            task = asyncio.create_task(self._receive(request, attempt["attempt_id"], deadline_mono, deadline_real, cycle_mono, cycle_wall))
             self._tasks.add(task)
             cleaned = False
 
@@ -449,8 +463,7 @@ class ResearchCollector:
 
             task.add_done_callback(settled)
             held = retained = False  # only this task's settlement owns cleanup now
-            remaining = min(self.limits["request_timeout_s"],
-                            remaining_cycle())
+            remaining = min(deadline_mono - self._clock()[1], deadline_real - asyncio.get_running_loop().time())
             done, _ = await asyncio.wait({task}, timeout=max(0, remaining))
             if not done:
                 self._quarantined = True
@@ -458,7 +471,7 @@ class ResearchCollector:
                 raise _Stopped("unsettled", "request_timeout")
             settled(task)
             result = task.result()
-            if self._clock()[1] - mono > remaining:
+            if self._clock()[1] > deadline_mono or asyncio.get_running_loop().time() > deadline_real:
                 self._quarantined = True
                 raise _Stopped("timeout", "late_response")
             if result[0]["http_status"] == 200 and result[0]["body_complete"]:
@@ -534,7 +547,11 @@ class ResearchCollector:
                 receipt["has_gaps"] |= (parse_status != "parsed" or bool(errors) or truncated
                                         or metadata["source_delivery"] != "network"
                                         or metadata["wall_clock_regressed"]
+                                        or metadata["closure_gate_reason"] is not None
                                         or metadata["error_code"] is not None)
+                if metadata["closure_gate_reason"] is not None:
+                    receipt.update(status="stopped", reason=metadata["closure_gate_reason"])
+                    break
                 if metadata["http_status"] == 429 or metadata["error_code"] == "chunk_limit":
                     receipt.update(status="stopped", reason="public_cooldown" if metadata["http_status"] == 429 else "transport_protocol_invalid")
                     break
@@ -551,7 +568,7 @@ class ResearchCollector:
                     self.store.finish_cycle(cycle_id, receipt)
             raise
         except ResearchRefusal as exc:
-            receipt.update(status="stopped" if str(exc) in {"attempt_cap", "read_byte_cap", "row_cap"} else "failed",
+            receipt.update(status="stopped" if str(exc) in {"attempt_cap", "read_byte_cap", "retained_byte_cap", "row_cap"} else "failed",
                            reason=str(exc), has_gaps=True)
         except Exception:
             receipt.update(status="failed", reason="collector_failed", has_gaps=True)

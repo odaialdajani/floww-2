@@ -544,7 +544,114 @@ def test_request_kind_cannot_expand_to_nonmarket_routes(value):
 
 def test_plan_freezes_explicit_parser_version_with_scope_and_limits():
     plan = module().build_plan(["2026-11-13"])
-    assert plan["parser_id"] == "public-option-contract+strict-research.v1"
+    assert plan["parser_id"] == "public-option-contract+strict-research.v2"
+
+
+@pytest.mark.asyncio
+async def test_full_retained_capacity_stops_before_next_provider_or_budget_attempt(tmp_path):
+    m, clock, budget = module(), Clock(), Budget()
+    with ResearchStore(tmp_path / "research", m.build_plan(["2026-11-13"], m.Limits(max_body_bytes=512, max_total_body_bytes=512))) as store:
+        def pad(request, body, values):
+            return body + b" " * (512 - len(body)) if request.kind == "quotes" else body
+        transport = Transport(m, store, clock, pad)
+        result = await make(m, store, transport, clock, budget).capture_cycle("cycle-1")
+        assert result["status"] == "stopped" and result["reason"] == "retained_byte_cap"
+        assert len(transport.calls) == result["dispatch_attempts"] == 1
+        assert budget.releases == 1 and budget.status(now=clock.mono)["available"] == 19
+        assert store.status()["reserved_attempts"] == 1
+        assert store.attempts("cycle-1")[0]["body"] == pad(transport.calls[0], body_for(transport.calls[0]), {})
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("case", ["session_closed", "paused", "request_deadline", "cycle_deadline"])
+async def test_final_gate_follows_blocking_owner_work_before_transport_dispatch(tmp_path, case):
+    m, clock, budget = module(), Clock(), Budget()
+    stopped = False
+    limits = m.Limits(cycle_timeout_s=0.5) if case == "cycle_deadline" else m.Limits()
+    with ResearchStore(tmp_path / "research", m.build_plan(["2026-11-13"], limits)) as store:
+        real_check, delayed = store._check_owner, False
+        def owner_check(*args, **kwargs):
+            nonlocal delayed, stopped
+            real_check(*args, **kwargs)
+            if store._pending and not delayed:
+                delayed = True
+                stopped = True
+                clock.advance(6 if case == "request_deadline" else 1)
+        store._check_owner = owner_check
+        transport = Transport(m, store, clock)
+        result = await make(m, store, transport, clock, budget,
+                            gate=(lambda now: not stopped) if case == "session_closed" else None,
+                            stop=(lambda: stopped) if case == "paused" else None).capture_cycle("cycle-1")
+        assert delayed and transport.calls == [] and result["dispatch_attempts"] == 0
+        assert result["status"] == "stopped"
+        assert budget.releases == 1 and budget.status(now=clock.mono)["available"] == 19
+        assert store.attempts("cycle-1")[0]["status"] == "pre_dispatch_stopped"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("contradiction", ["put_in_calls", "call_in_puts", "1926-11-13", "2126-11-13"])
+async def test_chain_identity_contradictions_keep_raw_but_never_become_clean_rows(tmp_path, contradiction):
+    m, clock = module(), Clock()
+    expiry = contradiction if contradiction[:4].isdigit() else "2026-11-13"
+    def changed(request, body, values):
+        if request.kind != "chain":
+            return body
+        value = json.loads(body)
+        if contradiction == "put_in_calls":
+            value["calls"][0]["instrument"]["symbol"] = request.symbol + "261113P00500000"
+        elif contradiction == "call_in_puts":
+            value["puts"], value["calls"] = value["calls"], []
+        return json.dumps(value).encode()
+    with ResearchStore(tmp_path / "research", m.build_plan([expiry])) as store:
+        transport = Transport(m, store, clock, changed)
+        result = await make(m, store, transport, clock).capture_cycle("cycle-1")
+        assert result["has_gaps"] is True
+        for row in store.attempts("cycle-1"):
+            if row["request"]["kind"] == "chain":
+                assert row["body"] and row["response"]["source_body_sha256"] == hashlib.sha256(row["body"]).hexdigest()
+                assert store.observations(row["attempt_id"]) == []
+                assert row["parsed"]["status"] == "parse_failed" and row["parsed"]["errors"] == 1
+
+
+@pytest.mark.asyncio
+async def test_body_completion_and_late_response_closure_are_separate_honest_clocks(tmp_path):
+    m, clock, budget = module(), Clock(datetime(2026, 11, 6, 20, 59, 59, tzinfo=UTC)), Budget()
+    calls = []
+    @asynccontextmanager
+    async def opening(request, attempt_id):
+        calls.append(request)
+        async def chunks():
+            yield body_for(request)
+        yield m.RawReply(chunks())
+        clock.advance(2)
+    close = datetime(2026, 11, 6, 21, tzinfo=UTC)
+    with ResearchStore(tmp_path / "research", m.build_plan(["2026-11-13"])) as store:
+        result = await make(m, store, type("T", (), {"open": staticmethod(opening)})(), clock, budget,
+                            gate=lambda now: now < close).capture_cycle("cycle-1")
+        row = store.attempts("cycle-1")[0]
+        assert row["response"]["body_completed_at"] == "2026-11-06T20:59:59+00:00"
+        assert row["response"]["response_closed_at"] == "2026-11-06T21:00:01+00:00"
+        assert row["response"]["closure_gate_reason"] == "session_closed_or_unknown"
+        assert row["body"] == body_for(calls[0])
+        assert len(calls) == budget.releases == 1 and result["has_gaps"] is True
+        assert result["status"] == "stopped" and result["reason"] == "session_closed_or_unknown"
+
+
+@pytest.mark.asyncio
+async def test_response_closure_past_cycle_deadline_discards_late_raw_result(tmp_path):
+    m, clock, budget = module(), Clock(), Budget()
+    @asynccontextmanager
+    async def opening(request, attempt_id):
+        async def chunks():
+            yield body_for(request)
+        yield m.RawReply(chunks())
+        clock.advance(1)
+    with ResearchStore(tmp_path / "research", m.build_plan(["2026-11-13"], m.Limits(cycle_timeout_s=0.5))) as store:
+        result = await make(m, store, type("T", (), {"open": staticmethod(opening)})(), clock, budget).capture_cycle("cycle-1")
+        row = store.attempts("cycle-1")[0]
+        assert result["status"] == "stopped" and result["reason"] == "late_response"
+        assert row["body"] is None and row["response"] is None and row["status"] == "timeout"
+        assert budget.releases == 1 and budget.status(now=clock.mono)["available"] == 19
 
 
 def test_offline_cli_preview_has_no_capture_flag_or_store_side_effect(tmp_path):
