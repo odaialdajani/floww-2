@@ -157,8 +157,11 @@ Evidence root: `/Users/nav/floww-heatmap-agents-20261107/`.
 
 - The actual working Hermes Desktop was used with NVIDIA MiniMax M3.1 Flash.
   It inspected the served FLOWW browser and produced a retained-SPY report,
-  distinguishing the different current-request snapshot. Record its final
-  native status and independent content verdict separately from file creation.
+  distinguishing the different current-request snapshot. Its native receipt
+  completed; a separate zero-tool native audit completed in one turn. Root
+  accepts the 41 independently tied-out numerical bindings and two conditional
+  questions only with companion errata; one unsupported runtime audit finding
+  is excluded. This does not reclassify the failed guarded helper trial.
 - The closed retained task now rejects arbitrary investigator rationales before
   auditor construction. Stream refusals are permanent through conflicting
   terminal events; the later signal-origin patch preserves a marker through SDK
