@@ -118,7 +118,7 @@ Evidence: `/Users/nav/floww-execution-20261107/status/0700/` and the installed p
 
 ## Current completion limits
 
-Real native research remains parked. Real internal source admission, atomic Liquid Paper binding, a separate venue policy/ledger, broader coding dispatch, three legacy job contracts, future market sessions and full historical acceptance remain open. Time Machine still has no writable supported destination. The Codex Ralph hook requires the owner's native trust click because Computer Use was denied access to Codex for safety reasons. Nothing bypasses that review.
+The guarded SDK research helper remains parked. The later user-authorized Desktop investigation is a separate native workflow; see the continuation below. Real internal source admission, atomic Liquid Paper binding, a separate venue policy/ledger, broader coding dispatch, three legacy job contracts, future market sessions and full historical acceptance remain open. Time Machine still has no writable supported destination. The user's later terminal handoff reported all 25 hooks trusted, including Ralph; this continuation changed no trust settings and did not bypass the earlier Computer Use denial.
 
 The paired premium app remains release `3948b9c715c687ad89839ed884040c7dc7e8cced` on 3000/8213. These operations and unmounted internal-paper changes do not claim a new application release. Original 8000, active stores, rollback releases and the 450-row history queue remain retained. Full execution receipt: `/Users/nav/floww-execution-20261107/REPORT.md`.
 
@@ -148,5 +148,56 @@ Current receipt: `/Users/nav/floww-continuation-20261107/REPORT.md`.
 Independent rejections and their reproductions remain in `reviews/`; corrections
 are permanent regression tests, not rewritten history. No actual orders or
 profitability results were produced. The 450 historical rows are retained and
-are not blanket accepted. Time Machine lacks a writable destination; Ralph Stop
-trust needs the native owner click after Computer Use denied Codex access.
+are not blanket accepted. Time Machine lacks a writable destination. The earlier
+Ralph warning is historical; the later handoff reported trust complete.
+
+## November 7 late native Desktop continuation
+
+Evidence root: `/Users/nav/floww-heatmap-agents-20261107/`.
+
+- The actual working Hermes Desktop was used with NVIDIA MiniMax M3.1 Flash.
+  It inspected the served FLOWW browser and produced a retained-SPY report,
+  distinguishing the different current-request snapshot. Record its final
+  native status and independent content verdict separately from file creation.
+- The closed retained task now rejects arbitrary investigator rationales before
+  auditor construction. Stream refusals are permanent through conflicting
+  terminal events; the later signal-origin patch preserves a marker through SDK
+  error translation. Frozen independent reviews accepted the exact changes.
+  The earlier HTTP200/incomplete-stream trial remains failed, with cause unknown,
+  two consumed pair IDs, no audit request and no reset of its parked circuit.
+- A fresh canonical native audit draft was actually attested with zero tools,
+  explicit NVIDIA/MiniMax, one turn and profile-following off. Empty toolsets
+  alone did not exclude MCP; the supported exclusion and actual catalog check
+  did. One turn remains distinct from one HTTP request and SSE stop/DONE proof.
+- The new deterministic stored-event monitor passed 53 focused checks and 18
+  independent probes. Root installed its reviewed copies and commissioned only
+  native `--no-agent` job `eaa6e27b396c`: five-minute cadence, 96 checks, local,
+  no catch-up. Its first natural run completed at 23:00:47 New York. Existing
+  role stops/control/circuit remain authoritative; recurring inference, event
+  consumption/shared reservation and fresh heatmap coverage remain open.
+- AskFlow chart binding was independently reviewed and integrated. All 2,910
+  frontend tests passed; production and isolated fixture builds passed. Both
+  layouts, saved/missing scope and a changed selected UTC cursor passed the
+  compiled browser fixture. The product-only release `4a6cb4944` is live with
+  the same backend tree as `3948b9c71`; all 35 served files match. Live Stock
+  loaded 70 candles in both layouts and refused its genuinely missing saved
+  scope. Market raw/adjusted axes were visually aligned in Chrome Guest.
+- Closed backup and disposable recovery verified all six stores and all 15
+  original journal observations inside the current 45. The generated 2.50 GiB
+  restore-test data copy was removed only after rehashing the retained 13-file
+  closed backup. Actual available space increased by 2,684,764,160 bytes.
+  Receipts, original proof, backup, live stores and rollback remain retained.
+- The nine-page Skylit review maps ten checks to exact retained evidence.
+  It does not establish proprietary-model equivalence or a profitable signal.
+  The native Liquid Computer supports execution, but its reviewed perpetual
+  mutations still lack verified atomic simulated-destination binding. No venue
+  order or policy mutation was submitted.
+- OpenBot was cloned and reviewed without installing/deploying its stack. The
+  observed Nous account had no instance/balance and required funding. No paid
+  cloud worker was created. Local native scheduling requires this Mac/gateway;
+  hosted inference does not confer cloud process uptime.
+
+See [native operations](../../operations/HERMES-DESKTOP-OPERATIONS.md) and
+[monitor contract](../../operations/NATIVE-MONITOR.md). Remaining gates retain
+their exact owners and evidence; neither the 450-row queue nor prospective
+profitability is marked complete by this continuation.
