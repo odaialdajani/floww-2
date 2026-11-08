@@ -26,12 +26,17 @@ from pathlib import Path
 
 try:
     from .research_intake import IntakeError, compile_snapshot, validate_research
+    from .research_native_role import role_view
 except ImportError:
     from research_intake import IntakeError, compile_snapshot, validate_research
+    from research_native_role import role_view
 
 MODEL = 'minimaxai/minimax-m3.1-flash'
 POLICY = 'retrospective-copied-facts-v1;SPY,QQQ;3-rows;2-independent-roles;one-POST-per-role;no-retry'
 DEFAULT_STATE = Path.home() / 'Library/Application Support/FLOWW/operations/research'
+ADMISSION_STATE = DEFAULT_STATE.parent / 'research-admission'
+DAILY_PAIR_LIMIT = 4
+MAX_ADMISSIONS = 1024
 HERMES_ROOT = Path('/Users/nav/.hermes')
 NATIVE_PYTHON = HERMES_ROOT / 'tools/python-3.14.9+20261021-darwin-arm64/bin/python3'
 ROLE_HELPER = Path(__file__).with_name('research_native_role.py')
@@ -173,6 +178,67 @@ def input_key(packet, rule_hash=None):
     identity = {'observations': sorted(row['observation_id'] for row in packet['observations']),
                 'model': MODEL, 'policy': POLICY, 'rules': rule_hash or rule_digest()}
     return hashlib.sha256(canonical(identity).encode()).hexdigest()
+
+
+def admission_ledger():
+    """Read the fixed shared ledger; receipts may be archived, dedupe may not."""
+    path = ADMISSION_STATE / 'admission.json'
+    if not path.exists() and not path.is_symlink():
+        return {'schema': 'floww-research-admission.v1', 'daily_pair_limit': DAILY_PAIR_LIMIT,
+                'circuit_parked': False, 'attempts': {}}
+    ledger = parse_json(read_bytes(path))
+    if (not isinstance(ledger, dict) or ledger.get('schema') != 'floww-research-admission.v1'
+            or type(ledger.get('daily_pair_limit')) is not int
+            or not 1 <= ledger['daily_pair_limit'] <= DAILY_PAIR_LIMIT
+            or type(ledger.get('circuit_parked')) is not bool
+            or not isinstance(ledger.get('attempts'), dict)
+            or len(ledger['attempts']) > MAX_ADMISSIONS):
+        raise WorkerError('invalid_admission_ledger')
+    for key, attempt in ledger['attempts'].items():
+        if (not re.fullmatch('[a-f0-9]{64}', key) or not isinstance(attempt, dict)
+                or attempt.get('status') not in ('started', 'accepted', 'parked')
+                or not isinstance(attempt.get('day_utc'), str)
+                or not re.fullmatch(r'\d{4}-\d{2}-\d{2}', attempt['day_utc'])):
+            raise WorkerError('invalid_admission_ledger')
+    # A durable unfinished attempt is an unknown result, not retry permission.
+    if any(attempt['status'] == 'started' for attempt in ledger['attempts'].values()):
+        ledger['circuit_parked'] = True
+    return ledger
+
+
+def reserve_pair(ledger, key, now):
+    """Called under the shared lease, before any native work or model call."""
+    if key in ledger['attempts']:
+        return {'status': 'duplicate_no_call', 'input_key': key,
+                'previous_status': ledger['attempts'][key]['status'], 'executable': False}
+    day = datetime.datetime.fromtimestamp(now, datetime.timezone.utc).date().isoformat()  # noqa: UP017 - Python 3.9 host
+    reason = None
+    if ledger['circuit_parked']:
+        reason = 'native_circuit_parked'
+    elif ledger['attempts'] and day < max(a['day_utc'] for a in ledger['attempts'].values()):
+        reason = 'admission_clock_regressed'
+    elif sum(a['day_utc'] == day for a in ledger['attempts'].values()) >= ledger['daily_pair_limit']:
+        reason = 'daily_pair_budget_exhausted'
+    elif len(ledger['attempts']) >= MAX_ADMISSIONS:
+        reason = 'admission_capacity_manual_review_required'
+    if reason:
+        atomic_json(ADMISSION_STATE / 'admission.json', ledger)
+        return {'status': 'parked', 'reason': reason, 'executable': False}
+    ledger['attempts'][key] = {'day_utc': day, 'status': 'started'}
+    atomic_json(ADMISSION_STATE / 'admission.json', ledger)
+    return None
+
+
+def resume_circuit():
+    """Explicit operator action; keeps prepaid budgets and all dedupe identities."""
+    with Lease(ADMISSION_STATE):
+        ledger = admission_ledger()
+        for attempt in ledger['attempts'].values():
+            if attempt['status'] == 'started':
+                attempt['status'] = 'parked'
+        ledger['circuit_parked'] = False
+        atomic_json(ADMISSION_STATE / 'admission.json', ledger)
+    return {'status': 'circuit_resumed', 'scope': 'saved_research_worker_only', 'executable': False}
 
 
 def validate_saved_page(saved):
@@ -410,7 +476,7 @@ def _run_native_role_held(role, packet, state, *, offline_replay=False, offline_
         preflight = message
     try:
         output = bounded_process([str(NATIVE_PYTHON), '-I', str(ROLE_HELPER)] + (['--offline-replay'] if offline_replay else []),
-                                 (canonical({'role': role, 'packet': packet, 'offline_fault': offline_fault}) + '\n').encode(),
+                                 (canonical({'role': role, 'packet': role_view(packet), 'offline_fault': offline_fault}) + '\n').encode(),
                                  env=env, state=state, on_ready=ready, cwd=str(scratch))
         lines = output.splitlines()
         if len(lines) != 2 or preflight is None:
@@ -468,7 +534,7 @@ def run_once(state=DEFAULT_STATE, *, saved=None, producer=None, role_runner=run_
     if paused(state):
         return finish({'status': 'paused', 'executable': False}, persist=False)
     try:
-        with Lease(state):
+        with Lease(state), Lease(ADMISSION_STATE):
             if paused(state):
                 return finish({'status': 'paused', 'executable': False}, persist=False)
             ensure_dir(state / 'receipts')
@@ -488,6 +554,10 @@ def run_once(state=DEFAULT_STATE, *, saved=None, producer=None, role_runner=run_
                 return finish(duplicate)
             if len(list((state / 'receipts').glob('*.json'))) >= MAX_RECEIPTS:
                 return finish({'status': 'parked', 'reason': 'receipt_capacity_manual_archive_required', 'executable': False})
+            ledger = admission_ledger()
+            refusal = reserve_pair(ledger, key, now)
+            if refusal is not None:
+                return finish(refusal)
             receipt = {'schema': 'floww-research-run.v1', 'input_key': key, 'packet_id': packet['packet_id'],
                        'status': 'started', 'started_at': now, 'model': MODEL, 'policy': POLICY,
                        'rule_hash': rule_digest(), 'executable': False, 'scope': 'internal_research',
@@ -500,15 +570,22 @@ def run_once(state=DEFAULT_STATE, *, saved=None, producer=None, role_runner=run_
                     receipt['reason'] = 'worker_paused'
                     break
                 try:
-                    native = role_runner(role, parse_json(canonical(packet)), state)
+                    view = role_view(packet)
+                    native = role_runner(role, view, state)
                     if not isinstance(native, dict):
                         raise WorkerError('native_protocol_refused')
                     validation = validate_research(packet, native.get('response'))
+                    selected = {row['observation_id'] for row in role_view(packet)['observations']}
+                    if validation.get('accepted') and (len(native['response']['claims']) > 3 or any(
+                            claim['observation_id'] not in selected or claim['field'] != 'bid'
+                            for claim in native['response']['claims'])):
+                        validation = {'accepted': False, 'reason': 'role_view_claim_refused'}
                     # Only bounded local metadata survives, never raw model prose/errors.
                     receipt['roles'][role] = {k: native[k] for k in ('success', 'http_request_count',
                          'blocked_http_attempt_count', 'native_valid_tool_names', 'cost_status', 'usage', 'preflight',
                          'exception_type', 'refusal_code', 'wire_refusals', 'offline_replay', 'elapsed_seconds',
-                         'transport_error_type', 'http_status', 'finish_reason', 'response_usage', 'native_failed', 'blocked_origins') if k in native}
+                         'transport_error_type', 'http_status', 'finish_reason', 'response_usage', 'native_failed',
+                         'blocked_origins', 'request_body_bytes', 'message_characters') if k in native}
                     receipt['roles'][role]['validation'] = validation
                     if not (native.get('success') is True and native.get('native_failed', False) is False
                             and not native.get('offline_replay') and native.get('http_request_count') == 1
@@ -521,6 +598,9 @@ def run_once(state=DEFAULT_STATE, *, saved=None, producer=None, role_runner=run_
             accepted = len(receipt['roles']) == 2 and all(r['validation'].get('accepted') for r in receipt['roles'].values())
             receipt['status'] = 'accepted_retrospective_facts' if accepted else 'parked'
             receipt['reason'] = 'independently_validated_copied_facts' if accepted else receipt.get('reason', 'role_refused')
+            ledger['attempts'][key]['status'] = 'accepted' if accepted else 'parked'
+            ledger['circuit_parked'] = not accepted
+            atomic_json(ADMISSION_STATE / 'admission.json', ledger)
             return finish(receipt, receipt_path)
     except WorkerError as exc:
         if str(exc) == 'lease_busy':
@@ -541,7 +621,7 @@ def status(state=DEFAULT_STATE):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=['run-once', 'status', 'pause', 'resume'])
+    parser.add_argument('action', choices=['run-once', 'status', 'pause', 'resume', 'resume-circuit'])
     parser.add_argument('--state-dir', type=Path, default=DEFAULT_STATE)
     parser.add_argument('--saved-input', type=Path, help='Explicit finite offline saved-observation JSON; never a URL or command')
     args = parser.parse_args(argv)
@@ -554,6 +634,8 @@ def main(argv=None):
             result = run_once(args.state_dir, saved=saved)
         elif args.action == 'status':
             result = status(args.state_dir)
+        elif args.action == 'resume-circuit':
+            result = resume_circuit()
         else:
             result = set_paused(args.state_dir, args.action == 'pause')
         print(canonical(result))

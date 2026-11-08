@@ -45,6 +45,10 @@ class WorkerTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.state = Path(self.temp.name).resolve() / 'state'
+        self.admission = self.state.parent / 'shared-admission'
+        patcher = mock.patch.object(worker, 'ADMISSION_STATE', self.admission, create=True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
         worker.set_paused(self.state, False)
         self.calls = []
 
@@ -57,6 +61,165 @@ class WorkerTests(unittest.TestCase):
     def run_worker(self, saved=None, runner=None, now=1794085822):
         return worker.run_once(self.state, saved=fixture() if saved is None else saved,
                                role_runner=runner or self.role, now=now)
+
+    def test_minimal_role_view_preserves_selected_bid_identity_and_clocks(self):
+        full = intake.compile_snapshot(fixture(), 1794085822)
+        original = copy.deepcopy(full)
+        view = worker.role_view(full)
+        self.assertEqual(full, original)
+        self.assertEqual(set(view), {'packet_id', 'source', 'decision_time', 'observations'})
+        self.assertEqual(view['packet_id'], full['packet_id'])
+        self.assertEqual(view['source'], full['source'])
+        self.assertEqual(view['decision_time'], full['decision_time'])
+        for index, actual in enumerate(view['observations']):
+            expected = full['observations'][index]
+            self.assertEqual(set(actual), {'observation_id', 'contract_id', 'provider', 'scope', 'fields', 'clocks'})
+            for name in ('observation_id', 'contract_id', 'provider', 'scope'):
+                self.assertEqual(actual[name], expected[name])
+            self.assertEqual(actual['fields'], {'bid': expected['fields']['bid']})
+            self.assertEqual(actual['clocks'], {k: expected['clocks'][k] for k in ('received_at', 'bid_source_time')})
+        self.assertLess(len(worker.canonical(view)), len(worker.canonical(full)) / 2)
+        self.run_worker()
+        self.assertEqual(self.calls[0][1], view)
+        self.assertEqual(self.calls[0][1], self.calls[1][1])
+        self.assertTrue(intake.validate_research(full, response(view))['accepted'])
+
+    def test_minimal_view_labels_missing_bid_and_clock_without_inference(self):
+        saved = fixture()
+        saved['quote_truth']['SPY|call|655|2026-11-10'].pop('bid')
+        saved['quote_truth']['SPY|call|655|2026-11-10'].pop('bid_source_time')
+        saved['row_observations']['SPY|call|655|2026-11-10'].pop('bid_source_time')
+        self.run_worker(saved=saved)
+        obs = self.calls[0][1]['observations'][0]
+        self.assertEqual(obs['fields']['bid']['status'], 'missing')
+        self.assertIsNone(obs['fields']['bid']['value'])
+        self.assertEqual(obs['clocks']['bid_source_time']['knowledge'], 'unknown')
+        self.assertIsNone(obs['clocks']['bid_source_time']['value'])
+
+    def test_role_view_caps_six_observations_and_rejects_hidden_fact_claims(self):
+        saved = fixture()
+        saved['rows'] = []
+        for symbol in ('SPY', 'QQQ'):
+            for strike in (655, 656, 657):
+                row = fixture()['rows'][0][:]
+                row[0], row[1], row[3] = symbol, symbol + '261110C' + str(strike * 1000).zfill(8), strike
+                saved['rows'].append(row)
+                key = symbol + '|call|' + str(strike) + '|2026-11-10'
+                saved['quote_truth'][key] = copy.deepcopy(fixture()['quote_truth']['SPY|call|655|2026-11-10'])
+                saved['row_observations'][key] = copy.deepcopy(fixture()['row_observations']['SPY|call|655|2026-11-10'])
+            saved['observations_by_ticker'][symbol] = {'source': 'public_api', 'scope': 'saved:test'}
+        saved['count'] = 6
+        full = worker.compile_pages([saved], 1794085822)
+        self.assertEqual(len(full['observations']), 6)
+        def hidden(role, packet, state):
+            result = self.role(role, packet, state)
+            result['response'] = response({**full, 'observations': full['observations'][3:]})
+            return result
+        result = self.run_worker(saved=saved, runner=hidden)
+        self.assertEqual(len(self.calls[0][1]['observations']), 3)
+        self.assertEqual(result['roles']['research']['validation']['reason'], 'role_view_claim_refused')
+
+    def test_closed_validation_rejects_altered_bid_unit_identity_and_citation(self):
+        full = intake.compile_snapshot(fixture(), 1794085822)
+        view = worker.role_view(full)
+        for key, value in (('value', '80.05'), ('unit', 'USD'), ('observation_id', 'invented'),
+                           ('citations', [{'observation_id': view['observations'][0]['observation_id'], 'field': 'ask'}])):
+            with self.subTest(key=key):
+                altered = response(view)
+                altered['claims'][0][key] = value
+                self.assertFalse(intake.validate_research(full, altered)['accepted'])
+        view['observations'][0]['fields']['bid']['value'] = '999'
+        self.assertEqual(full['observations'][0]['fields']['bid']['value'], '80.04')
+        self.assertFalse(intake.validate_research(full, response(view))['accepted'])
+
+    def changed(self, offset):
+        saved = fixture()
+        saved['quote_truth']['SPY|call|655|2026-11-10']['bid'] += offset
+        return saved
+
+    def test_global_daily_budget_survives_restart_and_different_state_directories(self):
+        for index in range(4):
+            state = self.state.parent / ('worker_' + str(index))
+            worker.set_paused(state, False)
+            result = worker.run_once(state, saved=self.changed(index), role_runner=self.role, now=1794085822)
+            self.assertEqual(result['status'], 'accepted_retrospective_facts')
+        result = self.run_worker(saved=self.changed(4))
+        self.assertEqual(result['reason'], 'daily_pair_budget_exhausted')
+        self.assertEqual(len(self.calls), 8)
+
+    def test_failure_parks_changed_inputs_until_explicit_global_resume(self):
+        def failed(role, packet, state):
+            result = self.role(role, packet, state)
+            result['success'] = False
+            return result
+        self.assertEqual(self.run_worker(runner=failed)['status'], 'parked')
+        worker.set_paused(self.state, False)
+        self.assertEqual(self.run_worker(saved=self.changed(1))['reason'], 'native_circuit_parked')
+        self.assertEqual(len(self.calls), 2)
+        worker.resume_circuit()
+        self.assertEqual(self.run_worker(saved=self.changed(1))['status'], 'accepted_retrospective_facts')
+
+    def test_global_dedupe_survives_local_receipt_removal(self):
+        first = self.run_worker()
+        (self.state / 'receipts' / (first['input_key'] + '.json')).unlink()
+        result = self.run_worker()
+        self.assertEqual(result['status'], 'duplicate_no_call')
+        self.assertEqual(len(self.calls), 2)
+
+    def test_shared_admission_lease_refuses_concurrent_state_directories(self):
+        with worker.Lease(self.admission):
+            result = self.run_worker()
+        self.assertEqual(result['status'], 'busy')
+        self.assertEqual(len(self.calls), 0)
+
+    def test_interrupted_pair_circuits_new_input_without_replay(self):
+        def crash(role, packet, state):
+            raise KeyboardInterrupt
+        with self.assertRaises(KeyboardInterrupt):
+            self.run_worker(runner=crash)
+        result = self.run_worker(saved=self.changed(1))
+        self.assertEqual(result['reason'], 'native_circuit_parked')
+        self.assertEqual(len(self.calls), 0)
+
+    def test_budget_rollover_keeps_global_dedupe_and_configured_lower_limit(self):
+        first = self.run_worker()
+        ledger = worker.parse_json(worker.read_bytes(self.admission / 'admission.json'))
+        ledger['daily_pair_limit'] = 1
+        worker.atomic_json(self.admission / 'admission.json', ledger)
+        self.assertEqual(self.run_worker(saved=self.changed(1))['reason'], 'daily_pair_budget_exhausted')
+        self.assertEqual(self.run_worker(saved=self.changed(1), now=1794172222)['status'], 'accepted_retrospective_facts')
+        (self.state / 'receipts' / (first['input_key'] + '.json')).unlink()
+        self.assertEqual(self.run_worker(now=1794172222)['status'], 'duplicate_no_call')
+        self.assertEqual(len(self.calls), 4)
+
+    def test_invalid_budget_and_admission_capacity_never_release_dedupe(self):
+        self.run_worker()
+        ledger = worker.parse_json(worker.read_bytes(self.admission / 'admission.json'))
+        ledger['daily_pair_limit'] = 5
+        worker.atomic_json(self.admission / 'admission.json', ledger)
+        with self.assertRaises(worker.WorkerError):
+            self.run_worker(saved=self.changed(1))
+        ledger['daily_pair_limit'] = 4
+        worker.atomic_json(self.admission / 'admission.json', ledger)
+        with mock.patch.object(worker, 'MAX_ADMISSIONS', 1):
+            result = self.run_worker(saved=self.changed(1))
+        self.assertEqual(result['reason'], 'admission_capacity_manual_review_required')
+        self.assertEqual(len(self.calls), 2)
+        self.assertEqual(len(worker.admission_ledger()['attempts']), 1)
+
+    def test_failure_circuit_is_shared_and_does_not_expire_at_midnight(self):
+        def failed(role, packet, state):
+            result = self.role(role, packet, state)
+            result['success'] = False
+            return result
+        self.run_worker(runner=failed)
+        other = self.state.parent / 'different-worker'
+        worker.set_paused(other, False)
+        result = worker.run_once(other, saved=self.changed(1), role_runner=self.role, now=1794172222)
+        self.assertEqual(result['reason'], 'native_circuit_parked')
+        self.assertEqual(len(self.calls), 2)
+        worker.resume_circuit()
+        self.assertEqual(len(worker.admission_ledger()['attempts']), 1)
 
     def test_each_page_source_envelope_and_metadata_are_admitted_before_combining(self):
         qqq = json.loads(json.dumps(fixture()).replace('SPY', 'QQQ'))
@@ -281,7 +444,7 @@ class WorkerTests(unittest.TestCase):
         saved = fixture()
         result = self.run_worker(saved=saved)
         packet = self.calls[0][1]
-        self.assertEqual(packet['observations'][0]['clocks']['volume_source_time']['knowledge'], 'unknown')
+        self.assertEqual(packet['observations'][0]['clocks']['bid_source_time']['freshness'], 'stale')
         self.assertEqual(result['roles']['audit']['validation']['claims'][0]['freshness'], 'stale')
 
     def test_child_group_memory_cap_is_observed_and_terminated(self):
@@ -346,6 +509,14 @@ class WireTests(unittest.TestCase):
             {'role': 'system', 'content': 'system'}, {'role': 'user', 'content': 'packet'}]}
         result.update(extra)
         return result
+
+    def test_actual_admitted_wire_size_is_safe_numeric_metadata(self):
+        guard = native.WireGuard('test-secret', self.request()['messages'])
+        guard.phase = 'run'
+        body = json.dumps(self.request()).encode()
+        guard.admit(native.ENDPOINT, 'POST', body)
+        self.assertEqual(guard.request_body_bytes, len(body))
+        self.assertEqual(guard.message_characters, len('systempacket'))
 
     def test_wire_rejects_secret_tools_endpoint_caps_and_additional_requests(self):
         guard = native.WireGuard('test-secret', self.request()['messages'])

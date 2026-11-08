@@ -49,6 +49,8 @@ class WireGuard:
         self.finish_reason = None
         self.response_usage = {}
         self.blocked_origins = []
+        self.request_body_bytes = 0
+        self.message_characters = 0
 
     def admit(self, url, method, content):
         try:
@@ -68,6 +70,8 @@ class WireGuard:
                 raise NativeError('untrusted_message_context')
             self.requests += 1
             self.output_cap = min(caps)
+            self.request_body_bytes = len(content)
+            self.message_characters = sum(len(message['content']) for message in self.expected_messages)
         except (NativeError, ValueError, TypeError, KeyError) as exc:
             self.blocked += 1
             self.refusals.append(str(exc) if isinstance(exc, NativeError) else 'invalid_wire_json')
@@ -131,13 +135,25 @@ def profile_check(config):
         raise NativeError('native_dispatch_refused')
 
 
+def role_view(packet):
+    """Project accepted evidence without changing any retained value or identity."""
+    return json.loads(json.dumps({
+        'packet_id': packet['packet_id'], 'source': packet['source'],
+        'decision_time': packet['decision_time'],
+        'observations': [{**{name: obs[name] for name in
+            ('observation_id', 'contract_id', 'provider', 'scope')},
+            'fields': {'bid': obs['fields']['bid']},
+            'clocks': {name: obs['clocks'][name] for name in ('received_at', 'bid_source_time')}}
+            for obs in packet['observations'][:3]]}, allow_nan=False))
+
+
 def prompt_for(packet, role):
     return ('Role: ' + role + '. Independently check this packet; you have no other role answer. '
-            'Copy bid for each supplied observation, at most three claims total. Use exact values, units and IDs. '
+            'Copy at least one bid fact, at most three claims total. Use exact values, units and IDs. '
             'Return JSON with exactly packet_id (from packet), status="review_only", executable=false, '
             'scope="internal_research", claims=[{"observation_id":ID,"field":"bid","value":VALUE,'
             '"unit":"unspecified_source_units","citations":[{"observation_id":ID,"field":"bid"}]}]. '
-            'No markdown. Missing bid is null. Packet:\n' + json.dumps(packet, sort_keys=True, separators=(',', ':')))
+            'No markdown. Missing bid is null. Packet:\n' + json.dumps(role_view(packet), sort_keys=True, separators=(',', ':')))
 
 
 def main():
@@ -182,6 +198,7 @@ def main():
             raise NativeError('offline_fault_refused')
         if role not in ('research', 'audit') or not isinstance(packet, dict):
             raise NativeError('role_input_refused')
+        packet = role_view(packet)
         profile = Path(os.environ['HERMES_HOME'])
         if profile != Path('/Users/nav/.hermes/profiles') / ('floww-' + role):
             raise NativeError('scoped_profile_refused')
@@ -358,6 +375,8 @@ def main():
             result['finish_reason'] = guard.finish_reason
             result['response_usage'] = guard.response_usage
             result['blocked_origins'] = guard.blocked_origins
+            result['request_body_bytes'] = guard.request_body_bytes
+            result['message_characters'] = guard.message_characters
         result['offline_replay'] = offline
         if '--self-test' not in sys.argv:
             protocol.write(json.dumps(result, sort_keys=True, separators=(',', ':')) + '\n')
