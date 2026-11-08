@@ -574,10 +574,12 @@ def update_whales(engine, snaps: dict) -> dict[str, dict]:
 
 
 def read_whales(engine, *, state: str | None = None, days: int = 30) -> list[dict]:
-    """Live badge read: open tracks (optionally state-filtered)."""
+    """Read the requested 1–365-day history, optionally state-filtered."""
     try:
-        sql = "SELECT * FROM whale_tracks WHERE asof_date >= current_date - INTERVAL '30' DAY"
-        params: list = []
+        if isinstance(days, bool) or not isinstance(days, int) or not 1 <= days <= 365:
+            raise ValueError("days must be an integer from 1 to 365")
+        sql = "SELECT * FROM whale_tracks WHERE asof_date >= current_date - ? * INTERVAL '1' DAY"
+        params: list = [days]
         if state:
             sql += " AND state = ?"
             params.append(state)
