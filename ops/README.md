@@ -125,3 +125,34 @@ in an automatic schedule or infer unlimited free quota.
 submission function always refuses. See
 [the separate venue policy](../docs/operations/LIQUID-PAPER-POLICY.md). No model
 answer, copied fact, green observer or caller JSON can open that lane.
+
+## Continuation boundaries and reusable lessons
+
+`coding_worker.py` registers only the receipt prerequisite task. Its full source
+base, exact writable path, checker hash and finite caps are fixed. Approval IDs
+are consumed in a separate trusted ledger before credentials; copying an
+approval file cannot create another budget. Its model patch requires independent
+acceptance; a valid exported artifact after a supervisor deadline does not mean
+the native worker completed or a dispatcher is commissioned. Live approvals
+from this continuation are consumed, not examples to replay.
+
+`legacy_job_preview.py --fixture JOB` runs synthetic local-only previews. Read
+[legacy contracts](../docs/operations/LEGACY-JOB-CONTRACTS.md) before any native
+reader or delivery work. No existing reminder/job definition is modified.
+
+The stored Public adapter is documented in
+[its source contract](../docs/operations/PUBLIC-PAPER-SOURCE-ADAPTER.md). It has no
+production issuer, keys, active book or broker wiring. Constructor interfaces
+and synthetic signatures do not establish authenticated production truth.
+
+Confirmed failures now enforce reusable constraints: freeze existing status
+priority branches and test every allowed state; bind approvals by durable ID
+rather than filename; bind exact structure/order lineage in addition to
+economics; and isolate self-tests before native bootstrap imports. Safe SSE
+metadata records unknown outcomes without retaining model prose or tool args.
+
+The smaller coding prompt did not stop the model from reading the full file.
+A future separately reviewed registry should consider exporting an editable
+semantic fragment and deterministically merging it against an immutable full
+baseline. That is an open design change, not permission to widen current tools,
+byte/time/token budgets or native completion claims.

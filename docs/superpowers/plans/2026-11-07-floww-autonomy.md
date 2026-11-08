@@ -101,7 +101,7 @@ Evidence: `coding/0700/REPORT.md`, `coding/0700/correction-2/REPORT.md`, and `re
 
 - [x] Back up/classify all seven model-driven jobs and repair only the four previously accepted reminder model pins. Schedules, payloads, delivery and historical errors were preserved; no replay occurred.
 - [x] Review the remaining three jobs and exact skills. `deal-scraper` inherits broad artifact-writing tools; `Dashboard Updates` writes cross-project trackers/notes and has broad delivery; `Morning Briefing` attaches personal context and external delivery. Review receipt: `jobs/review.json` in the current execution root.
-- [ ] Supply bounded per-job source/effect/delivery contracts and a no-delivery fixture before restoring inference on those three jobs. They remain enabled with retired pins, unchanged; they are not described as paused or repaired.
+- [x] Supply bounded per-job source/effect/delivery contracts and no-delivery fixtures; `ops/legacy_job_preview.py` passes five checks on Python 3.9/3.12. Native source authentication and restoring inference remain open. They remain enabled with retired pins, unchanged; they are not described as paused or repaired.
 - [ ] Observe a successful natural run before claiming delivery. Never replay missed external actions.
 - [x] Preserve Muse personal work and original personal/deal/medical history and credentials.
 
@@ -121,3 +121,32 @@ Evidence: `/Users/nav/floww-execution-20261107/status/0700/` and the installed p
 Real native research remains parked. Real internal source admission, atomic Liquid Paper binding, a separate venue policy/ledger, broader coding dispatch, three legacy job contracts, future market sessions and full historical acceptance remain open. Time Machine still has no writable supported destination. The Codex Ralph hook requires the owner's native trust click because Computer Use was denied access to Codex for safety reasons. Nothing bypasses that review.
 
 The paired premium app remains release `3948b9c715c687ad89839ed884040c7dc7e8cced` on 3000/8213. These operations and unmounted internal-paper changes do not claim a new application release. Original 8000, active stores, rollback releases and the 450-row history queue remain retained. Full execution receipt: `/Users/nav/floww-execution-20261107/REPORT.md`.
+
+## November 7 continuation evidence
+
+Current receipt: `/Users/nav/floww-continuation-20261107/REPORT.md`.
+
+- Task 3: minimal deterministic copied-fact view, durable shared daily four-pair
+  prepayment/circuit and all offline/rejection diagnostics independently accepted.
+  New two-request trial has explicit ReadTimeout evidence, no accepted facts;
+  circuit parked, trial paused, no collector installation.
+- Task 4: bounded stored Public adapter, exact owner/source intent and stage/fill
+  lineage, external-access-disabled reader, strict missing/zero handling and
+  fresh signed fill selection independently accepted as source only. A complete
+  synthetic roundtrip passes. Production authority/units/lifecycle/costs/marks
+  and application book wiring remain uncommissioned.
+- Task 6: one actual product task admitted through an ID-consumption ledger and
+  immutable external checker. Model-produced receipt edit passes 772 checks and
+  equals the root fix. Whole native completion still fails its deadline; the
+  general dispatcher remains open. Both live admissions stay consumed.
+- Task 7: local no-delivery contracts/fixtures delivered. Original broad jobs
+  remain unchanged; authenticated native readers and natural delivery unverified.
+- Task 8: receipt prioritizes precise prerequisites, all capabilities false.
+  Combined check is 203 operations tests + 323 paper/lease/source tests + 50
+  subtests. No hosted CI or whole-app suite is claimed in this continuation.
+
+Independent rejections and their reproductions remain in `reviews/`; corrections
+are permanent regression tests, not rewritten history. No actual orders or
+profitability results were produced. The 450 historical rows are retained and
+are not blanket accepted. Time Machine lacks a writable destination; Ralph Stop
+trust needs the native owner click after Computer Use denied Codex access.
