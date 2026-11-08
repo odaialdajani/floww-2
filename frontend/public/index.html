@@ -44,37 +44,8 @@
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
-    <script>
-      // Register service worker (only in production builds).
-      // R8-06: 127.0.0.1 and [::1] are the same machine as localhost — the
-      // kill-switch SW reloads every controlled page on activate, which
-      // turned local IP-literal dev sessions into a reload loop (aborted
-      // fetches, blank captures). Never register on loopback.
-      var __host = window.location.hostname;
-      var __isLoopback = (__host === 'localhost' || __host === '127.0.0.1' || __host === '[::1]');
-      if ('serviceWorker' in navigator && !__isLoopback) {
-        window.addEventListener('load', function() {
-          navigator.serviceWorker.register('/service-worker.js')
-            .then(function(reg) {
-              console.log('SW registered:', reg.scope);
-            })
-            .catch(function(err) {
-              console.log('SW registration failed:', err);
-            });
-        });
-      }
-      // Also register in development for testing PWA install
-      if ('serviceWorker' in navigator && window.location.hostname === 'localhost' && window.__SW_DEBUG__) {
-        window.addEventListener('load', function() {
-          navigator.serviceWorker.register('/service-worker.js')
-            .then(function(reg) {
-              console.log('SW registered (dev):', reg.scope);
-            })
-            .catch(function(err) {
-              console.log('SW registration failed (dev):', err);
-            });
-        });
-      }
-    </script>
+    <!-- Service worker retired: do not register it again. Keep service-worker.js
+         available so existing installations can update, clear old caches, and
+         unregister once without restarting the registration/reload cycle. -->
   </body>
 </html>
