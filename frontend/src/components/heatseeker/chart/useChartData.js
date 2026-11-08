@@ -55,7 +55,7 @@ export function useChartData({ symbol, interval = '5m', session = 'rth', scope =
   const sessionRef = useRef(null);
   if (!sessionRef.current) sessionRef.current = createChartSession();
   const paneSession = sessionRef.current;
-  const [data, setData] = useState(null);
+  const [result, setResult] = useState(null);
   const [status, setStatus] = useState('idle'); // idle | loading | ready | error
   const [meta, setMeta] = useState({ stale: false, cached: false, budget: false, outage: false });
   const inflightRef = useRef(new Map()); // key -> { gen, controller, shared }
@@ -80,7 +80,7 @@ export function useChartData({ symbol, interval = '5m', session = 'rth', scope =
       const outcome = (await fetcher({ symbol, interval, session, scope, signal: controller.signal })) || {};
       if (controller.signal.aborted || !paneSession.shouldApply(key, gen)) return undefined;
       setMeta({ stale: !!outcome.stale, cached: !!outcome.cached, budget: !!outcome.budgetExhausted, outage: !!outcome.outage });
-      setData(typeof outcome.data === 'undefined' ? null : outcome.data);
+      setResult({key, gen, data: outcome.data ?? null});
       setStatus(outcome.error ? 'error' : 'ready');
     } catch (error) {
       if (controller.signal.aborted || !paneSession.shouldApply(key, gen)) return undefined;
@@ -101,5 +101,6 @@ export function useChartData({ symbol, interval = '5m', session = 'rth', scope =
     inflightRef.current.clear();
   }, []);
 
-  return { data, status, badge: badgeFor(meta), meta, refresh: load, session: paneSession };
+  const generation = enabled && status === 'ready' && result?.key === key ? result.gen : null;
+  return { data: result?.data ?? null, generation, status, badge: badgeFor(meta), meta, refresh: load, session: paneSession };
 }

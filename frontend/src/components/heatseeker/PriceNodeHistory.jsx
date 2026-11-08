@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { API } from "../../config/api";
 import RecordedPriceChart from "./RecordedPriceChart";
@@ -34,7 +34,7 @@ function savedViewLabel(scope,index){
  return mode+" | "+sorted.length+" "+(sorted.length===1?"expiry":"expiries")+" | "+sorted[0]+(sorted.length>1?" to "+sorted.at(-1):"");
 }
 
-export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen, onOpenChange, primary = false, toolbarActions = null, exposureLine = null, darkLevels = null, flowBars = null, alertLines = null, showAtlas = true, forcedScope = null, onRecordNodes = null, cvdLine = null, onQuality = null, onEnvelopes = null, fitMode = "fit-visible", onReplayState = null, onReplayController = null, replaySourceId = null, replayEpoch = null, sync = null, onSyncEvent = null, chartFocus = false, onChartFocusChange = null }) {
+export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen, onOpenChange, primary = false, toolbarActions = null, exposureLine = null, darkLevels = null, flowBars = null, alertLines = null, showAtlas = true, forcedScope = null, onRecordNodes = null, cvdLine = null, onQuality = null, onEnvelopes = null, fitMode = "fit-visible", onReplayState = null, onChartReading = null, onReplayController = null, replaySourceId = null, replayEpoch = null, sync = null, onSyncEvent = null, chartFocus = false, onChartFocusChange = null }) {
   const [localOpen, setLocalOpen] = useState(false);
   const open = controlledOpen ?? (primary || localOpen);
   const setOpen = value => { setLocalOpen(value); onOpenChange?.(value); };
@@ -231,7 +231,7 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
     // A transport rejection is an unreachable read, never a live one.
     throw Object.assign(error instanceof Error ? error : new Error("history read failed"), { outage: true });
   }), [ticker, days, minutes, sessions, activeScope, contract]);
-  const { data: readData, status, badge: readBadge } = useChartData({
+  const { data: readData, generation: readGeneration, status, badge: readBadge } = useChartData({
     symbol: ticker, interval: minutes, session: sessions, scope: paneIdentity,
     fetcher: fetchHistory, enabled: open,
   });
@@ -533,6 +533,16 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
   const awareTime = value => typeof value === "string" && /(?:Z|[+-]\d{2}:\d{2})$/.test(value)
     ? Date.parse(value) : NaN;
   const cutoff = awareTime(comparisonTime);
+  const scopeRecorded = payload?.node_status === "available" && Array.isArray(payload.scopes)
+    && payload.scopes.includes(comparisonScope) && (!activeScope || activeScope === comparisonScope);
+  useLayoutEffect(() => {
+    if (!onChartReading) return;
+    onChartReading(readGeneration != null && Number.isFinite(cutoff) ? {
+      source: replaySourceId, epoch: replayEpoch, ticker: ticker.toUpperCase(),
+      scope: scopeRecorded ? comparisonScope : null, cursor: cutoff / 1000,
+      generation: `${ticker}:${readGeneration}:${replayEpoch ?? "default"}`,
+    } : null);
+  }, [onChartReading, readGeneration, cutoff, ticker, scopeRecorded, comparisonScope, replaySourceId, replayEpoch]);
   // Include view controls so the old result disappears on the first render
   // of a new request, before effects can clear the old history payload.
   const velocityRequestKey = JSON.stringify([ticker, comparisonScope, comparisonTime,

@@ -52,7 +52,7 @@ test('fetch-time opening range is refused after scrubbing to an earlier cursor',
 });
 
 test('actual chart reports use millisecond windows but transport context in server seconds', async () => {
-  axios.get.mockResolvedValue({data:{ticker:'SPY',frames,query_key:'owning-scope',scopes:[]}});
+  axios.get.mockResolvedValue({data:{ticker:'SPY',frames,query_key:'owning-scope',scopes:['owning-scope'],node_status:'available'}});
   const onContext=jest.fn(),onReplay=jest.fn();
   const first=render(<PriceNodeHistory ticker="SPY" open onReplayState={onReplay} />);
   await waitFor(()=>expect(onReplay.mock.calls.some(([r])=>r?.bar)).toBe(true));
