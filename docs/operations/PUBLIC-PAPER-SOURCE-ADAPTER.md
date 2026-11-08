@@ -10,17 +10,20 @@ durable lease/stop fencing, immutable artifacts, accounting and capacity limits.
 
 The constructor requires an existing account reader, a `StoredPublicSnapshots`
 reader pinned to one server-selected existing DuckDB, and an
-`AuthenticatedEvidenceDirectory`. Capture requests may select only
-`{"confirmation_id": "<64 hex content digest>"}`. Request quote fields, model
-output, calendars, equity and approval flags cannot establish source truth.
+`AuthenticatedEvidenceDirectory`. Stage requests may select only
+`{"confirmation_id": "<64 hex content digest>"}`. The ordinary service fill
+method supplies no confirmation selector; the adapter resolves one from an
+independently persisted, authenticated fill-selection record. Request quote fields,
+model output, calendars, equity and approval flags cannot establish source truth.
 
 The evidence directory is an **external trust interface, not an approval
-issuer**. It only reads bounded, regular, non-symlink files named by their content
-digest. Files contain `kind`, `body`, and `signature`; signatures are standard
+issuer**. It only reads bounded, regular, non-symlink files. Evidence files are
+named by their content digest; fill-selection indexes are named by their exact
+selector digest and their signed contents are pinned in each admission. Files contain `kind`, `body`, and `signature`; signatures are standard
 Python `hmac` HMAC-SHA256 over canonical `{"kind": kind, "body": body}` JSON.
 Separate constructor-provided keys authenticate owner records (`confirmation`,
-`policy_acceptance`) and source records (`source_evidence`). There are no default
-keys, signer, writer, provisioning path, network route, or environment-key lookup.
+`policy_acceptance`, `fill_selection`) and source records (`source_evidence`).
+There are no default keys, signer, writer, provisioning path, network route, or environment-key lookup.
 Only test fixtures issue synthetic records into temporary directories.
 
 A signature establishes that a configured issuer attested to bytes. It **does
@@ -35,11 +38,52 @@ version binding are not a substitute for issuer revocation design.
 Owner confirmation binds exact owner/account/internal venue/recovery epoch,
 account version, accepted time, expiry, proposal version, canonical economics,
 current policy digest, exact policy-acceptance reference, and exact source-evidence
-reference. The signed source bundle binds the same ownership and policy,
-economics digest, validity window, exact stored row content hashes, snapshot and
+reference. Both owner confirmation and source bundle must carry the same exact
+`intent`, independently of the generic economic-field digest. A stage intent is
+`{kind: "stage", order_id, structure_id}`. The order ID is the account's next
+immutable epoch/sequence identity; a reduction structure ID is the exact held
+structure, not merely a matching contract or position with the same economics.
+Missing or mismatched targets refuse. The signed source bundle binds the same
+ownership and policy, economics digest, validity window, exact stored row content hashes, snapshot and
 contract selections, complete contract metadata, cost evidence, and session-open
 observation. Verification rereads these exact records; it never chooses a newer
 snapshot, issues a replacement confirmation, or grants a Boolean risk pass.
+
+## Ordinary fill composition and fresh-source authority
+
+For a fill, the adapter first checks the exact existing order and finds at most
+two retained stage artifacts, requiring exactly one. It validates the immutable
+artifact digest, owner/account/epoch, original confirmation signature, exact
+staged economics and order/structure identity, and successful durable stage
+resolution receipt. The receipt must bind the original creation time and current
+policy. A signed fill intent is `{kind: "fill", order_id, structure_id,
+stage_artifact_digest}`. Remaining quantity, fill list and status may legitimately
+change; the adapter does not hash the entire mutable order as authorization.
+
+The trusted selector is `{binding, policy_digest, account_version, intent}`. The
+read-only authority directory looks up `fill-<digest(selector)>.json`, whose
+owner-role-signed `fill_selection` body is exactly
+`{selector, confirmation_id}`. That content-addressed confirmation points to a
+separately signed fresh source bundle. Every field must match. The original
+successful stage authorizes no fabricated source refresh and is not silently
+reused as a new fill approval. Missing selection fails explicitly as
+`fresh_fill_authority_unavailable`. The configured issuer must authenticate owner
+authority for the fill; this adapter provides no writer, issuer or unattended
+approval minting. The fill index and fresh-source issuer remain unprovisioned.
+
+Each admission pins the selection record's content digest and stage artifact
+digest alongside source references. Resume rereads the same account-version
+selection and refuses signed index replacement or other changed content. Exact
+completed operation retries use the existing durable receipt without recapture.
+
+A stage snapshot normally precedes order creation and cannot satisfy the actual
+one-second fill latency. Positive service composition tests therefore stage with
+`latency_ms=1000` and independently sign a new recorded quote at stage time plus
+two seconds. Pre-latency quotes still receive the existing durable risk refusal;
+stale source capture remains refused without new account writes. Restart and
+partial fills use new exact-version authority/source selections while preserving
+the original order lineage. This source composition is tested only with synthetic
+issuers, temporary recorder rows and isolated fake account storage.
 
 ## Stored schema and bounded reads
 
@@ -67,7 +111,12 @@ Positive integer sizes on both sides are mandatory. Unknown size is distinct
 from measured zero in readiness reports; both refuse execution.
 
 The recorder's `DEFAULT_STANDARD` multiplier is **not** accepted as contract
-proof. The source row must have explicit multiplier provenance and match a
+proof. The source row must have a trimmed, nonempty, bounded provenance label using
+letters, digits and `_.:/-`; empty/whitespace labels and the recorder's known
+unknown/invalid/quarantined markers refuse in capture and readiness. The recorder
+has no established production provenance allowlist, so a syntactically valid
+label is not source truth: the independent issuer still must verify its origin.
+The recorded multiplier must match a
 separately attested standard multiplier of 100. Signed metadata must also state
 USD per-share option premium units, contracts for quote size, known unadjusted
 status, clear corporate-action status, active lifecycle, exact strike/right/

@@ -26,7 +26,7 @@ from services.agent.paper import execution, risk, valuation
 from services.agent.paper.accounting import exact
 from services.agent.paper.admission import CapturedInputs
 from services.agent.paper.policy import binding_of, validate_policy, valuation_policy
-from services.agent.paper.repository import PaperConflict, canonical, digest, validate_json
+from services.agent.paper.repository import PaperConflict, canonical, digest, operation_version, scope, validate_json
 from services.solstice_calendar import ET, exchange_day_info
 
 MAX_ROWS = 64
@@ -60,6 +60,15 @@ def _ref(value):
     return value
 
 
+def _multiplier_provenance(value):
+    # Actual recorder shape is a bounded label, not a producer-authenticated
+    # enum. Reject its known analytical refusal/default markers; the separate
+    # signed source issuer must still establish the label's factual origin.
+    return (isinstance(value, str) and re.fullmatch(r"[A-Za-z][A-Za-z0-9_.:/-]{0,199}", value) is not None
+            and value not in {"DEFAULT_STANDARD", "MULTIPLIER_UNKNOWN", "MULTIPLIER_INVALID",
+                              "MULTIPLIER_ALIAS_DISAGREE", "CONTRACT_QUARANTINED"})
+
+
 class AuthenticatedEvidenceDirectory:
     """Read existing content-addressed records, authenticated with server keys.
 
@@ -74,13 +83,33 @@ class AuthenticatedEvidenceDirectory:
         _require(confirmation_key != evidence_key, "independent_issuer_keys_required")
         self._directory = Path(directory).resolve(strict=True)
         self._keys = {"confirmation": confirmation_key, "policy_acceptance": confirmation_key,
-                      "source_evidence": evidence_key}
+                      "source_evidence": evidence_key, "fill_selection": confirmation_key}
 
     async def read(self, reference, kind):
-        _ref(reference)
+        return await self._read_file(_ref(reference) + ".json", kind, expected_digest=reference)
+
+    async def resolve_fill(self, selector):
+        """Read an independently issued exact-version selector, never issue one.
+
+        Its owner-role signature binds the exact successful stage lineage and
+        chooses a separately signed fill confirmation/fresh source bundle.
+        """
+        selector = _bounded(selector)
+        try:
+            record = await self._read_file("fill-" + digest(selector) + ".json", "fill_selection")
+        except SourceRefusal as exc:
+            if str(exc) == "persisted_evidence_unavailable":
+                raise SourceRefusal("fresh_fill_authority_unavailable") from None
+            raise
+        body = record["body"]
+        _require(isinstance(body, dict) and set(body) == {"selector", "confirmation_id"}
+                 and body["selector"] == selector, "fill_selection_binding_mismatch")
+        return dict(confirmation_id=_ref(body["confirmation_id"])), "fill-selection:" + digest(record)
+
+    async def _read_file(self, filename, kind, *, expected_digest=None):
         _require(kind in self._keys, "evidence_kind_invalid")
         try:
-            fd = os.open(self._directory / (reference + ".json"), os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+            fd = os.open(self._directory / filename, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
             with os.fdopen(fd, "rb") as stream:
                 info = os.fstat(stream.fileno())
                 _require(stat.S_ISREG(info.st_mode) and info.st_size <= MAX_BYTES, "evidence_file_invalid")
@@ -89,7 +118,7 @@ class AuthenticatedEvidenceDirectory:
             record = _bounded(json.loads(raw))
             _require(set(record) == {"kind", "body", "signature"} and record["kind"] == kind,
                      "evidence_kind_invalid")
-            _require(digest(record) == reference, "immutable_evidence_changed")
+            _require(expected_digest is None or digest(record) == expected_digest, "immutable_evidence_changed")
             expected = hmac.new(self._keys[kind], canonical({"kind": kind, "body": record["body"]}).encode(),
                                 hashlib.sha256).hexdigest()
             _require(isinstance(record["signature"], str)
@@ -189,7 +218,7 @@ def inspect_stored_row(record, *, now, max_age_seconds):
     gaps = ["size_unit_unverified", "price_currency_unverified", "lifecycle_unverified",
             "corporate_action_status_unverified", "costs_unverified", "confirmation_unavailable",
             "policy_acceptance_unavailable", "session_open_equity_unverified"]
-    if row.get("multiplier_source") in (None, "DEFAULT_STANDARD"):
+    if not _multiplier_provenance(row.get("multiplier_source")):
         gaps.append("standard_multiplier_unverified")
     try:
         market_session(now)
@@ -271,16 +300,106 @@ class PublicPaperSourceAdapter:
         self.repository, self.snapshots, self.evidence = repository, snapshots, evidence
         self.clock = clock or (lambda: datetime.now(UTC))
 
+    @staticmethod
+    def _stage_intent(current, parameters):
+        order_id = current["epoch"] + ":" + str(current["state"]["next_order_sequence"])
+        structure = parameters.get("structure_id") if parameters.get("side") == "sell" else order_id
+        _require(isinstance(structure, str) and 1 <= len(structure) <= 200, "exact_intent_target_required")
+        if parameters.get("side") == "buy":
+            _require(parameters.get("structure_id") in (None, order_id), "stage_intent_target_mismatch")
+        else:
+            _require(structure in current["state"]["positions"], "stage_intent_held_target_missing")
+        return dict(kind="stage", order_id=order_id, structure_id=structure)
+
+    async def _stage_lineage(self, current, parameters):
+        """Resolve one successful immutable stage and match fixed order identity.
+
+        Remaining quantity, status, fills and book versions legitimately evolve;
+        they are not a replacement for immutable parent/order authorization.
+        """
+        order_id = parameters.get("order_id")
+        order = current["state"]["orders"].get(order_id)
+        _require(isinstance(order, dict) and order.get("order_id") == order_id
+                 and risk.economics(order) == risk.economics(parameters)
+                 and all(order.get(key) == parameters.get(key) for key in ("structure_id", "created_at")),
+                 "fill_exact_stored_order_required")
+        _require(hasattr(self.repository, "admissions"), "fill_stage_lineage_unavailable")
+        binding = scope(current["owner"], current["account_id"], "internal")
+        query = {**binding, "epoch": current["epoch"], "command.kind": "stage",
+                 "confirmation_record.body.intent.order_id": order_id}
+        parents = [record async for record in self.repository.admissions.find(query).limit(2)]
+        _require(len(parents) == 1, "fill_stage_lineage_missing_or_ambiguous")
+        parent = _bounded(parents[0])
+        parent_id, parent_digest = parent.get("parent_operation"), parent.get("artifact_digest")
+        _require(parent_digest == digest({k: v for k, v in parent.items() if k != "artifact_digest"})
+                 and parent.get("_id") == digest([binding, parent_id])
+                 and parent.get("starting_version") == operation_version(parent_id)
+                 and parent_id.split(":", 1)[0] == current["epoch"]
+                 and all(parent.get(key) == value for key, value in binding.items())
+                 and parent.get("epoch") == current["epoch"] and parent["command"].get("kind") == "stage"
+                 and parent.get("action") == ("entry" if order["side"] == "buy" else "reduce"), "fill_stage_artifact_changed")
+        intent = dict(kind="stage", order_id=order_id, structure_id=order["structure_id"])
+        stage_confirmation = await self.evidence.read(digest(parent["confirmation_record"]), "confirmation")
+        body = stage_confirmation["body"]
+        _require(isinstance(body, dict), "stage_confirmation_body_invalid")
+        _require(stage_confirmation == parent["confirmation_record"] and body.get("intent") == intent
+                 and body.get("binding") == binding_of(current) and body.get("accepted_by") == current["owner"]
+                 and body.get("authentication") == "authenticated_owner_session"
+                 and body.get("policy_digest") == current["state"]["risk_policy"]["digest"]
+                 and body.get("policy_digest") == parent.get("policy_digest")
+                 and body.get("account_version") == parent["starting_version"]
+                 and body.get("economics") == risk.economics(order)
+                 and risk.economics(parent["command"]["parameters"]) == risk.economics(order)
+                 and order.get("risk_economics_digest") == digest(risk.economics(order)), "fill_stage_intent_mismatch")
+        expected_structure = (order_id if order["side"] == "buy"
+                              else parent["command"]["parameters"].get("structure_id"))
+        _require(expected_structure == order["structure_id"], "fill_stage_structure_mismatch")
+        resolve = parent["resolve_operation"]
+        _require(resolve.split(":", 1)[0] == current["epoch"]
+                 and operation_version(resolve) == parent["starting_version"] + 1, "fill_stage_resolution_invalid")
+        receipt = await self.repository.receipt(current["owner"], current["account_id"], resolve,
+            dict(kind="paper_admission_resolve", parent_operation=parent_id, artifact_digest=parent_digest))
+        event = (receipt or {}).get("body", {})
+        decision = event.get("risk_decision", {})
+        _require(receipt is not None and receipt.get("version") == parent["starting_version"] + 2
+                 and receipt.get("operation_id") == resolve
+                 and receipt["version"] <= current["version"] and event.get("assessment_status") == "pass"
+                 and event.get("kind") == "paper_order_staged" and event.get("order_id") == order_id
+                 and event.get("structure_id") == order["structure_id"]
+                 and decision.get("status") == "pass"
+                 and decision.get("evaluated_at") == order.get("created_at")
+                 and decision.get("binding") == binding_of(current)
+                 and decision.get("policy_digest") == body["policy_digest"], "fill_successful_stage_receipt_required")
+        return dict(kind="fill", order_id=order_id, structure_id=order["structure_id"],
+                    stage_artifact_digest=parent_digest)
+
     async def _authority(self, reference, current, parameters, *, capture):
+        now = execution.instant(self.clock())
+        policy = validate_policy(current["state"].get("risk_policy"), binding_of(current), now=now)
+        extra_refs = []
+        if "order_id" in parameters:
+            intent = await self._stage_lineage(current, parameters)
+            version = current["version"]
+            if not capture:
+                _require(isinstance(reference, dict) and set(reference) == {"confirmation_id"}, "confirmation_selection_only")
+                retained = await self.evidence.read(reference["confirmation_id"], "confirmation")
+                version = retained["body"].get("account_version")
+            selector = dict(binding=binding_of(current), policy_digest=policy["digest"],
+                            account_version=version, intent=intent)
+            selected, index_ref = await self.evidence.resolve_fill(selector)
+            _require(reference is None or reference == selected, "fill_confirmation_selection_mismatch")
+            reference = selected
+            extra_refs = [index_ref, "stage-artifact:" + intent["stage_artifact_digest"]]
+        else:
+            intent = self._stage_intent(current, parameters)
         _require(isinstance(reference, dict) and set(reference) == {"confirmation_id"}, "confirmation_selection_only")
         signed = await self.evidence.read(reference["confirmation_id"], "confirmation")
         body = signed["body"]
         _require(isinstance(body, dict), "confirmation_body_invalid")
-        now = execution.instant(self.clock())
-        policy = validate_policy(current["state"].get("risk_policy"), binding_of(current), now=now)
         _require(body.get("binding") == binding_of(current) and body.get("accepted_by") == current["owner"]
                  and body.get("authentication") == "authenticated_owner_session", "confirmation_owner_mismatch")
         _require(body.get("policy_digest") == policy["digest"], "confirmation_policy_mismatch")
+        _require(body.get("intent") == intent, "confirmation_intent_mismatch")
         _require(body.get("economics") == risk.economics(parameters), "confirmation_economics_mismatch")
         version = body.get("account_version")
         _require(type(version) is int and current["version"] in ((version,) if capture else (version, version + 1)),
@@ -295,9 +414,10 @@ class PublicPaperSourceAdapter:
         _require(isinstance(bundle, dict), "source_evidence_body_invalid")
         _require(bundle.get("binding") == binding_of(current) and bundle.get("policy_digest") == policy["digest"]
                  and bundle.get("economics_digest") == digest(risk.economics(parameters)), "source_evidence_binding_mismatch")
+        _require(bundle.get("intent") == intent, "source_evidence_intent_mismatch")
         _require(execution.instant(bundle.get("verified_at")) <= now < execution.instant(bundle.get("valid_until")),
                  "source_evidence_expired_or_future")
-        return signed, bundle, policy
+        return signed, bundle, policy, extra_refs
 
     @staticmethod
     def _quote(record, metadata, terms, now):
@@ -318,7 +438,7 @@ class PublicPaperSourceAdapter:
                  == Decimal(int(strike)) / Decimal(1000), "contract_strike_or_right_mismatch")
         _require(metadata.get("size_unit") == "contracts" and metadata.get("price_unit") == "USD_per_share",
                  "source_units_unverified")
-        _require(row.get("multiplier_source") not in (None, "DEFAULT_STANDARD")
+        _require(_multiplier_provenance(row.get("multiplier_source"))
                  and exact(str(row.get("multiplier")), positive=True) == exact(metadata.get("premium_factor")) == 100,
                  "standard_multiplier_unverified")
         _require(metadata.get("corporate_action_status") == "clear" and metadata.get("adjusted") is False
@@ -355,7 +475,7 @@ class PublicPaperSourceAdapter:
         return quote
 
     async def _capture(self, current, parameters, reference, *, capture):
-        signed, bundle, policy = await self._authority(reference, current, parameters, capture=capture)
+        signed, bundle, policy, extra_refs = await self._authority(reference, current, parameters, capture=capture)
         terms = risk.economics(parameters)
         _require(terms["product_kind"] == "option", "unsupported_instrument")
         market_session(self.clock())
@@ -405,7 +525,7 @@ class PublicPaperSourceAdapter:
                       valid_until=min(execution.instant(bundle["valid_until"]), execution.instant(signed["body"]["valid_until"])),
                       verifier_version="persisted-public-source-v1", now=now,
                       verify_evidence=lambda record: record["costs"] == costs and record["economics"] == signed["body"]["economics"])
-        refs += ["confirmation:" + reference["confirmation_id"], "evidence:" + signed["body"]["evidence_ref"],
+        refs += extra_refs + ["confirmation:" + digest(signed), "evidence:" + signed["body"]["evidence_ref"],
                  "policy-acceptance:" + signed["body"]["policy_acceptance_ref"]]
         return CapturedInputs(frame, trade, refs, signed, quotes[terms["contract_id"]])
 

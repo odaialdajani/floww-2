@@ -98,14 +98,15 @@ async def setup(tmp_path):
     source = StoredPublicSnapshots(path)
     selections = [dict(snapshot_id="synthetic-snapshot", contract_id=CID)]
     records = await source.read(selections)
-    bundle = dict(binding=binding, policy_digest=policy["digest"], economics_digest=digest(risk.economics(terms)),
+    intent = dict(kind="stage", order_id=EPOCH + ":1", structure_id=EPOCH + ":1")
+    bundle = dict(intent=intent, binding=binding, policy_digest=policy["digest"], economics_digest=digest(risk.economics(terms)),
                   verified_at=NOW.isoformat(), valid_until=(NOW + timedelta(minutes=5)).isoformat(),
                   metadata=[metadata], costs=costs, selections=selections,
                   source_refs=["public-stored:" + digest(row) for row in records],
                   session_open=dict(session_id="XNYS:2026-11-06", source_id="SYNTHETIC-OPEN-VALUATION",
                                     observed_at="2026-11-06T14:30:00+00:00", equity="10000"))
     acceptance = dict(binding=binding, policy=policy, accepted_by=OWNER, authentication="authenticated_owner_session")
-    confirmation = dict(binding=binding, policy_digest=policy["digest"], economics=risk.economics(terms),
+    confirmation = dict(intent=intent, binding=binding, policy_digest=policy["digest"], economics=risk.economics(terms),
                         accepted_by=OWNER, authentication="authenticated_owner_session", account_version=4,
                         accepted_at=NOW.isoformat(), valid_until=(NOW + timedelta(minutes=5)).isoformat(),
                         proposal_version=1, policy_acceptance_ref=sign(directory, "policy_acceptance", acceptance))
@@ -456,3 +457,250 @@ async def test_even_a_local_table_view_is_not_an_admitted_snapshot(setup):
     conn.close()
     with pytest.raises(SourceRefusal, match="stored_snapshot_unavailable_or_ambiguous"):
         await c.source.read(c.bundle["selections"])
+
+
+@pytest.mark.parametrize("value", ["", "   ", "\t", "DEFAULT_STANDARD", "MULTIPLIER_UNKNOWN"])
+async def test_review_blank_or_unknown_multiplier_provenance(setup, value):
+    c = setup
+    conn = duckdb.connect(str(c.path))
+    conn.execute("UPDATE contract_observations_v2 SET multiplier_source=?", [value])
+    conn.close()
+    rows = await c.source.read(c.bundle["selections"])
+    c.bundle["source_refs"] = ["public-stored:" + digest(row) for row in rows]
+    c.resign()
+    with pytest.raises(SourceRefusal, match="standard_multiplier_unverified"):
+        await capture(c)
+    assert "standard_multiplier_unverified" in inspect_stored_row(rows[0], now=NOW, max_age_seconds=60)["gaps"]
+
+
+async def test_review_exact_same_contract_reduction_target_is_authorized(setup):
+    c = setup
+    opening = (await capture(c)).opening_trade_evidence
+    c.terms.update(side="sell", structure_id="held-A")
+    c.current["state"]["cash"] = "9600"
+    for key in ("held-A", "held-B"):
+        c.current["state"]["positions"][key] = dict(contract_id=CID, product_kind="option", premium_factor="100",
+                                                    lots=[dict(quantity=1, cost_per_unit="200")])
+        c.current["state"]["exit_capacity"][key] = dict(events=execution.EXIT_EVENTS,
+                                                        orders=execution.EXIT_ORDERS, quotes=execution.EXIT_QUOTES)
+    c.current["state"]["risk_trades"] = {key: copy.deepcopy(opening) for key in ("held-A", "held-B")}
+    c.confirmation["intent"] = c.bundle["intent"] = dict(kind="stage", order_id=EPOCH + ":1", structure_id="held-A")
+    c.confirmation["economics"] = risk.economics(c.terms)
+    c.bundle["economics_digest"] = digest(risk.economics(c.terms))
+    c.resign()
+    first = await capture(c, action="reduce")
+    legitimate = risk.prepare_stage(c.current, c.terms, expected_version=4, trade_evidence=None, frame=first.frame, now=NOW)
+    assert legitimate["status"] == "pass", legitimate["reason"]
+    redirected = dict(c.terms, structure_id="held-B")
+    # Both held structures have the same valid source and economics. Authority,
+    # not generic risk arithmetic, must distinguish the exact intended target.
+    with pytest.raises(SourceRefusal, match="intent"):
+        await capture(c, action="reduce", frozen_parameters=redirected)
+    with pytest.raises(SourceRefusal, match="intent"):
+        await verify(c, first, frozen_parameters=redirected)
+
+
+@pytest.fixture
+async def service_context(setup, tmp_path):
+    # Actual service/admission/guarded repository, with faithful isolated Mongo
+    # fake and a private temporary lease. No application book or live service.
+    from scripts.paper_synthetic_fixture import persist_synthetic_policy
+    from services.agent.paper.execution_control import PaperExecutionAuthority
+    from services.agent.paper.guarded_repository import GuardedPaperRepository
+    from services.agent.paper.service import PreparedPaperService
+    from services.execution_lease import acquire_lease, release_lease
+    from test_agent_paper_runner import _FakeDatabase
+
+    c = setup
+    repo = GuardedPaperRepository(_FakeDatabase())
+    await repo.initialize()
+    await repo.create(OWNER, ACCOUNT, execution.new_book("10000", currency="USD"))
+    await persist_synthetic_policy(repo, OWNER, ACCOUNT, synthetic_policy_body(), now=NOW)
+    lease_path = str(tmp_path / "synthetic-public-executor.lease")
+    lease = acquire_lease(lease_path, "synthetic-public-service")
+    assert lease["ok"]
+    authority = PaperExecutionAuthority(lease_path, lease["token"], lambda: "running")
+    c.repo = repo
+    c.adapter.repository = repo
+    c.service = PreparedPaperService(repo, admission_adapter=c.adapter, execution_authority=authority, clock=lambda: c.clock[0])
+    repo.accounts.server_clock = lambda: c.clock[0]
+    await c.service.admission.bind_execution(OWNER, ACCOUNT)
+    c.current = await repo.read(OWNER, ACCOUNT)
+    c.binding = binding_of(c.current)
+    c.terms.update(latency_ms=1000, slippage_enabled=False)
+    policy = c.current["state"]["risk_policy"]
+    c.confirmation.update(binding=c.binding, policy_digest=policy["digest"], account_version=c.current["version"],
+                          economics=risk.economics(c.terms),
+                          intent=dict(kind="stage", order_id=c.current["epoch"] + ":1", structure_id=c.current["epoch"] + ":1"))
+    c.confirmation["policy_acceptance_ref"] = sign(c.directory, "policy_acceptance",
+        dict(binding=c.binding, policy=policy, accepted_by=OWNER, authentication="authenticated_owner_session"))
+    c.bundle.update(binding=c.binding, policy_digest=policy["digest"], economics_digest=digest(risk.economics(c.terms)),
+                    intent=c.confirmation["intent"])
+    c.resign()
+    try:
+        yield c
+    finally:
+        release_lease(lease_path, lease["token"])
+
+
+async def service_operation(c):
+    from services.agent.paper.repository import operation_id
+    current = await c.repo.read(OWNER, ACCOUNT)
+    return operation_id(current["version"], epoch=current["epoch"])
+
+
+async def service_stage(c):
+    parent = await service_operation(c)
+    result, created = await c.service.stage(OWNER, ACCOUNT, parent, c.terms, c.ref)
+    assert created
+    assert result["body"]["assessment_status"] == "pass"
+    c.stage_artifact = next(row for row in c.repo.admissions.docs if row["parent_operation"] == parent)
+    c.stage_order = result["body"]["order_id"]
+    await c.service.admission.replenish(OWNER, ACCOUNT)
+    return result
+
+
+async def issue_synthetic_fill(c, *, new_time=None, quote_changes=None, capture_inputs=True):
+    # TEST-ONLY issuer: independently signed new source after the 1s latency.
+    c.current = await c.repo.read(OWNER, ACCOUNT)
+    order = c.current["state"]["orders"][c.stage_order]
+    at = new_time or NOW + timedelta(seconds=2)
+    c.clock[0] = at
+    sid = "synthetic-fresh-fill-" + str(c.current["version"])
+    save_snapshot(c.path, sid=sid, changes={"bid_timestamp": at.isoformat(), "ask_timestamp": at.isoformat(),
+                                           "received_at": at.isoformat(), **(quote_changes or {})})
+    c.bundle["selections"] = [dict(snapshot_id=sid, contract_id=CID)]
+    c.bundle["source_refs"] = ["public-stored:" + digest(row) for row in await c.source.read(c.bundle["selections"])]
+    intent = dict(kind="fill", order_id=order["order_id"], structure_id=order["structure_id"],
+                  stage_artifact_digest=c.stage_artifact["artifact_digest"])
+    c.confirmation.update(intent=intent, account_version=c.current["version"], accepted_at=at.isoformat(),
+                          economics=risk.economics(order))
+    c.bundle.update(intent=intent, verified_at=at.isoformat(), economics_digest=digest(risk.economics(order)))
+    c.resign()
+    selector = dict(binding=c.binding, policy_digest=c.confirmation["policy_digest"],
+                    account_version=c.current["version"], intent=intent)
+    KEYS["fill_selection"] = KEYS["confirmation"]
+    ref = sign(c.directory, "fill_selection", dict(selector=selector, confirmation_id=c.ref["confirmation_id"]))
+    index_path = c.directory / ("fill-" + digest(selector) + ".json")
+    index_path.write_bytes((c.directory / (ref + ".json")).read_bytes())
+    c.fill_index = index_path
+    if not capture_inputs:
+        return None
+    return await c.adapter.capture_verified_inputs(binding=c.binding, expected_version=c.current["version"], action="entry",
+                                                  frozen_parameters=order, quote=None, confirmation_ref=None)
+
+
+async def test_review_real_service_stage_and_fill_after_one_second_latency(service_context):
+    c = service_context
+    await service_stage(c)
+    original = await c.repo.read(OWNER, ACCOUNT)
+    with pytest.raises(SourceRefusal, match="fresh_fill_authority_unavailable"):
+        await c.service.quote(OWNER, ACCOUNT, await service_operation(c), c.stage_order, None)
+    assert await c.repo.read(OWNER, ACCOUNT) == original
+    captured = await issue_synthetic_fill(c)
+    assert execution.instant(captured.executable_quote["observed_at"]) >= NOW + timedelta(seconds=1)
+    operation = await service_operation(c)
+    result, created = await c.service.quote(OWNER, ACCOUNT, operation, c.stage_order, captured.executable_quote)
+    assert created and result["body"]["assessment_status"] == "pass"
+    after = await c.repo.read(OWNER, ACCOUNT)
+    assert after["state"]["orders"][c.stage_order]["filled"] == 1
+    assert after["state"]["cash"] == "9789.35"
+    # Exact saved receipt is recoverable without recapture, even after expiry.
+    c.clock[0] += timedelta(hours=2)
+    retried, created = await c.service.quote(OWNER, ACCOUNT, operation, c.stage_order, captured.executable_quote)
+    assert not created and retried == result
+    assert await c.repo.read(OWNER, ACCOUNT) == after
+
+
+async def test_review_same_economics_fill_order_substitution_refused(service_context):
+    c = service_context
+    await service_stage(c)
+    captured = await issue_synthetic_fill(c)
+    current = await c.repo.read(OWNER, ACCOUNT)
+    original = current["state"]["orders"][c.stage_order]
+    other = c.current["epoch"] + ":999"
+    current["state"]["orders"][other] = dict(original, order_id=other)
+    with pytest.raises(SourceRefusal, match="lineage_missing"):
+        await c.adapter.verify_admission(owner=OWNER, current_account=current,
+            frozen_parameters=current["state"]["orders"][other], confirmation_record=captured.confirmation_record,
+            immutable_source_refs=captured.immutable_source_refs)
+
+
+async def test_review_fill_parent_and_index_tampering_refuses(service_context):
+    c = service_context
+    await service_stage(c)
+    captured = await issue_synthetic_fill(c)
+    record = json.loads(c.fill_index.read_text())
+    record["body"]["selector"]["account_version"] += 1
+    c.fill_index.write_text(canonical(record))
+    with pytest.raises(SourceRefusal, match="authentication_failed"):
+        await c.service.quote(OWNER, ACCOUNT, await service_operation(c), c.stage_order, captured.executable_quote)
+    await issue_synthetic_fill(c)
+    c.repo.admissions.docs[0]["command"]["parameters"]["quantity"] += 1
+    with pytest.raises(SourceRefusal, match="stage_artifact_changed"):
+        await c.service.quote(OWNER, ACCOUNT, await service_operation(c), c.stage_order, captured.executable_quote)
+
+
+
+async def test_review_partial_fills_preserve_identity_as_mutable_order_fields_change(service_context):
+    c = service_context
+    c.terms["quantity"] = 2
+    c.confirmation["economics"] = risk.economics(c.terms)
+    c.bundle["economics_digest"] = digest(risk.economics(c.terms))
+    c.bundle["costs"]["maximum_loss"] = "434.60"
+    c.resign()
+    await service_stage(c)
+    first = await issue_synthetic_fill(c, quote_changes=dict(bid_size=1, ask_size=1))
+    await c.service.quote(OWNER, ACCOUNT, await service_operation(c), c.stage_order, first.executable_quote)
+    current = await c.repo.read(OWNER, ACCOUNT)
+    assert current["state"]["orders"][c.stage_order]["remaining"] == 1
+    assert len(current["state"]["orders"][c.stage_order]["fills"]) == 1
+    await c.service.admission.replenish(OWNER, ACCOUNT)
+    # Reconstruct adapter as a restarted process, keeping durable stage lineage.
+    c.adapter = PublicPaperSourceAdapter(c.repo, snapshots=c.source, evidence=c.authority, clock=lambda: c.clock[0])
+    c.service.admission.adapter = c.adapter
+    second = await issue_synthetic_fill(c, new_time=NOW + timedelta(seconds=3))
+    await c.service.quote(OWNER, ACCOUNT, await service_operation(c), c.stage_order, second.executable_quote)
+    current = await c.repo.read(OWNER, ACCOUNT)
+    assert current["state"]["orders"][c.stage_order]["filled"] == 2
+    assert current["state"]["cash"] == "9578.70"
+    assert len(current["state"]["orders"][c.stage_order]["fills"]) == 2
+
+
+async def test_review_existing_risk_retains_pre_latency_refusal(service_context):
+    c = service_context
+    await service_stage(c)
+    early = (NOW + timedelta(milliseconds=500)).isoformat()
+    captured = await issue_synthetic_fill(c, quote_changes=dict(bid_timestamp=early, ask_timestamp=early))
+    with pytest.raises(PaperConflict, match="before simulated latency"):
+        await c.service.quote(OWNER, ACCOUNT, await service_operation(c), c.stage_order, captured.executable_quote)
+    current = await c.repo.read(OWNER, ACCOUNT)
+    assert current["state"]["cash"] == "10000"
+    assert current["state"]["orders"][c.stage_order]["filled"] == 0
+    assert not current["state"]["risk_control"]["pending"]
+    assert len(c.repo.admissions.docs) == 2  # Refused assessment retained durably.
+
+
+async def test_review_stale_fresh_source_selection_never_writes(service_context):
+    c = service_context
+    await service_stage(c)
+    before = await c.repo.read(OWNER, ACCOUNT)
+    stale = (NOW - timedelta(seconds=61)).isoformat()
+    await issue_synthetic_fill(c, new_time=NOW + timedelta(seconds=2), capture_inputs=False,
+                               quote_changes=dict(bid_timestamp=stale, ask_timestamp=stale))
+    with pytest.raises(SourceRefusal, match="bid_stale"):
+        await c.service.quote(OWNER, ACCOUNT, await service_operation(c), c.stage_order, None)
+    assert await c.repo.read(OWNER, ACCOUNT) == before
+    assert len(c.repo.admissions.docs) == 1
+
+
+async def test_review_missing_successful_stage_receipt_refuses(service_context):
+    c = service_context
+    await service_stage(c)
+    captured = await issue_synthetic_fill(c)
+    operation = c.stage_artifact["resolve_operation"]
+    c.repo.events.docs = [event for event in c.repo.events.docs if event["operation_id"] != operation]
+    # replenish projected the stage events; deleting only this synthetic durable
+    # receipt must not let a signed source/index invent an executed stage.
+    with pytest.raises(SourceRefusal, match="successful_stage_receipt"):
+        await c.service.quote(OWNER, ACCOUNT, await service_operation(c), c.stage_order, captured.executable_quote)
