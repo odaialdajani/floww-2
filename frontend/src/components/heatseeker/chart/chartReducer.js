@@ -76,9 +76,10 @@ export function invalidateAll(panes) {
 // previous composition's evidence atomically). Pane 0 holds focus when the
 // previous focused pane was removed by the shrink.
 export function resizePanes(panes, count, symbol) {
-  const base = invalidateAll(panes.slice(0, count));
+  const generation = Math.max(0, ...panes.map(p => p.generation)) + 1;
+  const base = panes.slice(0, count).map(p => ({ ...p, generation }));
   const next = [...base];
-  while (next.length < count) next.push({ id: `pane-${next.length}`, symbol, focused: false, generation: 1 });
+  while (next.length < count) next.push({ id: `pane-${next.length}`, symbol, focused: false, generation });
   const hadFocused = next.some((p) => p.focused);
   return next.map((p, i) => ({ ...p, focused: hadFocused ? p.focused : i === 0 }));
 }

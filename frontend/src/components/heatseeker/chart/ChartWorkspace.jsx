@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
 import PriceNodeHistory from '../PriceNodeHistory';
 import ChartPane from './ChartPane';
 import AtlasChart from './AtlasChart';
@@ -223,7 +223,36 @@ export default function ChartWorkspace({
   const focusedSource = useNew ? contextPane?.id : 'default-chart';
   const focusedTicker = useNew ? contextPane?.symbol : ticker;
   const focusedEpoch = useNew ? layoutId + ':' + contextPane?.generation : 'default';
-  const reading = open && chartReading && chartReading.source === focusedSource && chartReading.epoch === focusedEpoch
+  const previousHostTicker = useRef(ticker);
+  const retargeting = useNew && previousHostTicker.current !== ticker;
+  // Bind every focused callback to this actual pane lifetime, not just its
+  // reusable slot ID. Memoization keeps the chart's reporting effects stable.
+  const callbackBinding = JSON.stringify([open, focusedSource, focusedTicker, focusedEpoch, retargeting]);
+  const callbackOwner = useRef(callbackBinding); callbackOwner.current = callbackBinding;
+  const focusedCallbacks = useMemo(() => {
+    const admit = apply => value => {
+      if (callbackOwner.current === callbackBinding) apply(value);
+    };
+    return { reading: admit(setChartReading), quality: admit(setQuality), envelopes: admit(setEnvelopes),
+      replay: admit(handlePaneReplayState), controller: admit(handleReplayController) };
+  }, [callbackBinding, handlePaneReplayState, handleReplayController]);
+  useLayoutEffect(() => {
+    if (previousHostTicker.current === ticker) return;
+    previousHostTicker.current = ticker;
+    if (!useNew) return;
+    const focused = panesRef.current.find(pane => pane.focused) || panesRef.current[0];
+    if (!focused || focused.symbol === ticker) return;
+    dispatch({ type: 'focus', id: focused.id, symbol: ticker });
+    // Presentation survives, but a previous instrument's price adoption and
+    // evidence cannot be replayed onto the new symbol.
+    setPaneStates(previous => {
+      const { price, ...state } = previous[focused.id] || {};
+      return { ...previous, [focused.id]: state };
+    });
+    setSyncByPane(previous => { const next = { ...previous }; delete next[focused.id]; return next; });
+    setChartReading(null); setReplayBinding(null); setEnvelopes(null); setQuality(null);
+  }, [ticker, useNew]);
+  const reading = open && !retargeting && chartReading && chartReading.source === focusedSource && chartReading.epoch === focusedEpoch
     && chartReading.ticker === focusedTicker?.toUpperCase() ? chartReading : null;
   const chartDescriptor = reading?.scope
     ? bindContext({ focus: reading.ticker, query: 'focused-chart', scope: reading.scope, cursor: reading.cursor, generation: reading.generation })
@@ -531,8 +560,8 @@ export default function ChartWorkspace({
                   darkLevels={pane.symbol === ticker ? darkLevels : null}
                   flowBars={pane.symbol === ticker ? flowBars : null}
                   cvdLine={pane.symbol === ticker ? cvdLine : null}
-                  onQuality={setQuality} onEnvelopes={setEnvelopes} onReplayController={handleReplayController}
-                  onReplayState={handlePaneReplayState} onChartReading={setChartReading} replaySourceId={pane.id}
+                  onQuality={focusedCallbacks.quality} onEnvelopes={focusedCallbacks.envelopes} onReplayController={focusedCallbacks.controller}
+                  onReplayState={focusedCallbacks.replay} onChartReading={focusedCallbacks.reading} replaySourceId={pane.id}
                   replayEpoch={layoutId + ':' + pane.generation}
                   visibilitySettings={paneStates[pane.id]?.settings || DEFAULT_PANE_SETTINGS}
                   onVisibilitySettingsChange={settingsHandler(pane)}
