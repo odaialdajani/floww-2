@@ -275,6 +275,26 @@ class GuardedOfflineModeTests(unittest.TestCase):
                 self.assertIsNotNone(result['stream_refusal'])
                 self.assertEqual(result['http_request_count'], 1, lines)
 
+    def test_native_helper_signal_latches_before_readerror_and_json_refusal(self):
+        lines = self.run_mode('replay', 'helper_signal_readerror')
+        self.assertEqual(lines[-1]['guard_events'], [], lines)
+        self.assertFalse(lines[-1]['bootstrap_source_loaded'])
+        result = lines[-2]
+        self.assertFalse(result['success'], lines)
+        self.assertEqual(result['http_request_count'], 1, lines)
+        self.assertEqual(result['transport_error_type'], 'ReadError', lines)
+        self.assertEqual(result['refusal_code'], 'model_json_refused', lines)
+        self.assertEqual(result['stream_refusal'], 'native_deadline_or_termination', lines)
+        self.assertFalse(result['stream_done'])
+
+    def test_unknown_offline_fault_still_refuses_before_any_fake_post(self):
+        lines = self.run_mode('replay', 'not_a_registered_fault')
+        self.assertEqual(lines[-1]['guard_events'], [], lines)
+        result = lines[-2]
+        self.assertFalse(result['success'], lines)
+        self.assertEqual(result['refusal_code'], 'offline_fault_refused')
+        self.assertEqual(result['http_request_count'], 0)
+
 
 if __name__ == '__main__':
     unittest.main()

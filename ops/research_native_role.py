@@ -444,7 +444,7 @@ def main():
         fault = supplied.get('offline_fault') if offline else None
         if fault not in (None, 'timeout', 'rate_limit', 'partial_timeout', 'missing_done', 'length', 'response_limit',
                          'pending', 'length_then_stop', 'filter_then_stop', 'duplicate_stop',
-                         'content_after_stop', 'choice_conflict', 'refusal_then_stop'):
+                         'content_after_stop', 'choice_conflict', 'refusal_then_stop', 'helper_signal_readerror'):
             raise NativeError('offline_fault_refused')
         if role not in ('research', 'audit') or not isinstance(packet, dict):
             raise NativeError('role_input_refused')
@@ -468,6 +468,8 @@ def main():
                 handle.flush()
                 os.fsync(handle.fileno())
         def stop(signum, frame):
+            if guard is not None:
+                guard._refuse_stream('native_deadline_or_termination')
             raise NativeError('native_deadline_or_termination')
         signal.signal(signal.SIGALRM, stop)
         signal.signal(signal.SIGTERM, stop)
@@ -529,6 +531,13 @@ def main():
                             yield ('data: ' + json.dumps(event) + '\n\n').encode()
                             if fault == 'partial_timeout':
                                 raise httpx.ReadTimeout('Offline partial fixture timeout', request=request)
+                            if fault == 'helper_signal_readerror':
+                                try:
+                                    # Exercise the registered callback without
+                                    # delivering an OS signal or killing a process.
+                                    signal.getsignal(signal.SIGALRM)(signal.SIGALRM, None)
+                                except NativeError:
+                                    raise httpx.ReadError('Offline cancelled fixture', request=request) from None
                         terminal = {'id': 'offline-fixture', 'object': 'chat.completion.chunk', 'created': 1,
                             'model': MODEL, 'choices': [{'index': 0, 'delta': {},
                             'finish_reason': 'length' if fault == 'length' else 'stop'}],
