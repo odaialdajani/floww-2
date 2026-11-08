@@ -99,6 +99,12 @@ Git baseline and the same directory/marker lease and native/gateway boundaries.
 The new acceptance ID admits only the one declared path; the arithmetic fixture
 and its checker are unchanged.
 
+The initial model prompt supplies only the exact registered baseline action
+selector excerpt and the closed change contract, after verifying the complete
+source hash. The rest of the module stays in the private workspace and trusted
+external checker; it is omitted from the initial prompt. Source/export, tool,
+permission, generation, time and byte caps are unchanged.
+
 The model can edit only the existing action selector. Everything before and
 after it must be byte-identical to the trusted baseline. A closed AST permits
 only branch conditions and literal action assignments, with no calls or imports.
@@ -162,3 +168,20 @@ policy, checker result and a candidate patch. No source file is written back,
 published or installed. The parent integrator must independently review and
 admit any product patch. The worker is one-shot and installs no dispatcher,
 schedule or service.
+
+The parent gateway derives bounded safe SSE diagnostics from bytes already
+returned by its existing single bounded response read. Successful output bytes
+are forwarded unchanged. Diagnostics retain fixed-enum finish reasons, bounded
+numeric usage, permitted tool names (unknown names become `other`), unique call
+counts, and observed delta counts/UTF-8 byte counts. They never retain model
+reasoning, prose, arguments, IDs, keys or headers. Usage is reported by the
+provider and does not establish billing or acceptance. Missing usage stays
+absent; repeated cumulative usage is replaced rather than added.
+
+Parsing is bounded to 262145 already-read bytes, 8192 bytes per line, 16384 per
+event, 2048 parsed events and 128 call slots. Split, malformed, oversized and
+incomplete frames produce bounded counters/flags; no extra stream read is made.
+Idempotent finalization does not recount deltas. Metadata is retained before an
+aggregate output-cap refusal, and available safe prefix diagnostics accompany a
+per-response cap refusal. Neither cap, the stream configuration nor request
+fields are increased or changed. No raw live SSE is written to receipts.

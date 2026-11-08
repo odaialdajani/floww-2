@@ -46,6 +46,175 @@ class Refusal(ValueError):
     """A closed admission gate; never a request for automatic retry."""
 
 
+class ResponseRefusal(Refusal):
+    """Keep only bounded safe metadata when an existing response cap refuses."""
+
+    def __init__(self, reason, status, output_bytes, diagnostics):
+        super().__init__(reason)
+        self.status, self.output_bytes, self.diagnostics = status, output_bytes, diagnostics
+
+
+class SafeSSEDiagnostics:
+    """Inspect already-read bytes only; never retain model text or tool arguments.
+
+    Counters describe observed wire deltas, not accepted output or billing.
+    Per-line/event, total-input, event and call-slot bounds are independent.
+    """
+
+    def __init__(self):
+        self.line, self.event = bytearray(), bytearray()
+        self.drop_line, self.drop_event, self.closed = False, False, False
+        self.calls, self.reasons, self.usage = {}, set(), {}
+        self.counts = dict.fromkeys(('bytes_seen', 'events_seen', 'json_events', 'malformed_events',
+            'oversized_events', 'delta_count', 'content_delta_count', 'content_bytes',
+            'reasoning_delta_count', 'reasoning_bytes', 'tool_argument_delta_count', 'tool_argument_bytes'), 0)
+        self.done, self.limited, self.incomplete = False, False, False
+
+    @property
+    def buffered_bytes(self):
+        return len(self.line) + len(self.event)
+
+    @staticmethod
+    def _unique(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError('duplicate SSE key')
+            result[key] = value
+        return result
+
+    def feed(self, data):
+        if self.closed:
+            return
+        room = max(0, 262145 - self.counts['bytes_seen'])
+        if len(data) > room:
+            self.limited = True
+        for value in memoryview(data)[:room]:
+            self.counts['bytes_seen'] += 1
+            if value == 10:
+                if not self.drop_line:
+                    self._line(bytes(self.line).removesuffix(b'\r'))
+                self.line.clear()
+                self.drop_line = False
+            elif not self.drop_line:
+                if len(self.line) < 8192:
+                    self.line.append(value)
+                else:
+                    self.line.clear()
+                    self.drop_line = self.drop_event = self.limited = True
+
+    def _line(self, line):
+        if not line:
+            if self.event or self.drop_event:
+                self.counts['events_seen'] += 1
+                if self.drop_event:
+                    self.counts['oversized_events'] += 1
+                elif self.counts['events_seen'] <= 2048:
+                    self._event(bytes(self.event))
+                else:
+                    self.limited = True
+            self.event.clear()
+            self.drop_event = False
+        elif line.startswith(b'data:') and not self.drop_event:
+            payload = line[5:]
+            if payload.startswith(b' '):
+                payload = payload[1:]
+            if len(self.event) + len(payload) + 1 > 16384:
+                self.event.clear()
+                self.drop_event = self.limited = True
+            else:
+                if self.event:
+                    self.event.extend(b'\n')
+                self.event.extend(payload)
+
+    def _event(self, payload):
+        if payload == b'[DONE]':
+            self.done = True
+            return
+        try:
+            value = json.loads(payload.decode('utf-8'), object_pairs_hook=self._unique,
+                parse_constant=lambda _: (_ for _ in ()).throw(ValueError('nonfinite SSE value')))
+        except (ValueError, UnicodeError, RecursionError):
+            self.counts['malformed_events'] += 1
+            return
+        if type(value) is not dict or type(value.get('choices', [])) is not list:
+            self.counts['malformed_events'] += 1
+            return
+        self.counts['json_events'] += 1
+        usage = value.get('usage')
+        if type(usage) is dict:
+            # Repeated cumulative usage frames replace values; never sum them.
+            for name in ('prompt_tokens', 'completion_tokens', 'total_tokens'):
+                number = usage.get(name)
+                if type(number) is int and 0 <= number <= 1_000_000_000:
+                    self.usage[name] = number
+            for group, name in (('completion_tokens_details', 'reasoning_tokens'),
+                                ('prompt_tokens_details', 'cached_tokens')):
+                detail = usage.get(group)
+                if type(detail) is dict and type(detail.get(name)) is int and 0 <= detail[name] <= 1_000_000_000:
+                    self.usage[group] = {name: detail[name]}
+        choices = value.get('choices', [])
+        self.limited |= len(choices) > 8
+        for choice in choices[:8]:
+            if type(choice) is not dict:
+                continue
+            index = choice.get('index', 0)
+            if type(index) is not int or not 0 <= index < 8:
+                continue
+            reason = choice.get('finish_reason')
+            if reason is not None:
+                self.reasons.add(reason if type(reason) is str and reason in
+                    ('stop', 'length', 'tool_calls', 'function_call', 'content_filter') else 'other')
+            delta = choice.get('delta')
+            if type(delta) is not dict:
+                continue
+            self.counts['delta_count'] += 1
+            for field, group in (('content', 'content'), ('reasoning', 'reasoning'), ('reasoning_content', 'reasoning')):
+                if type(delta.get(field)) is str:
+                    self.counts[group + '_delta_count'] += 1
+                    self.counts[group + '_bytes'] += len(delta[field].encode('utf-8', errors='replace'))
+            calls = delta.get('tool_calls', [])
+            if type(calls) is not list:
+                continue
+            self.limited |= len(calls) > 16
+            for call in calls[:16]:
+                if type(call) is not dict or type(call.get('index')) is not int or not 0 <= call['index'] < 16:
+                    continue
+                function = call.get('function')
+                if type(function) is not dict:
+                    continue
+                slot = (index, call['index'])
+                current = self.calls.setdefault(slot, '')
+                fragment = function.get('name')
+                if type(fragment) is str and fragment != current:
+                    joined = current + fragment
+                    self.calls[slot] = joined if len(joined) <= 64 and re.fullmatch('[A-Za-z_][A-Za-z0-9_]*', joined) else '?'
+                if type(function.get('arguments')) is str:
+                    self.counts['tool_argument_delta_count'] += 1
+                    self.counts['tool_argument_bytes'] += len(function['arguments'].encode('utf-8', errors='replace'))
+
+    def finish(self):
+        if not self.closed:
+            self.incomplete = bool(self.line or self.event or self.drop_line or self.drop_event)
+            self.line.clear()
+            self.event.clear()
+            self.calls = {slot: name if name in ('edit', 'read', 'write') else 'other'
+                          for slot, name in self.calls.items()}
+            self.closed = True
+        names = sorted({name if name in ('edit', 'read', 'write') else 'other' for name in self.calls.values()})
+        return {'schema': 'floww-safe-sse.v1', **self.counts, 'finish_reasons': sorted(self.reasons),
+                'usage': {key: dict(value) if isinstance(value, dict) else value for key, value in self.usage.items()},
+                'tool_calls': len(self.calls), 'tool_call_names': names,
+                'done': self.done, 'complete': self.done and not self.incomplete and not self.limited
+                and not self.counts['malformed_events'], 'incomplete': self.incomplete, 'limited': self.limited}
+
+
+def safe_sse_diagnostics(data):
+    parser = SafeSSEDiagnostics()
+    parser.feed(data)
+    return parser.finish()
+
+
 @dataclass(frozen=True)
 class TaskContract:
     task_id: str
@@ -482,7 +651,7 @@ def official_request(body, credential, timeout):
     with opener.open(request, timeout=timeout) as response:
         data = response.read(262145)
         if len(data) > 262144:
-            raise Refusal("upstream output byte cap")
+            raise ResponseRefusal("upstream output byte cap", response.status, len(data), safe_sse_diagnostics(data))
         return response.status, response.headers.get("Content-Type", "text/event-stream"), data
 
 
@@ -498,6 +667,7 @@ class Gateway:
                 pass
 
             def do_POST(self):
+                attempt = None
                 try:
                     if self.client_address[0] != "127.0.0.1":
                         raise Refusal("client refused")
@@ -522,17 +692,24 @@ class Gateway:
                     data = self.rfile.read(length)
                     if len(data) != length:
                         raise Refusal("request truncated")
-                    body = owner.gate.admit(json.loads(data))
+                    submitted = json.loads(data)
+                    body = owner.gate.admit(submitted)
+                    request_sha = hashlib.sha256(json.dumps(submitted, sort_keys=True).encode()).hexdigest()
+                    attempt = next(row for row in owner.gate.receipts if row['request_sha256'] == request_sha)
                     status, mime, output = owner.transport(body, owner.credential,
                                                           max(.1, owner.gate.deadline - time.monotonic()))
+                    # Annotate before aggregate accounting, so refusal retains safe
+                    # response metadata without forwarding or reading extra bytes.
+                    attempt.update(status=status, output_bytes=len(output), sse=safe_sse_diagnostics(output))
                     owner.gate.record_output(len(output))
-                    owner.gate.receipts[-1].update(status=status, output_bytes=len(output))
                     self.send_response(status)
                     self.send_header("Content-Type", mime)
                     self.send_header("Content-Length", str(len(output)))
                     self.end_headers()
                     self.wfile.write(output)
                 except Exception as exc:
+                    if isinstance(exc, ResponseRefusal) and attempt is not None:
+                        attempt.update(status=exc.status, output_bytes=exc.output_bytes, sse=exc.diagnostics)
                     reason = str(exc) if isinstance(exc, Refusal) else type(exc).__name__
                     owner.denials.append(reason)
                     owner.gate.stop(reason)

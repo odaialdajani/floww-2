@@ -7,6 +7,8 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import urllib.error
+import urllib.request
 from pathlib import Path
 from unittest.mock import patch
 
@@ -316,8 +318,165 @@ except w.Refusal: sys.exit(42)
         self.assertEqual(contract.max_output_tokens, 1024)
         prompt = self.m.task_prompt(self.base)
         self.assertIn('mode_binding_unverified', prompt)
-        self.assertIn(self.base.decode(), prompt)
+        self.assertLess(len(prompt.encode()), 4096)
+        self.assertIn(self.m.SOURCE_SHA256, prompt)
+        self.assertIn("    if unresolved:\n        action = 'resolve_paper_ledger'", prompt)
+        self.assertNotIn('def _acceptance', prompt)
+        self.assertNotIn('def _private', prompt)
+        with self.assertRaisesRegex(self.m.Refusal, 'source'):
+            self.m.task_prompt(self.base + b'\n')
         self.assertNotIn('NVIDIA_API_KEY', prompt)
+
+    def sse(self):
+        events = [
+            {'choices': [{'index': 0, 'delta': {'reasoning_content': 'PRIVATE_REASONING',
+                'content': 'PRIVATE_PROSE', 'tool_calls': [{'index': 0, 'id': 'PRIVATE_ID',
+                'function': {'name': 'ed', 'arguments': 'PRIVATE_ARGUMENTS'}}]}}]},
+            {'choices': [{'index': 0, 'delta': {'tool_calls': [{'index': 0,
+                'function': {'name': 'it', 'arguments': 'MORE_PRIVATE_ARGUMENTS'}}]}, 'finish_reason': 'tool_calls'}],
+             'usage': {'prompt_tokens': 20, 'completion_tokens': 9, 'total_tokens': 29,
+                       'untrusted': 'PRIVATE_USAGE'}}]
+        return b''.join(b'data: ' + json.dumps(event).encode() + b'\r\n\r\n' for event in events) + b'data: [DONE]\r\n\r\n'
+
+    def test_safe_sse_split_frames_are_bounded_idempotent_and_never_retain_text(self):
+        wire = self.sse()
+        whole, split = self.m.a.SafeSSEDiagnostics(), self.m.a.SafeSSEDiagnostics()
+        whole.feed(wire)
+        for value in wire:
+            split.feed(bytes([value]))
+        result = whole.finish()
+        self.assertEqual(split.finish(), result)
+        self.assertEqual(whole.finish(), result)
+        self.assertEqual(result['tool_call_names'], ['edit'])
+        self.assertEqual(result['tool_calls'], 1)
+        self.assertEqual(result['finish_reasons'], ['tool_calls'])
+        self.assertEqual(result['usage'], {'prompt_tokens': 20, 'completion_tokens': 9, 'total_tokens': 29})
+        self.assertEqual(result['reasoning_bytes'], 17)
+        self.assertTrue(result['complete'])
+        self.assertNotIn('PRIVATE', json.dumps(result))
+        self.assertLess(len(json.dumps(result)), 2048)
+
+    def test_sse_malformed_incomplete_and_oversized_frames_do_not_echo_or_expand(self):
+        parser = self.m.a.SafeSSEDiagnostics()
+        parser.feed(b'data: not-PRIVATE-JSON\n\ndata: ' + b'x' * 20000 + b'\n\ndata: {"unfinished":')
+        result = parser.finish()
+        self.assertGreaterEqual(result['malformed_events'], 1)
+        self.assertGreaterEqual(result['oversized_events'], 1)
+        self.assertFalse(result['complete'])
+        self.assertTrue(result['incomplete'])
+        self.assertNotIn('PRIVATE', json.dumps(result))
+        self.assertLess(parser.buffered_bytes, 20000)
+        parser = self.m.a.SafeSSEDiagnostics()
+        for _ in range(1000):
+            parser.feed(b'x' * 1024)
+            self.assertLessEqual(parser.buffered_bytes, 24576)
+        self.assertLessEqual(parser.finish()['bytes_seen'], 262145)
+        self.assertTrue(parser.finish()['limited'])
+        parser = self.m.a.SafeSSEDiagnostics()
+        parser.feed(b'data: {}\n\n' * 3000)
+        self.assertEqual(parser.finish()['json_events'], 2048)
+        self.assertTrue(parser.finish()['limited'])
+
+    def test_sse_unknown_names_reasons_and_repeated_usage_cannot_persist_payloads(self):
+        event = {'choices': [{'index': 0, 'finish_reason': 'PRIVATE_FINISH',
+            'delta': {'tool_calls': [{'index': 0, 'function': {'name': 'PRIVATE_NAME', 'arguments': 'PRIVATE_ARGS'}}]}}],
+            'usage': {'prompt_tokens': 5, 'completion_tokens': True, 'total_tokens': 'PRIVATE_USAGE',
+                      'completion_tokens_details': {'reasoning_tokens': 4, 'text': 'PRIVATE_DETAIL'}}}
+        wire = b'data: ' + json.dumps(event).encode() + b'\n\n'
+        parser = self.m.a.SafeSSEDiagnostics()
+        parser.feed(wire + wire + b'data: [DONE]\n\n')
+        result = parser.finish()
+        self.assertEqual(result['usage'], {'prompt_tokens': 5, 'completion_tokens_details': {'reasoning_tokens': 4}})
+        self.assertEqual(result['finish_reasons'], ['other'])
+        self.assertEqual(result['tool_call_names'], ['other'])
+        self.assertEqual(result['tool_calls'], 1)
+        self.assertNotIn('PRIVATE', json.dumps(result))
+        self.assertNotIn('PRIVATE', repr(parser.calls))
+
+    def envelope(self):
+        example = Path(self.m.__file__).parent / 'templates/coding-task.example.json'
+        return {'model': self.m.a.MODEL, 'messages': [{'role': 'user', 'content': 'offline'}],
+                'tools': json.loads(example.read_text())['native_envelope']['tool_catalog'], 'stream': True}
+
+    def test_gateway_diagnostics_preserve_forwarded_bytes_and_cap_failure_metadata(self):
+        wire = self.sse()
+        for limit in (262144, 1):
+            contract = self.m.a.TaskContract('diagnostics', 'a' * 40, str(self.root), ('arithmetic.py',),
+                                            max_output_bytes=limit)
+            gate = self.m.a.RequestGate(contract)
+            with self.m.a.Gateway(gate, transport=lambda *_: (200, 'text/event-stream', wire)) as gateway:
+                request = urllib.request.Request(gateway.base_url + '/chat/completions',
+                    data=json.dumps(self.envelope()).encode(), headers={'Authorization': 'Bearer ' + gateway.nonce})
+                if limit == 1:
+                    with self.assertRaises(urllib.error.HTTPError):
+                        urllib.request.urlopen(request, timeout=2)
+                else:
+                    with urllib.request.urlopen(request, timeout=2) as response:
+                        self.assertEqual(response.read(), wire)
+            self.assertEqual(gate.receipts[0]['output_bytes'], len(wire))
+            self.assertEqual(gate.receipts[0]['sse']['tool_call_names'], ['edit'])
+            self.assertEqual(gate.output_bytes, len(wire))
+            self.assertNotIn('PRIVATE', json.dumps(gate.receipts))
+
+    def test_gateway_second_response_aggregate_cap_and_partial_transport_keep_diagnostics(self):
+        wire = self.sse()
+        contract = self.m.a.TaskContract('diagnostics', 'a' * 40, str(self.root), ('arithmetic.py',),
+                                        max_output_bytes=len(wire) + 1)
+        gate = self.m.a.RequestGate(contract)
+        with self.m.a.Gateway(gate, transport=lambda *_: (200, 'text/event-stream', wire)) as gateway:
+            for index in range(2):
+                body = self.envelope()
+                body['messages'][0]['content'] = str(index)
+                request = urllib.request.Request(gateway.base_url + '/chat/completions',
+                    data=json.dumps(body).encode(), headers={'Authorization': 'Bearer ' + gateway.nonce})
+                if index:
+                    with self.assertRaises(urllib.error.HTTPError):
+                        urllib.request.urlopen(request, timeout=2)
+                else:
+                    with urllib.request.urlopen(request, timeout=2) as response:
+                        self.assertEqual(response.read(), wire)
+        self.assertEqual(gate.output_bytes, 2 * len(wire))
+        self.assertEqual(gate.receipts[1]['status'], 200)
+        self.assertEqual(gate.receipts[1]['sse']['tool_calls'], 1)
+        self.assertEqual(gate.receipts[1]['sse']['finish_reasons'], ['tool_calls'])
+        gate = self.m.a.RequestGate(contract)
+
+        def partial(*_):
+            raise self.m.a.ResponseRefusal('upstream output byte cap', 200, 262145,
+                                         self.m.a.safe_sse_diagnostics(wire))
+
+        with self.m.a.Gateway(gate, transport=partial) as gateway:
+            request = urllib.request.Request(gateway.base_url + '/chat/completions',
+                data=json.dumps(self.envelope()).encode(), headers={'Authorization': 'Bearer ' + gateway.nonce})
+            with self.assertRaises(urllib.error.HTTPError):
+                urllib.request.urlopen(request, timeout=2)
+        self.assertEqual(gate.receipts[0]['output_bytes'], 262145)
+        self.assertEqual(gate.receipts[0]['sse']['tool_call_names'], ['edit'])
+        self.assertNotIn('PRIVATE', json.dumps(gate.receipts))
+
+    def test_official_read_cap_keeps_partial_safe_diagnostics_without_extra_read(self):
+        calls = []
+        wire = self.sse() + b'x' * 262145
+        class Response:
+            status = 200
+            headers = {'Content-Type': 'text/event-stream'}
+            def __enter__(self):
+                return self
+            def __exit__(self, *_):
+                pass
+            def read(self, size):
+                calls.append(size)
+                return wire[:size]
+        class Opener:
+            def open(self, *_args, **_kwargs):
+                return Response()
+        with patch.object(self.m.a.urllib.request, 'build_opener', return_value=Opener()):
+            with self.assertRaises(self.m.a.ResponseRefusal) as error:
+                self.m.a.official_request(self.envelope(), 'synthetic-key', 1)
+        self.assertEqual(calls, [262145])
+        self.assertEqual(error.exception.output_bytes, 262145)
+        self.assertEqual(error.exception.diagnostics['tool_call_names'], ['edit'])
+        self.assertNotIn('PRIVATE', json.dumps(error.exception.diagnostics))
 
 
 if __name__ == '__main__':

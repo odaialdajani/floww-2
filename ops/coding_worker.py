@@ -196,15 +196,22 @@ def check_candidate(workspace, checker=CHECKER):
 
 
 def task_prompt(source):
-    return ("Edit only ops/operations_receipt.py in the disposable workspace. Use edit immediately; "
-            "the complete source follows. Change only _summarize's existing action selector. Preserve "
+    if digest(source) != registered_task().source_sha256:
+        raise Refusal('prompt source identity mismatch')
+    text = source.decode()
+    _, _, selector = _selector(text)
+    excerpt = ''.join(text.splitlines(keepends=True)[selector.lineno - 1:selector.end_lineno])
+    return ("Registered baseline SHA-256: " + SOURCE_SHA256 + ". Path: ops/operations_receipt.py. "
+            "Edit only this file in the disposable workspace. Use edit immediately with the exact excerpt below; "
+            "the unchanged remainder is deliberately omitted and checked externally. Change only the body of "
+            "the state != 'reviewed' branch in _summarize's existing action selector. Preserve "
             "unresolved ledger > missing review > stale review > unhealthy/unknown availability precedence. "
             "Within the existing state != 'reviewed' branch select by refusal code priority: "
             "mode_binding_unverified -> verify_liquid_paper_binding; provider_parked -> inspect_parked_provider; "
             "runtime_unverified -> verify_runtime_acceptance; otherwise independent_review_required. "
             "Reviewed stays none. Use only if/elif/else, membership/comparisons and literal action assignments. "
             "Do not change any other bytes, capabilities, tests, configuration or permissions. No shell, "
-            "network, extra files, imports or calls. Then finish.\nSOURCE:\n" + source.decode())
+            "network, extra files, imports or calls. Then finish.\nEXACT BASELINE SELECTOR:\n" + excerpt)
 
 
 def _private_directory(info):
