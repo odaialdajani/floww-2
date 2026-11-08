@@ -596,8 +596,8 @@ class WireTests(unittest.TestCase):
         guard = native.WireGuard('test-secret', self.request()['messages'])
         guard.phase = 'run'
         guard.admit(native.ENDPOINT, 'POST', json.dumps(self.request()).encode())
-        wire = (b': ping\r\n\r\ndata: {"choices":[{"delta":{"content":"private-output"},'
-                b'"finish_reason":null}]}\r\n\r\ndata: {"choices":[{"delta":{},'
+        wire = (b': ping\r\n\r\ndata: {"choices":[{"index":0,"delta":{"content":"private-output"},'
+                b'"finish_reason":null}]}\r\n\r\ndata: {"choices":[{"index":0,"delta":{},'
                 b'"finish_reason":"stop"}],"usage":{"prompt_tokens":7,"completion_tokens":9,'
                 b'"total_tokens":16,"unsafe":"private-output"}}\n\ndata: [DONE]\n\n')
         for index in range(0, len(wire), 7):
@@ -614,12 +614,10 @@ class WireTests(unittest.TestCase):
     def test_sse_metadata_uses_complete_events_with_multiline_data(self):
         guard = native.WireGuard('test-secret', self.request()['messages'])
         guard.observe_stream_bytes(b'data: {"choices":\n')
-        guard.observe_stream_bytes(b'data: [{"finish_reason":"stop"}]}\n\n')
+        guard.observe_stream_bytes(b'data: [{"index":0,"delta":{},"finish_reason":"stop"}]}\n\n')
         self.assertEqual(guard.finish_reason, 'stop')
         guard.observe_stream_bytes(b'data: [DONE]\n')
         self.assertFalse(guard.stream_done)
-        with self.assertRaisesRegex(native.NativeError, 'native_stream_incomplete'):
-            guard.finish_stream()
         guard.observe_stream_bytes(b'\n')
         guard.finish_stream()
         self.assertTrue(guard.stream_done)
@@ -629,8 +627,13 @@ class WireTests(unittest.TestCase):
         guard.observe_stream_bytes(b'data: {"choices":[]}\n\n')
         with self.assertRaisesRegex(native.NativeError, 'native_stream_incomplete'):
             guard.finish_stream()
+        # Once EOF was rejected, later bytes cannot repair that failed stream.
+        with self.assertRaisesRegex(native.NativeError, 'native_stream_incomplete'):
+            guard.observe_stream_bytes(b'data: [DONE]\n\n')
+        guard = native.WireGuard('test-secret', self.request()['messages'])
+        guard.observe_stream_bytes(b'x' * native.MAX_REPLY)
         with self.assertRaisesRegex(native.NativeError, 'native_response_limit'):
-            guard.observe_stream_bytes(b'x' * native.MAX_REPLY)
+            guard.observe_stream_bytes(b'x')
 
     def test_actual_admitted_wire_size_is_safe_numeric_metadata(self):
         guard = native.WireGuard('test-secret', self.request()['messages'])

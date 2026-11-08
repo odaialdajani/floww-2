@@ -95,11 +95,19 @@ class WireGuard:
                     if frame.filename.startswith(str(NATIVE_SOURCE) + '/')][-8:])
             raise NativeError('wire_policy_refused') from None
 
+    def _refuse_stream(self, code):
+        # A rejected terminal state is irreversible, even if native code catches
+        # the exception or tries to read another chunk after it.
+        if self.stream_refusal is None:
+            self.stream_refusal = code
+        raise NativeError(self.stream_refusal)
+
     def observe_stream_bytes(self, chunk):
         """Observe bounded transport metadata; installed SDK owns SSE decoding."""
+        if self.stream_refusal is not None:
+            self._refuse_stream(self.stream_refusal)
         if self.response_bytes + len(chunk) > MAX_REPLY:
-            self.stream_refusal = 'native_response_limit'
-            raise NativeError(self.stream_refusal)
+            self._refuse_stream('native_response_limit')
         self.response_bytes += len(chunk)
         self.response_chunks += 1
         elapsed = round(time.monotonic() - self._request_started, 3) if self._request_started is not None else None
@@ -121,28 +129,50 @@ class WireGuard:
             self._event_lines.clear()
             self.sse_events += 1
             if self.stream_done:
-                self.stream_refusal = 'native_stream_data_after_done'
-                raise NativeError(self.stream_refusal)
+                self._refuse_stream('native_stream_data_after_done')
             if data == b'[DONE]':
+                # The SDK may stop reading immediately at DONE, before EOF.
+                if self.finish_reason != 'stop':
+                    self._refuse_stream('native_stream_terminal_missing')
                 self.stream_done = True
                 continue
             try:
                 event = json.loads(data)
-                for choice in event.get('choices') or []:
+                choices = event.get('choices')
+                if not isinstance(choices, list) or len(choices) > 1:
+                    self._refuse_stream('native_stream_choice_refused')
+                for choice in choices:
+                    if not isinstance(choice, dict) or type(choice.get('index')) is not int or choice['index'] != 0:
+                        self._refuse_stream('native_stream_choice_refused')
+                    if self.finish_reason is not None:
+                        self._refuse_stream('native_stream_data_after_terminal')
+                    delta = choice.get('delta')
+                    if not isinstance(delta, dict):
+                        self._refuse_stream('native_stream_metadata_invalid')
+                    if delta.get('refusal'):
+                        self._refuse_stream('native_stream_refusal')
+                    if delta.get('tool_calls') or delta.get('function_call'):
+                        self._refuse_stream('native_stream_tool_delta_refused')
                     reason = choice.get('finish_reason')
                     if reason is not None:
                         self.finish_reason = reason if reason in ('stop', 'length', 'tool_calls', 'content_filter') else 'unknown'
+                        if self.finish_reason != 'stop':
+                            self._refuse_stream('native_stream_finish_refused')
                 self.response_usage.update({name: value for name, value in (event.get('usage') or {}).items()
                     if name in ('prompt_tokens', 'completion_tokens', 'total_tokens')
                     and type(value) is int and 0 <= value <= 10 ** 7})
             except (ValueError, TypeError, AttributeError):
-                self.stream_refusal = 'native_stream_metadata_invalid'
-                raise NativeError(self.stream_refusal) from None
+                self._refuse_stream('native_stream_metadata_invalid')
+        # The native SDK returns at DONE, so reject an already-received partial
+        # trailing event here rather than relying on an EOF callback it may skip.
+        if self.stream_done and (self._event_buffer.strip() or self._event_lines):
+            self._refuse_stream('native_stream_data_after_done')
 
     def finish_stream(self):
-        if self._event_buffer.strip() or self._event_lines or not self.stream_done:
-            self.stream_refusal = 'native_stream_incomplete'
-            raise NativeError(self.stream_refusal)
+        if self.stream_refusal is not None:
+            self._refuse_stream(self.stream_refusal)
+        if self._event_buffer.strip() or self._event_lines or not self.stream_done or self.finish_reason != 'stop':
+            self._refuse_stream('native_stream_incomplete')
 
     def diagnostics(self):
         return {name: getattr(self, name) for name in (
@@ -155,12 +185,10 @@ def bounded_stream_response(httpx, response, guard, local):
     guard.http_status = response.status_code
     if response.status_code == 202:
         response.close()
-        guard.stream_refusal = 'native_pending_response_refused'
-        raise NativeError(guard.stream_refusal)
+        guard._refuse_stream('native_pending_response_refused')
     if response.status_code == 200 and response.headers.get('content-type', '').split(';', 1)[0].strip() != 'text/event-stream':
         response.close()
-        guard.stream_refusal = 'native_stream_content_type_refused'
-        raise NativeError(guard.stream_refusal)
+        guard._refuse_stream('native_stream_content_type_refused')
 
     class BoundedStream(httpx.SyncByteStream):
         def __iter__(self):
@@ -178,8 +206,7 @@ def bounded_stream_response(httpx, response, guard, local):
                         guard.observe_stream_bytes(chunk)
                     else:
                         if guard.response_bytes + len(chunk) > MAX_REPLY:
-                            guard.stream_refusal = 'native_response_limit'
-                            raise NativeError(guard.stream_refusal)
+                            guard._refuse_stream('native_response_limit')
                         guard.response_bytes += len(chunk)
                     yield chunk
                 if response.status_code == 200:
@@ -315,6 +342,10 @@ def main():
                         if not isinstance(value, (str, bytes, os.PathLike)):
                             continue
                         path = Path(os.fsdecode(value)).resolve()
+                        if path.name.startswith('hermes_bootstrap.') and path.is_relative_to(NATIVE_SOURCE):
+                            raise NativeError('offline_bootstrap_source_refused')
+                        if path.is_relative_to(Path('/Users/nav/Library')):
+                            raise NativeError('offline_protected_library_refused')
                         if path.is_relative_to(real_root):
                             writing = event != 'open' or args[2] & (os.O_WRONLY | os.O_RDWR | os.O_CREAT | os.O_TRUNC)
                             if writing or not any(path.is_relative_to(p.resolve()) for p in permitted):
@@ -322,6 +353,13 @@ def main():
             sys.addaudithook(fixture_audit)
             if sys.prefix == sys.base_prefix:
                 raise NativeError('offline_preinstalled_dependencies_required')
+            # All offline modes use only preinstalled dependencies. Native
+            # process_bootstrap needs this symbol, never real bootstrap startup.
+            bootstrap = types.ModuleType('hermes_bootstrap')
+            def no_fixture_connection(*args, **kwargs):
+                raise NativeError('offline_socket_refused')
+            bootstrap._happy_eyeballs_create_connection = no_fixture_connection
+            sys.modules['hermes_bootstrap'] = bootstrap
             if self_test:
                 diagnostic_home = tempfile.TemporaryDirectory(prefix='floww-native-selftest-')
                 for name in list(os.environ):
@@ -336,27 +374,14 @@ def main():
                 import pm.environments as fixture_environments
                 fixture_environments._payload_manifest = lambda *a, **k: None
                 fixture_environments.store_root = lambda *a, **k: Path(diagnostic_home.name) / 'runtime'
-                # process_bootstrap imports one networking helper from bootstrap.
-                # Supply an always-denied fixture hook without executing bootstrap.
-                bootstrap = types.ModuleType('hermes_bootstrap')
-                def no_fixture_connection(*args, **kwargs):
-                    raise NativeError('offline_socket_refused')
-                bootstrap._happy_eyeballs_create_connection = no_fixture_connection
-                sys.modules['hermes_bootstrap'] = bootstrap
                 # Actual native rejection logic needs existing libraries only;
                 # no bootstrap source or PM startup/recovery is executed here.
                 proof = rejection_fixture()
                 protocol.write(json.dumps(proof) + '\n')
                 protocol.flush()
                 return 0 if proof['all_passed'] else 1
-            import hermes_cli._early_recovery as recovery
-            import hermes_cli.venv_sync as venv_sync
-            import pm.environments as environments
-            environments.activate_dependencies = lambda *a, **k: None
-            venv_sync.prepare_launch = lambda *a, **k: None
-            recovery.recover_if_needed = lambda *a, **k: None
-            recovery.restore_interrupted_pull = lambda *a, **k: False
-        import hermes_bootstrap  # noqa: F401
+        else:
+            import hermes_bootstrap  # noqa: F401 - live startup only
         import httpx
         body = sys.stdin.buffer.readline(MAX_INPUT + 1)
         if len(body) > MAX_INPUT or not body.endswith(b'\n'):
@@ -364,7 +389,9 @@ def main():
         supplied = json.loads(body)
         role, packet = supplied['role'], supplied['packet']
         fault = supplied.get('offline_fault') if offline else None
-        if fault not in (None, 'timeout', 'rate_limit', 'partial_timeout', 'missing_done', 'length', 'response_limit', 'pending'):
+        if fault not in (None, 'timeout', 'rate_limit', 'partial_timeout', 'missing_done', 'length', 'response_limit',
+                         'pending', 'length_then_stop', 'filter_then_stop', 'duplicate_stop',
+                         'content_after_stop', 'choice_conflict', 'refusal_then_stop'):
             raise NativeError('offline_fault_refused')
         if role not in ('research', 'audit') or not isinstance(packet, dict):
             raise NativeError('role_input_refused')
@@ -449,7 +476,20 @@ def main():
                             'model': MODEL, 'choices': [{'index': 0, 'delta': {},
                             'finish_reason': 'length' if fault == 'length' else 'stop'}],
                             'usage': {'prompt_tokens': 1, 'completion_tokens': 1, 'total_tokens': 2}}
+                        if fault in ('length_then_stop', 'filter_then_stop', 'refusal_then_stop'):
+                            rejected = json.loads(json.dumps(terminal))
+                            rejected['choices'][0]['finish_reason'] = (
+                                'content_filter' if fault == 'filter_then_stop' else 'length')
+                            if fault == 'refusal_then_stop':
+                                rejected['choices'][0].update(delta={'refusal': 'fixture refused'}, finish_reason=None)
+                            yield ('data: ' + json.dumps(rejected) + '\n\n').encode()
+                        if fault == 'choice_conflict':
+                            terminal['choices'][0]['index'] = 1
                         yield ('data: ' + json.dumps(terminal) + '\n\n').encode()
+                        if fault in ('duplicate_stop', 'content_after_stop'):
+                            if fault == 'content_after_stop':
+                                terminal['choices'][0].update(delta={'content': 'fixture late'}, finish_reason=None)
+                            yield ('data: ' + json.dumps(terminal) + '\n\n').encode()
                         if fault != 'missing_done':
                             yield b'data: [DONE]\n\n'
                 return bounded_stream_response(httpx, httpx.Response(200,
@@ -491,6 +531,18 @@ def main():
             skip_context_files=True, load_soul_identity=False, skip_memory=True, skip_background_review=True,
             session_db=None, fallback_model={}, credential_pool=None,
             reasoning_config={'enabled': False}, run_budget_seconds=30, cwd=os.getcwd())
+        if offline:
+            # SDK platform headers otherwise spawn sw_vers on macOS. This value
+            # affects fixture headers only; native parsing and transport stay real.
+            # Hermes constructs a fresh request client for each attempt, so pin
+            # each instance after the real factory returns, not just the primary.
+            agent.client._platform = 'Unknown'
+            fixture_client_factory = agent._create_request_openai_client
+            def fixture_request_client(*args, **kwargs):
+                client = fixture_client_factory(*args, **kwargs)
+                client._platform = 'Unknown'
+                return client
+            agent._create_request_openai_client = fixture_request_client
         # Do not build native personal/context-rich system text. The boundary
         # subsequently verifies the entire two-message list byte-for-byte.
         agent._build_system_prompt = lambda *args, **kwargs: SYSTEM
