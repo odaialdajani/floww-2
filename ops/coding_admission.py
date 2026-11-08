@@ -66,7 +66,9 @@ class TaskContract:
             raise Refusal("invalid task id")
         if not re.fullmatch(r"[0-9a-f]{40}", self.base_sha):
             raise Refusal("base head must be a full SHA")
-        if not Path(self.workspace).is_absolute() or self.acceptance != "pure-add-v1":
+        registered = (self.acceptance == "receipt-next-action-v1"
+                      and self.allowed_paths == ("ops/operations_receipt.py",))
+        if not Path(self.workspace).is_absolute() or not (self.acceptance == "pure-add-v1" or registered):
             raise Refusal("workspace or acceptance contract refused")
         limits = {"max_generations": (1, 3), "max_output_tokens": (1, 1024),
                   "max_seconds": (1, 90), "max_input_bytes": (1, 65536),

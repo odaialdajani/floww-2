@@ -87,3 +87,57 @@ admit arbitrary product coding, a release, service control, publication,
 accounts or orders. A broader task needs a reviewed acceptance contract,
 protected-path rules and reviewer before dispatch. Corrections are limited to
 three and confined to the failed unit; this fixture runner performs none.
+
+## Separately registered product task
+
+`coding_worker.py` registers only `receipt-next-action-v1`, registry
+`floww-coding-registry.v1`. It exports `ops/operations_receipt.py` from the exact
+`191e3df9ef54db155d512d7e44577fd48188d12c` Git object and checks its declared
+SHA-256. Unrelated working files, project instructions, Git hooks, credentials
+and personal context are never exported. The private export has a separate clean
+Git baseline and the same directory/marker lease and native/gateway boundaries.
+The new acceptance ID admits only the one declared path; the arithmetic fixture
+and its checker are unchanged.
+
+The model can edit only the existing action selector. Everything before and
+after it must be byte-identical to the trusted baseline. A closed AST permits
+only branch conditions and literal action assignments, with no calls or imports.
+The externally owned checker and baseline under the private continuation's
+`coding-trusted` directory are pinned by hash and excluded from model write
+scope. The checker runs under a fixed isolated standard-library Python command
+with network and writes denied, never imports the candidate module, and checks
+260 priority/preservation cases. Its result must match the safe candidate hash.
+Neither model text nor a model-provided test result establishes acceptance.
+
+The next prerequisite is selected inside the existing non-reviewed branch:
+`mode_binding_unverified` → `verify_liquid_paper_binding`, then
+`provider_parked` → `inspect_parked_provider`, then `runtime_unverified` →
+`verify_runtime_acceptance`, then the existing independent-review fallback.
+The existing unresolved ledger, missing/stale review and unavailable watchdog
+precedence is preserved. Reviewed receipts still select `none`; capabilities
+remain false. This contract is specific to this first task. Another task needs
+a separately accepted registry change.
+
+Run local positive and hostile native replays without any provider credential:
+
+```
+/usr/bin/python3 ops/coding_worker.py --source /PATH/TO/REPOSITORY --artifacts /PRIVATE/NEW/offline
+/usr/bin/python3 ops/coding_worker.py --source /PATH/TO/REPOSITORY --artifacts /PRIVATE/NEW/hostile --hostile-offline
+```
+
+Live dispatch additionally requires a clean frozen implementation and a private
+externally created admission file. Its closed JSON schema binds `schema` to
+`floww-coding-live-admission.v1`, the task ID, `implementation_commit` to the
+reviewed full SHA, the registry, base SHA, checker SHA, `max_generations: 3` and
+`approved: true`. Duplicate keys and incorrect types refuse. The admission is
+durably consumed before key access or native launch; a failed/crashed attempt
+requires fresh external review. Do not generate this approval from model output.
+Only an explicitly admitted run uses `--live --admission /PRIVATE/approval.json
+--credential-file /PRIVATE/credential`. There are at most three official model
+POSTs, 1024 output tokens each, with no automatic retry or fallback.
+
+Receipts retain before/after hashes, actual request/catalog evidence, sandbox
+policy, checker result and a candidate patch. No source file is written back,
+published or installed. The parent integrator must independently review and
+admit any product patch. The worker is one-shot and installs no dispatcher,
+schedule or service.
