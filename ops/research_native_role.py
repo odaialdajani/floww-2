@@ -52,6 +52,16 @@ class WireGuard:
         self.blocked_origins = []
         self.request_body_bytes = 0
         self.message_characters = 0
+        self.response_bytes = 0
+        self.response_chunks = 0
+        self.sse_events = 0
+        self.stream_done = False
+        self.first_response_byte_seconds = None
+        self.last_response_byte_seconds = None
+        self._request_started = None
+        self._event_buffer = b''
+        self._event_lines = []
+        self.stream_refusal = None
 
     def admit(self, url, method, content):
         try:
@@ -65,11 +75,14 @@ class WireGuard:
             caps = [body[k] for k in ('max_tokens', 'max_completion_tokens', 'max_output_tokens') if k in body]
             if not caps or any(type(cap) is not int or not 0 < cap <= 1024 for cap in caps):
                 raise NativeError('output_cap_refused')
-            if body.get('model') != MODEL or body.get('tools') or body.get('functions') or body.get('stream'):
+            allowed = {'model', 'messages', 'max_tokens', 'stream', 'stream_options'}
+            if (set(body) - allowed or body.get('model') != MODEL or body.get('stream') is not True
+                    or body.get('stream_options') != {'include_usage': True}):
                 raise NativeError('request_envelope_refused')
             if body.get('messages') != self.expected_messages:
                 raise NativeError('untrusted_message_context')
             self.requests += 1
+            self._request_started = time.monotonic()
             self.output_cap = min(caps)
             self.request_body_bytes = len(content)
             self.message_characters = sum(len(message['content']) for message in self.expected_messages)
@@ -81,6 +94,108 @@ class WireGuard:
                     'function': frame.name, 'line': frame.lineno} for frame in traceback.extract_stack(limit=24)
                     if frame.filename.startswith(str(NATIVE_SOURCE) + '/')][-8:])
             raise NativeError('wire_policy_refused') from None
+
+    def observe_stream_bytes(self, chunk):
+        """Observe bounded transport metadata; installed SDK owns SSE decoding."""
+        if self.response_bytes + len(chunk) > MAX_REPLY:
+            self.stream_refusal = 'native_response_limit'
+            raise NativeError(self.stream_refusal)
+        self.response_bytes += len(chunk)
+        self.response_chunks += 1
+        elapsed = round(time.monotonic() - self._request_started, 3) if self._request_started is not None else None
+        if self.first_response_byte_seconds is None:
+            self.first_response_byte_seconds = elapsed
+        self.last_response_byte_seconds = elapsed
+        self._event_buffer += chunk
+        # SSE lines can cross HTTP chunks. Only safe finish/usage metadata survives.
+        while b'\n' in self._event_buffer:
+            line, self._event_buffer = self._event_buffer.split(b'\n', 1)
+            line = line.rstrip(b'\r')
+            if line:
+                if line.startswith(b'data:'):
+                    self._event_lines.append(line[5:].lstrip(b' '))
+                continue
+            if not self._event_lines:
+                continue
+            data = b'\n'.join(self._event_lines)
+            self._event_lines.clear()
+            self.sse_events += 1
+            if self.stream_done:
+                self.stream_refusal = 'native_stream_data_after_done'
+                raise NativeError(self.stream_refusal)
+            if data == b'[DONE]':
+                self.stream_done = True
+                continue
+            try:
+                event = json.loads(data)
+                for choice in event.get('choices') or []:
+                    reason = choice.get('finish_reason')
+                    if reason is not None:
+                        self.finish_reason = reason if reason in ('stop', 'length', 'tool_calls', 'content_filter') else 'unknown'
+                self.response_usage.update({name: value for name, value in (event.get('usage') or {}).items()
+                    if name in ('prompt_tokens', 'completion_tokens', 'total_tokens')
+                    and type(value) is int and 0 <= value <= 10 ** 7})
+            except (ValueError, TypeError, AttributeError):
+                self.stream_refusal = 'native_stream_metadata_invalid'
+                raise NativeError(self.stream_refusal) from None
+
+    def finish_stream(self):
+        if self._event_buffer.strip() or self._event_lines or not self.stream_done:
+            self.stream_refusal = 'native_stream_incomplete'
+            raise NativeError(self.stream_refusal)
+
+    def diagnostics(self):
+        return {name: getattr(self, name) for name in (
+            'response_bytes', 'response_chunks', 'sse_events', 'stream_done', 'stream_refusal',
+            'first_response_byte_seconds', 'last_response_byte_seconds')}
+
+
+def bounded_stream_response(httpx, response, guard, local):
+    """Pass incremental bytes to native SDK, with existing byte/socket boundaries."""
+    guard.http_status = response.status_code
+    if response.status_code == 202:
+        response.close()
+        guard.stream_refusal = 'native_pending_response_refused'
+        raise NativeError(guard.stream_refusal)
+    if response.status_code == 200 and response.headers.get('content-type', '').split(';', 1)[0].strip() != 'text/event-stream':
+        response.close()
+        guard.stream_refusal = 'native_stream_content_type_refused'
+        raise NativeError(guard.stream_refusal)
+
+    class BoundedStream(httpx.SyncByteStream):
+        def __iter__(self):
+            iterator = response.iter_bytes()
+            try:
+                while True:
+                    local.allowed = True
+                    try:
+                        chunk = next(iterator)
+                    except StopIteration:
+                        break
+                    finally:
+                        local.allowed = False
+                    if response.status_code == 200:
+                        guard.observe_stream_bytes(chunk)
+                    else:
+                        if guard.response_bytes + len(chunk) > MAX_REPLY:
+                            guard.stream_refusal = 'native_response_limit'
+                            raise NativeError(guard.stream_refusal)
+                        guard.response_bytes += len(chunk)
+                    yield chunk
+                if response.status_code == 200:
+                    guard.finish_stream()
+            except httpx.TransportError as exc:
+                guard.transport_error_type = type(exc).__name__
+                raise
+            finally:
+                local.allowed = False
+                response.close()
+
+        def close(self):
+            response.close()
+
+    return httpx.Response(response.status_code, headers={'Content-Type': response.headers.get('content-type', '')},
+                          stream=BoundedStream(), request=response.request, extensions=response.extensions)
 
 
 def rejection_fixture():
@@ -249,7 +364,7 @@ def main():
         supplied = json.loads(body)
         role, packet = supplied['role'], supplied['packet']
         fault = supplied.get('offline_fault') if offline else None
-        if fault not in (None, 'timeout', 'rate_limit'):
+        if fault not in (None, 'timeout', 'rate_limit', 'partial_timeout', 'missing_done', 'length', 'response_limit', 'pending'):
             raise NativeError('offline_fault_refused')
         if role not in ('research', 'audit') or not isinstance(packet, dict):
             raise NativeError('role_input_refused')
@@ -307,44 +422,45 @@ def main():
                     guard.http_status = 429
                     return httpx.Response(429, json={'error': {'message': 'Offline fixture rate limit',
                         'type': 'rate_limit_error'}}, request=request)
-                guard.http_status = 200
-                guard.finish_reason = 'stop'
+                if fault == 'pending':
+                    return bounded_stream_response(httpx, httpx.Response(202, request=request), guard, local)
                 claims = [{'observation_id': obs['observation_id'], 'field': 'bid',
                     'value': obs['fields']['bid']['value'], 'unit': obs['fields']['bid']['unit'],
                     'citations': [{'observation_id': obs['observation_id'], 'field': 'bid'}]}
                     for obs in packet['observations'][:3]]
                 copied = {'packet_id': packet['packet_id'], 'status': 'review_only', 'executable': False,
                           'scope': 'internal_research', 'claims': claims}
-                fake = {'id': 'offline-fixture', 'object': 'chat.completion', 'created': 1, 'model': MODEL,
-                        'choices': [{'index': 0, 'message': {'role': 'assistant', 'content': json.dumps(copied)},
-                                     'finish_reason': 'stop'}],
-                        'usage': {'prompt_tokens': 1, 'completion_tokens': 1, 'total_tokens': 2}}
-                return httpx.Response(200, json=fake, request=request)
+                # A real httpx byte stream exercises the installed OpenAI SSE decoder
+                # and Hermes accumulator; this cannot fall through to real HTTP.
+                class FixtureStream(httpx.SyncByteStream):
+                    def __iter__(self):
+                        if fault == 'response_limit':
+                            yield b':' + b'x' * MAX_REPLY
+                            return
+                        content = json.dumps(copied)
+                        for index in range(0, len(content), 31):
+                            event = {'id': 'offline-fixture', 'object': 'chat.completion.chunk',
+                                'created': 1, 'model': MODEL, 'choices': [{'index': 0,
+                                'delta': {'content': content[index:index + 31]}, 'finish_reason': None}]}
+                            yield ('data: ' + json.dumps(event) + '\n\n').encode()
+                            if fault == 'partial_timeout':
+                                raise httpx.ReadTimeout('Offline partial fixture timeout', request=request)
+                        terminal = {'id': 'offline-fixture', 'object': 'chat.completion.chunk', 'created': 1,
+                            'model': MODEL, 'choices': [{'index': 0, 'delta': {},
+                            'finish_reason': 'length' if fault == 'length' else 'stop'}],
+                            'usage': {'prompt_tokens': 1, 'completion_tokens': 1, 'total_tokens': 2}}
+                        yield ('data: ' + json.dumps(terminal) + '\n\n').encode()
+                        if fault != 'missing_done':
+                            yield b'data: [DONE]\n\n'
+                return bounded_stream_response(httpx, httpx.Response(200,
+                    headers={'Content-Type': 'text/event-stream'}, stream=FixtureStream(), request=request), guard, local)
             request.headers['Authorization'] = 'Bearer ' + key
             request.extensions['timeout'] = {'connect': 5., 'read': 25., 'write': 5., 'pool': 2.}
             kwargs.update(follow_redirects=False, stream=True)
             local.allowed = True
             try:
                 response = original_send(client, request, *args, **kwargs)
-                guard.http_status = response.status_code
-                data = bytearray()
-                try:
-                    for chunk in response.iter_bytes():
-                        data.extend(chunk)
-                        if len(data) > MAX_REPLY:
-                            raise NativeError('native_response_limit')
-                finally:
-                    response.close()
-                if response.status_code == 200:
-                    with contextlib.suppress(ValueError, TypeError, KeyError, IndexError):
-                        observed = json.loads(data)
-                        reason = observed['choices'][0].get('finish_reason')
-                        guard.finish_reason = reason if reason in ('stop', 'length', 'tool_calls', 'content_filter') else 'unknown'
-                        guard.response_usage = {name: value for name, value in observed.get('usage', {}).items()
-                            if name in ('prompt_tokens', 'completion_tokens', 'total_tokens')
-                            and type(value) is int and 0 <= value <= 10 ** 7}
-                return httpx.Response(response.status_code, headers={'Content-Type': 'application/json'},
-                                      content=bytes(data), request=request)
+                return bounded_stream_response(httpx, response, guard, local)
             except httpx.TransportError as exc:
                 guard.transport_error_type = type(exc).__name__
                 raise
@@ -378,7 +494,10 @@ def main():
         # Do not build native personal/context-rich system text. The boundary
         # subsequently verifies the entire two-message list byte-for-byte.
         agent._build_system_prompt = lambda *args, **kwargs: SYSTEM
-        agent._disable_streaming = True
+        # Native streaming remains a single request. Any native compatibility,
+        # continuation or fallback attempt still meets the same one-POST guard.
+        os.environ['HERMES_STREAM_RETRIES'] = '0'
+        agent._disable_streaming = False
         if (agent.max_tokens != 1024 or agent.max_iterations != 1 or agent.tools or agent.valid_tool_names
             or agent._api_max_retries != 1 or agent._auto_recovery_cycles != 0
             or getattr(agent.client, 'max_retries', None) != 0
@@ -386,11 +505,13 @@ def main():
             or not agent.skip_context_files or not agent.skip_background_review):
             raise NativeError('native_effective_envelope_refused')
         source_files = ['run_agent.py', 'agent/agent_init.py', 'agent/turn_tool_validation.py',
-                        'agent/turn_tool_round.py', 'agent/client_lifecycle.py', 'agent/usage_pricing.py']
+                        'agent/turn_tool_round.py', 'agent/client_lifecycle.py', 'agent/usage_pricing.py',
+                        'agent/turn_api_call.py', 'agent/chat_completion_helpers.py',
+                        'agent/chat_completion_helpers_relay.py']
         ready = {'phase': 'ready', 'bounded': True, 'native_class': 'run_agent.AIAgent',
                  'native_valid_tool_names': [], 'advertised_tools': 0, 'output_cap': 1024,
                  'native_total_attempts': 1, 'sdk_retries': 0, 'auto_recovery_cycles': 0,
-                 'max_iterations': 1, 'streaming': False, 'offline_replay': offline, 'tool_rejection_passed': proof['all_passed'],
+                 'max_iterations': 1, 'streaming': True, 'native_stream_retries': 0, 'offline_replay': offline, 'tool_rejection_passed': proof['all_passed'],
                  'session_db': False, 'memory': False, 'personal_context': False,
                  'pricing_lookup': 'disabled_runtime_adapter_cost_unknown',
                  'native_source_hash': hashlib.sha256(b''.join((NATIVE_SOURCE / p).read_bytes() for p in source_files)).hexdigest()}
@@ -414,7 +535,8 @@ def main():
         result['usage'] = {name: answer[name] for name in ('input_tokens', 'output_tokens', 'reasoning_tokens',
             'total_tokens', 'api_calls', 'cache_read_tokens', 'cache_write_tokens')
             if type(answer.get(name)) is int and 0 <= answer[name] <= 10 ** 7}
-        result['success'] = result['native_failed'] is False and guard.requests == 1 and guard.blocked == 0
+        result['success'] = (result['native_failed'] is False and guard.requests == 1 and guard.blocked == 0
+                             and guard.stream_done and not guard.stream_refusal and guard.finish_reason == 'stop')
     except BaseException as exc:
         result['exception_type'] = type(exc).__name__
         if isinstance(exc, NativeError):
@@ -446,6 +568,7 @@ def main():
             result['blocked_origins'] = guard.blocked_origins
             result['request_body_bytes'] = guard.request_body_bytes
             result['message_characters'] = guard.message_characters
+            result.update(guard.diagnostics())
         result['offline_replay'] = offline
         if '--self-test' not in sys.argv:
             protocol.write(json.dumps(result, sort_keys=True, separators=(',', ':')) + '\n')

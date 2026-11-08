@@ -302,6 +302,21 @@ class WorkerTests(unittest.TestCase):
         self.assertFalse(result['executable'])
         self.assertEqual(len(self.calls[0][1]['observations']), 2)
 
+    def test_safe_stream_diagnostics_survive_durable_receipt_without_raw_output(self):
+        def streamed(role, packet, state):
+            result = self.role(role, packet, state)
+            result.update(response_bytes=234, response_chunks=8, sse_events=5, stream_done=True,
+                          stream_refusal=None, first_response_byte_seconds=.4, last_response_byte_seconds=.8,
+                          raw_output='private-output')
+            return result
+        result = self.run_worker(runner=streamed)
+        self.assertEqual(result['status'], 'accepted_retrospective_facts')
+        for role in result['roles'].values():
+            self.assertEqual(role['response_bytes'], 234)
+            self.assertTrue(role['stream_done'])
+            self.assertNotIn('raw_output', role)
+        self.assertNotIn('private-output', worker.read_bytes(self.state / 'latest.json').decode())
+
     def test_explicit_native_failure_overrides_valid_facts_and_success_flag(self):
         def failed(role, packet, state):
             result = self.role(role, packet, state)
@@ -561,10 +576,61 @@ class WireTests(unittest.TestCase):
         import research_worker as worker
 
     def request(self, **extra):
-        result = {'model': native.MODEL, 'max_tokens': 1024, 'messages': [
+        result = {'model': native.MODEL, 'max_tokens': 1024, 'stream': True,
+                  'stream_options': {'include_usage': True}, 'messages': [
             {'role': 'system', 'content': 'system'}, {'role': 'user', 'content': 'packet'}]}
         result.update(extra)
         return result
+
+    def test_wire_requires_documented_stream_envelope_and_forbids_extra_parameters(self):
+        for extra in ({'stream': False}, {'stream': 'true'}, {'stream_options': {'include_usage': False}},
+                      {'reasoning_effort': 'low'}, {'extra_body': {'thinking': False}}):
+            with self.subTest(extra=extra):
+                guard = native.WireGuard('test-secret', self.request()['messages'])
+                guard.phase = 'run'
+                with self.assertRaises(native.NativeError):
+                    guard.admit(native.ENDPOINT, 'POST', json.dumps(self.request(**extra)).encode())
+                self.assertEqual(guard.requests, 0)
+
+    def test_fragmented_sse_diagnostics_track_terminal_without_retaining_response_text(self):
+        guard = native.WireGuard('test-secret', self.request()['messages'])
+        guard.phase = 'run'
+        guard.admit(native.ENDPOINT, 'POST', json.dumps(self.request()).encode())
+        wire = (b': ping\r\n\r\ndata: {"choices":[{"delta":{"content":"private-output"},'
+                b'"finish_reason":null}]}\r\n\r\ndata: {"choices":[{"delta":{},'
+                b'"finish_reason":"stop"}],"usage":{"prompt_tokens":7,"completion_tokens":9,'
+                b'"total_tokens":16,"unsafe":"private-output"}}\n\ndata: [DONE]\n\n')
+        for index in range(0, len(wire), 7):
+            guard.observe_stream_bytes(wire[index:index + 7])
+        guard.finish_stream()
+        self.assertTrue(guard.stream_done)
+        self.assertEqual(guard.finish_reason, 'stop')
+        self.assertEqual(guard.response_usage, {'prompt_tokens': 7, 'completion_tokens': 9, 'total_tokens': 16})
+        self.assertEqual(guard.response_bytes, len(wire))
+        self.assertEqual(guard.sse_events, 3)
+        self.assertEqual(guard._event_buffer, b'')
+        self.assertNotIn('private-output', json.dumps(guard.diagnostics()))
+
+    def test_sse_metadata_uses_complete_events_with_multiline_data(self):
+        guard = native.WireGuard('test-secret', self.request()['messages'])
+        guard.observe_stream_bytes(b'data: {"choices":\n')
+        guard.observe_stream_bytes(b'data: [{"finish_reason":"stop"}]}\n\n')
+        self.assertEqual(guard.finish_reason, 'stop')
+        guard.observe_stream_bytes(b'data: [DONE]\n')
+        self.assertFalse(guard.stream_done)
+        with self.assertRaisesRegex(native.NativeError, 'native_stream_incomplete'):
+            guard.finish_stream()
+        guard.observe_stream_bytes(b'\n')
+        guard.finish_stream()
+        self.assertTrue(guard.stream_done)
+
+    def test_sse_eof_and_byte_limit_are_explicit_refusals(self):
+        guard = native.WireGuard('test-secret', self.request()['messages'])
+        guard.observe_stream_bytes(b'data: {"choices":[]}\n\n')
+        with self.assertRaisesRegex(native.NativeError, 'native_stream_incomplete'):
+            guard.finish_stream()
+        with self.assertRaisesRegex(native.NativeError, 'native_response_limit'):
+            guard.observe_stream_bytes(b'x' * native.MAX_REPLY)
 
     def test_actual_admitted_wire_size_is_safe_numeric_metadata(self):
         guard = native.WireGuard('test-secret', self.request()['messages'])
@@ -613,6 +679,11 @@ class WireTests(unittest.TestCase):
         self.assertEqual(result['http_request_count'], 1)
         self.assertEqual(result['blocked_http_attempt_count'], 0)
         self.assertTrue(result['offline_replay'])
+        self.assertTrue(result['preflight']['streaming'])
+        self.assertTrue(result['stream_done'])
+        self.assertGreater(result['response_chunks'], 1)
+        self.assertEqual(result['finish_reason'], 'stop')
+        self.assertEqual(result['response_usage'], {'prompt_tokens': 1, 'completion_tokens': 1, 'total_tokens': 2})
         self.assertTrue(intake.validate_research(packet, result['response'])['accepted'])
         self.assertEqual(before, (profile / 'ESTOP').read_bytes())
 
@@ -642,6 +713,31 @@ class WireTests(unittest.TestCase):
             self.assertNotIn('Authorization', serialized)
             self.assertNotIn('Packet:', serialized)
             self.assertEqual(before, (profile / 'ESTOP').read_bytes())
+
+    def test_native_stream_faults_never_become_success_or_additional_posts(self):
+        packet = intake.compile_snapshot(fixture(), 1794085822)
+        for fault in ('partial_timeout', 'missing_done', 'length', 'response_limit', 'pending'):
+            with self.subTest(fault=fault), tempfile.TemporaryDirectory(dir='/Users/nav') as folder:
+                state = Path(folder) / 'state'
+                worker.set_paused(state, False)
+                result = worker._run_native_role_held('research', packet, state,
+                    offline_replay=True, offline_fault=fault)
+            self.assertFalse(result['success'], result)
+            self.assertEqual(result['http_request_count'], 1, result)
+            self.assertEqual(result['cost_status'], 'unknown')
+            if fault == 'partial_timeout':
+                self.assertEqual(result['transport_error_type'], 'ReadTimeout')
+                self.assertGreater(result['response_bytes'], 0)
+            elif fault == 'pending':
+                self.assertEqual(result['http_status'], 202)
+                self.assertFalse(result['stream_done'])
+            elif fault == 'missing_done':
+                self.assertFalse(result['stream_done'])
+            elif fault == 'length':
+                self.assertEqual(result['finish_reason'], 'length')
+            elif fault == 'response_limit':
+                self.assertLessEqual(result['response_bytes'], native.MAX_REPLY)
+            self.assertNotIn('offline-fixture-secret', json.dumps(result))
 
     def test_parallel_offline_replays_keep_real_markers_present_and_unchanged(self):
         import concurrent.futures

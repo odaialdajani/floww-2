@@ -640,7 +640,9 @@ def run_once(state=DEFAULT_STATE, *, saved=None, producer=None, role_runner=run_
                          'blocked_http_attempt_count', 'native_valid_tool_names', 'cost_status', 'usage', 'preflight',
                          'exception_type', 'refusal_code', 'wire_refusals', 'offline_replay', 'elapsed_seconds',
                          'transport_error_type', 'http_status', 'finish_reason', 'response_usage', 'native_failed',
-                         'blocked_origins', 'request_body_bytes', 'message_characters') if k in native}
+                         'blocked_origins', 'request_body_bytes', 'message_characters', 'response_bytes', 'response_chunks',
+                         'sse_events', 'stream_done', 'stream_refusal', 'first_response_byte_seconds',
+                         'last_response_byte_seconds') if k in native}
                     receipt['roles'][role]['validation'] = validation
                     if not (native.get('success') is True and native.get('native_failed', False) is False
                             and not native.get('offline_replay') and native.get('http_request_count') == 1
