@@ -3,11 +3,11 @@ import copy
 import io
 import json
 import shutil
-from pathlib import Path
 import sys
-import time
 import tempfile
+import time
 import unittest
+from pathlib import Path
 from unittest import mock
 
 OPS = Path(__file__).resolve().parents[1]

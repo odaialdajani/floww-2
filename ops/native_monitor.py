@@ -13,13 +13,13 @@ import importlib.util
 import json
 import math
 import os
-from pathlib import Path
 import re
 import signal
 import stat
 import sys
 import threading
 import time
+from pathlib import Path
 
 MAX_BODY = 256 * 1024
 MAX_OUTPUT = 7000  # Native monitor context caps output at 8000 characters.
@@ -104,7 +104,7 @@ def validate_controls(ledger, now):
             or type(ledger.get('circuit_parked')) is not bool
             or not isinstance(ledger.get('attempts'), dict) or len(ledger['attempts']) > 1024):
         raise Hold('invalid_admission_ledger')
-    day = datetime.datetime.fromtimestamp(now, datetime.timezone.utc).date().isoformat()
+    day = datetime.datetime.fromtimestamp(now, datetime.timezone.utc).date().isoformat()  # noqa: UP017 - /usr/bin/python3 is 3.9; datetime.UTC needs 3.11.
     attempts = ledger['attempts']
     for key, attempt in attempts.items():
         if (not isinstance(key, str) or not re.fullmatch('[a-f0-9]{64}', key)

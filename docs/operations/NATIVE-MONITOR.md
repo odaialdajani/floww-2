@@ -27,6 +27,8 @@ A trusted consumer must maintain this **read-only input** before commissioning:
 
 Missing/malformed/symlink controls hold; this code does not create an empty index. All eligible events already consumed means `no_new_source_event`, even if only coverage, receipt or values changed. Native monitor hashing additionally suppresses an identical output within the same job. The trusted caller must atomically reserve the existing shared model budget and record source-event consumption **before** inference. A read-only capacity check is not a reservation. No such caller or scheduler is installed here.
 
+When a bundle contains a new event, it may also include already-consumed eligible events as context. This is an evidence bundle, not a dispatch list. The future consumer must filter out consumed source-event IDs and reserve only the new authorized work before inference; it must not submit every event in the bundle again.
+
 ## Local commands and native cron preparation
 
 ```sh
@@ -54,7 +56,7 @@ Run the new monitor tests and the existing pure intake checks, with no live netw
 ```sh
 /usr/bin/python3 -m unittest discover -s ops/tests -p test_native_monitor.py
 /usr/bin/python3 -m unittest discover -s ops/tests -p test_research_intake.py
-ruff check ops/native_monitor.py ops/tests/test_native_monitor.py
+ruff check --config backend/pyproject.toml ops/native_monitor.py ops/tests/test_native_monitor.py
 ```
 
 Tests cover fresh/mixed/missing/stale/future/conflicting evidence, stable receipt-independent IDs, consumed events, malformed JSON, fixed GETs, independent HTTP failures, body/deadline caps, preserved control bytes, symlink rejection, output caps and stop/circuit changes during reads. Source tests do not establish a commissioned native job, fresh market coverage, a Liquid binding, orders or a profitable strategy.
