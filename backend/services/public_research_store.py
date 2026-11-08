@@ -445,9 +445,10 @@ class ResearchStore:
 
     def finish_cycle(self, cycle_id, receipt):
         text = _safe_json(receipt, 16384)
+        downgrade = receipt.get("status") == "stopped" and receipt.get("has_gaps") is True
         with self._transaction():
-            if self._conn.execute("UPDATE cycles SET status=?,receipt=? WHERE cycle_id=? AND status='collecting'",
-                                  (receipt.get("status", "failed"), text, cycle_id)).rowcount != 1:
+            if self._conn.execute("UPDATE cycles SET status=?,receipt=? WHERE cycle_id=? AND (status='collecting' OR (? AND status='committed'))",
+                                  (receipt.get("status", "failed"), text, cycle_id, downgrade)).rowcount != 1:
                 raise ResearchRefusal("cycle_not_collecting")
 
     def attempts(self, cycle_id):

@@ -654,6 +654,77 @@ async def test_response_closure_past_cycle_deadline_discards_late_raw_result(tmp
         assert budget.releases == 1 and budget.status(now=clock.mono)["available"] == 19
 
 
+@pytest.mark.asyncio
+async def test_closure_clock_below_observed_body_clock_is_an_explicit_preserved_gap(tmp_path):
+    m, clock, budget = module(), Clock(), Budget()
+    calls = []
+    @asynccontextmanager
+    async def opening(request, attempt_id):
+        calls.append(request)
+        async def chunks():
+            clock.advance(2)
+            yield body_for(request)
+        yield m.RawReply(chunks())
+        clock.wall -= timedelta(seconds=1)
+    with ResearchStore(tmp_path / "research", m.build_plan(["2026-11-13"])) as store:
+        result = await make(m, store, type("T", (), {"open": staticmethod(opening)})(), clock, budget).capture_cycle("cycle-1")
+        row = store.attempts("cycle-1")[0]
+        assert row["response"]["body_completed_at"] == "2026-11-06T15:00:02+00:00"
+        assert row["response"]["response_closed_at"] == "2026-11-06T15:00:01+00:00"
+        assert row["response"]["wall_clock_regressed"] is True
+        assert row["response"]["closure_gate_reason"] == "clock_regressed"
+        assert row["body"] == body_for(calls[0])
+        assert result["status"] == "stopped" and result["has_gaps"] is True
+        assert len(calls) == budget.releases == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("phase", ["raw", "parsed", "receipt"])
+@pytest.mark.parametrize("condition", ["deadline", "market", "cancel"])
+async def test_post_storage_gate_cannot_bless_expired_closed_or_cancelled_cycle(tmp_path, phase, condition):
+    m, clock, budget = module(), Clock(), Budget()
+    closed, delayed = False, False
+    with ResearchStore(tmp_path / "research", m.build_plan(["2026-11-13"], m.Limits(cycle_timeout_s=1))) as store:
+        name = {"raw": "record_response", "parsed": "record_parsed", "receipt": "finish_cycle"}[phase]
+        real = getattr(store, name)
+        def write(*args):
+            nonlocal closed, delayed
+            result = real(*args)
+            is_last = phase == "receipt"
+            if phase != "receipt":
+                row = next(row for row in store.attempts("cycle-1") if row["attempt_id"] == args[0])
+                is_last = row["request"]["kind"] == "chain" and row["request"]["symbol"] == "QQQ"
+            if is_last and not delayed:
+                delayed = True
+                if condition == "deadline":
+                    clock.advance(2)
+                elif condition == "market":
+                    closed = True
+                else:
+                    asyncio.current_task().cancel()
+            return result
+        setattr(store, name, write)
+        transport = Transport(m, store, clock)
+        task = asyncio.create_task(make(m, store, transport, clock, budget,
+                                        gate=lambda now: not closed).capture_cycle("cycle-1"))
+        if condition == "cancel":
+            with pytest.raises(asyncio.CancelledError):
+                await task
+            result = store.begin_cycle("cycle-1", "XNYS:2026-11-06")
+            assert result["reason"] == "cancelled"
+        else:
+            result = await task
+            assert result["reason"] == ("cycle_deadline" if condition == "deadline" else "session_closed_or_unknown")
+        assert delayed and result["status"] == "stopped" and result["has_gaps"] is True
+        saved = store.begin_cycle("cycle-1", "XNYS:2026-11-06")
+        assert saved["status"] == "stopped" and saved["has_gaps"] is True
+        assert len(transport.calls) == budget.releases == 6
+        assert budget.status(now=clock.mono)["available"] == 14
+        row = store.attempts("cycle-1")[-1]
+        assert row["body"] == body_for(transport.calls[-1])
+        assert row["response"]["source_body_sha256"] == hashlib.sha256(row["body"]).hexdigest()
+
+
 def test_offline_cli_preview_has_no_capture_flag_or_store_side_effect(tmp_path):
     module()
     root = Path(__file__).resolve().parents[2]

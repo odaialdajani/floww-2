@@ -308,12 +308,17 @@ class ResearchCollector:
         self._quarantined = False
         self._invoked = 0
         self._cycle_deadline = None
+        self._last_wall = None
+        self._wall_regressed = False
 
     def _clock(self):
         now, mono = self.clock.now(), self.clock.monotonic()
         if (not isinstance(now, datetime) or now.tzinfo is None or now.utcoffset() is None
                 or type(mono) not in (int, float) or not math.isfinite(mono)):
             raise ResearchRefusal("clock_invalid")
+        if self._last_wall is not None and now < self._last_wall:
+            self._wall_regressed = True
+        self._last_wall = max(now, self._last_wall) if self._last_wall is not None else now
         return now, float(mono)
 
     def _gate(self, started_mono, started_wall):
@@ -322,7 +327,7 @@ class ResearchCollector:
         now, mono = self._clock()
         if mono < started_mono:
             return "clock_invalid"
-        if now < started_wall:
+        if self._wall_regressed or now < started_wall:
             return "clock_regressed"
         if mono - started_mono >= self.limits["cycle_timeout_s"]:
             return "cycle_deadline"
@@ -412,7 +417,7 @@ class ResearchCollector:
                     "body_completed_at": completed.isoformat() if completed else None,
                     "response_closed_at": closed.isoformat() if closed else None,
                     "closure_gate_reason": closure_reason,
-                    "wall_clock_regressed": completed is not None and completed < started_at,
+                    "wall_clock_regressed": self._wall_regressed,
                     "body_complete": complete, "bytes_observed": seen,
                     "source_body_sha256": hashlib.sha256(body).hexdigest() if complete else None,
                     "withholding_reason": withholding, "error_code": error}
@@ -497,6 +502,8 @@ class ResearchCollector:
             return {"status": "stopped", "reason": "collector_busy_or_quarantined",
                     "research_only": True, "trusted_for_admission": False, "executable": False}
         self._running = True
+        self._last_wall = None
+        self._wall_regressed = False
         initial_invocations = self._invoked
         receipt = {"cycle_id": cycle_id, "status": "collecting", "research_only": True,
                    "trusted_for_admission": False, "executable": False, "has_gaps": False,
@@ -530,6 +537,9 @@ class ResearchCollector:
                     break
                 self.store.record_response(current["attempt_id"], metadata, body)
                 receipt["responses_committed"] += 1
+                reason = self._gate(mono, wall)
+                if reason:
+                    receipt.update(status="stopped", reason=reason, has_gaps=True)
                 rows, errors, truncated = [], 0, False
                 parse_status = "unavailable"
                 if (metadata["body_complete"] and metadata["withholding_reason"] is None
@@ -549,6 +559,11 @@ class ResearchCollector:
                                         or metadata["wall_clock_regressed"]
                                         or metadata["closure_gate_reason"] is not None
                                         or metadata["error_code"] is not None)
+                reason = self._gate(mono, wall)
+                if reason:
+                    receipt.update(status="stopped", reason=reason, has_gaps=True)
+                if receipt["status"] == "stopped":
+                    break
                 if metadata["closure_gate_reason"] is not None:
                     receipt.update(status="stopped", reason=metadata["closure_gate_reason"])
                     break
@@ -578,6 +593,16 @@ class ResearchCollector:
         if began:
             try:
                 self.store.finish_cycle(cycle_id, receipt)
+                reason = self._gate(mono, wall)
+                if reason and receipt["status"] == "committed":
+                    receipt.update(status="stopped", reason=reason, has_gaps=True)
+                    self.store.finish_cycle(cycle_id, receipt)
+            except asyncio.CancelledError:
+                receipt.update(status="stopped", reason="cancelled", has_gaps=True)
+                with contextlib.suppress(ResearchRefusal):
+                    self.store.finish_cycle(cycle_id, receipt)
+                raise
             except ResearchRefusal:
+                self._quarantined = True
                 receipt.update(status="failed", reason="cycle_commit_failed", has_gaps=True)
         return receipt
