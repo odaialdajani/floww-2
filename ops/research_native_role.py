@@ -9,6 +9,7 @@ code. The model has no executable tools and cannot choose a path or destination.
 """
 import contextlib
 import hashlib
+import importlib.util
 import json
 import os
 import signal
@@ -278,8 +279,28 @@ def profile_check(config):
         raise NativeError('native_dispatch_refused')
 
 
+def registered_heatmap(packet):
+    """Closed task registry: no caller-supplied prompt, module or helper path."""
+    if not isinstance(packet, dict) or packet.get('task_id') != 'retained-heatmap-v1':
+        raise NativeError('task_not_registered')
+    spec = importlib.util.spec_from_file_location('_floww_heatmap_task', Path(__file__).with_name('heatmap_research.py'))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def system_for(packet):
+    if 'task_id' in packet:
+        task = registered_heatmap(packet)
+        task.role_view(packet)
+        return task.SYSTEM
+    return SYSTEM
+
+
 def role_view(packet):
     """Project accepted evidence without changing any retained value or identity."""
+    if 'task_id' in packet:
+        return registered_heatmap(packet).role_view(packet)
     return json.loads(json.dumps({
         'packet_id': packet['packet_id'], 'source': packet['source'],
         'decision_time': packet['decision_time'],
@@ -291,6 +312,8 @@ def role_view(packet):
 
 
 def prompt_for(packet, role):
+    if 'task_id' in packet:
+        return registered_heatmap(packet).prompt_for(packet, role)
     return ('Role: ' + role + '. Independently check this packet; you have no other role answer. '
             'Copy at least one bid fact, at most three claims total. Use exact values, units and IDs. '
             'Return JSON with exactly packet_id (from packet), status="review_only", executable=false, '
@@ -396,6 +419,7 @@ def main():
         if role not in ('research', 'audit') or not isinstance(packet, dict):
             raise NativeError('role_input_refused')
         packet = role_view(packet)
+        system = system_for(packet)
         profile = Path(os.environ['HERMES_HOME'])
         expected = Path('/Users/nav/.hermes/profiles') / ('floww-' + role)
         if offline:
@@ -436,7 +460,7 @@ def main():
         if not key or '\n' in key or len(key) > 4096:
             raise NativeError('scoped_credential_absent')
         prompt = prompt_for(packet, role)
-        messages = [{'role': 'system', 'content': SYSTEM}, {'role': 'user', 'content': prompt}]
+        messages = [{'role': 'system', 'content': system}, {'role': 'user', 'content': prompt}]
         guard = WireGuard(key, messages)
         original_send = httpx.Client.send
         def guarded_send(client, request, *args, **kwargs):
@@ -451,12 +475,15 @@ def main():
                         'type': 'rate_limit_error'}}, request=request)
                 if fault == 'pending':
                     return bounded_stream_response(httpx, httpx.Response(202, request=request), guard, local)
-                claims = [{'observation_id': obs['observation_id'], 'field': 'bid',
-                    'value': obs['fields']['bid']['value'], 'unit': obs['fields']['bid']['unit'],
-                    'citations': [{'observation_id': obs['observation_id'], 'field': 'bid'}]}
-                    for obs in packet['observations'][:3]]
-                copied = {'packet_id': packet['packet_id'], 'status': 'review_only', 'executable': False,
-                          'scope': 'internal_research', 'claims': claims}
+                if 'task_id' in packet:
+                    copied = registered_heatmap(packet).fixture_response(packet, role)
+                else:
+                    claims = [{'observation_id': obs['observation_id'], 'field': 'bid',
+                        'value': obs['fields']['bid']['value'], 'unit': obs['fields']['bid']['unit'],
+                        'citations': [{'observation_id': obs['observation_id'], 'field': 'bid'}]}
+                        for obs in packet['observations'][:3]]
+                    copied = {'packet_id': packet['packet_id'], 'status': 'review_only', 'executable': False,
+                              'scope': 'internal_research', 'claims': claims}
                 # A real httpx byte stream exercises the installed OpenAI SSE decoder
                 # and Hermes accumulator; this cannot fall through to real HTTP.
                 class FixtureStream(httpx.SyncByteStream):
@@ -545,7 +572,7 @@ def main():
             agent._create_request_openai_client = fixture_request_client
         # Do not build native personal/context-rich system text. The boundary
         # subsequently verifies the entire two-message list byte-for-byte.
-        agent._build_system_prompt = lambda *args, **kwargs: SYSTEM
+        agent._build_system_prompt = lambda *args, **kwargs: system
         # Native streaming remains a single request. Any native compatibility,
         # continuation or fallback attempt still meets the same one-POST guard.
         os.environ['HERMES_STREAM_RETRIES'] = '0'
@@ -572,7 +599,7 @@ def main():
         if sys.stdin.readline(16).strip() != 'RUN' or is_engaged():
             raise NativeError('role_not_admitted')
         guard.phase = 'run'
-        answer = agent.run_conversation(prompt, system_message=SYSTEM)
+        answer = agent.run_conversation(prompt, system_message=system)
         result['native_failed'] = answer.get('failed') is not False
         result['usage'] = {name: answer[name] for name in ('input_tokens', 'output_tokens', 'reasoning_tokens',
             'total_tokens', 'api_calls', 'cache_read_tokens', 'cache_write_tokens')
@@ -581,7 +608,8 @@ def main():
         if not isinstance(text, str) or len(text.encode()) > 32 * 1024:
             raise NativeError('model_output_limit')
         try:
-            result['response'] = json.loads(text)
+            result['response'] = (registered_heatmap(packet).parse_response(text)
+                                  if 'task_id' in packet else json.loads(text))
         except (ValueError, RecursionError):
             raise NativeError('model_json_refused') from None
         result['usage'] = {name: answer[name] for name in ('input_tokens', 'output_tokens', 'reasoning_tokens',

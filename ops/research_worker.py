@@ -681,14 +681,26 @@ def status(state=DEFAULT_STATE):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('action', choices=['run-once', 'status', 'pause', 'resume', 'resume-circuit'])
-    parser.add_argument('--state-dir', type=Path, default=DEFAULT_STATE)
+    parser.add_argument('--state-dir', type=Path)
     parser.add_argument('--saved-input', type=Path, help='Explicit finite offline saved-observation JSON; never a URL or command')
+    parser.add_argument('--task', choices=['saved-observation-v1', 'retained-heatmap-v1'], default='saved-observation-v1')
     args = parser.parse_args(argv)
+    if args.state_dir is None:
+        args.state_dir = DEFAULT_STATE.parent / 'heatmap-research' if args.task == 'retained-heatmap-v1' else DEFAULT_STATE
     def terminate(signum, frame):
         raise KeyboardInterrupt
     signal.signal(signal.SIGTERM, terminate)
     try:
-        if args.action == 'run-once':
+        if args.task == 'retained-heatmap-v1' and args.action in ('run-once', 'status'):
+            if args.saved_input is not None:
+                raise WorkerError('registered_task_source_is_fixed')
+            try:
+                from . import heatmap_research
+            except ImportError:
+                import heatmap_research
+            result = (heatmap_research.run_once(args.state_dir) if args.action == 'run-once'
+                      else heatmap_research.status(args.state_dir))
+        elif args.action == 'run-once':
             saved = parse_json(read_bytes(args.saved_input)) if args.saved_input else None
             result = run_once(args.state_dir, saved=saved)
         elif args.action == 'status':
