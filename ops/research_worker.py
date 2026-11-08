@@ -132,6 +132,7 @@ class Lease:
 
     def __enter__(self):
         ensure_dir(self.state)
+        self.directory_identity = self.state.stat()
         self.fd = os.open(str(self.state / 'worker.lock'), os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
         info = os.fstat(self.fd)
         if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_nlink != 1:
@@ -144,7 +145,30 @@ class Lease:
             os.close(self.fd)
             self.fd = None
             raise WorkerError('lease_busy') from None
+        try:
+            self.check()
+        except BaseException:
+            os.close(self.fd)
+            self.fd = None
+            raise
         return self
+
+    def check(self):
+        """Refuse a removed/replaced lock or directory instead of rebinding it."""
+        try:
+            directory = self.state.lstat()
+            current = (self.state / 'worker.lock').lstat()
+            held = os.fstat(self.fd)
+            if (any(component.is_symlink() for component in [self.state, *self.state.parents])
+                    or not stat.S_ISDIR(directory.st_mode)
+                    or (directory.st_dev, directory.st_ino) !=
+                        (self.directory_identity.st_dev, self.directory_identity.st_ino)
+                    or not stat.S_ISREG(current.st_mode) or current.st_uid != os.getuid()
+                    or current.st_nlink != 1 or held.st_nlink != 1
+                    or (current.st_dev, current.st_ino) != (held.st_dev, held.st_ino)):
+                raise WorkerError('lease_identity_changed')
+        except OSError as exc:
+            raise WorkerError('lease_identity_changed') from exc
 
     def __exit__(self, *args):
         if self.fd is not None:
@@ -231,12 +255,13 @@ def reserve_pair(ledger, key, now):
 
 def resume_circuit():
     """Explicit operator action; keeps prepaid budgets and all dedupe identities."""
-    with Lease(ADMISSION_STATE):
+    with Lease(ADMISSION_STATE) as admission:
         ledger = admission_ledger()
         for attempt in ledger['attempts'].values():
             if attempt['status'] == 'started':
                 attempt['status'] = 'parked'
         ledger['circuit_parked'] = False
+        admission.check()
         atomic_json(ADMISSION_STATE / 'admission.json', ledger)
     return {'status': 'circuit_resumed', 'scope': 'saved_research_worker_only', 'executable': False}
 
@@ -534,7 +559,7 @@ def run_once(state=DEFAULT_STATE, *, saved=None, producer=None, role_runner=run_
     if paused(state):
         return finish({'status': 'paused', 'executable': False}, persist=False)
     try:
-        with Lease(state), Lease(ADMISSION_STATE):
+        with Lease(state), Lease(ADMISSION_STATE) as admission:
             if paused(state):
                 return finish({'status': 'paused', 'executable': False}, persist=False)
             ensure_dir(state / 'receipts')
@@ -555,6 +580,7 @@ def run_once(state=DEFAULT_STATE, *, saved=None, producer=None, role_runner=run_
             if len(list((state / 'receipts').glob('*.json'))) >= MAX_RECEIPTS:
                 return finish({'status': 'parked', 'reason': 'receipt_capacity_manual_archive_required', 'executable': False})
             ledger = admission_ledger()
+            admission.check()
             refusal = reserve_pair(ledger, key, now)
             if refusal is not None:
                 return finish(refusal)
@@ -566,6 +592,7 @@ def run_once(state=DEFAULT_STATE, *, saved=None, producer=None, role_runner=run_
             atomic_json(receipt_path, receipt)
             atomic_json(state / 'packets' / (key + '.json'), packet)
             for role in ('research', 'audit'):
+                admission.check()
                 if paused(state):
                     receipt['reason'] = 'worker_paused'
                     break
@@ -594,12 +621,14 @@ def run_once(state=DEFAULT_STATE, *, saved=None, producer=None, role_runner=run_
                 except (WorkerError, OSError, ValueError, TypeError) as exc:
                     receipt['roles'][role] = {'validation': {'accepted': False,
                         'reason': str(exc) if isinstance(exc, WorkerError) else 'role_failed'}}
+                admission.check()
                 atomic_json(receipt_path, receipt)
             accepted = len(receipt['roles']) == 2 and all(r['validation'].get('accepted') for r in receipt['roles'].values())
             receipt['status'] = 'accepted_retrospective_facts' if accepted else 'parked'
             receipt['reason'] = 'independently_validated_copied_facts' if accepted else receipt.get('reason', 'role_refused')
             ledger['attempts'][key]['status'] = 'accepted' if accepted else 'parked'
             ledger['circuit_parked'] = not accepted
+            admission.check()
             atomic_json(ADMISSION_STATE / 'admission.json', ledger)
             return finish(receipt, receipt_path)
     except WorkerError as exc:

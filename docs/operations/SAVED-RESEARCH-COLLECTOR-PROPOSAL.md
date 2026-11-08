@@ -24,7 +24,10 @@ facts are accepted. Acceptance remains retrospective and nonexecutable.
 
 All caller state directories share the fixed private
 `~/Library/Application Support/FLOWW/operations/research-admission/admission.json`
-and one exclusive admission lease held for the entire pair. This ledger prepays
+and one exclusive admission lease held for the entire pair. Lock and directory inode identities are
+checked before reservation, before and after each role and before finalization;
+replacement fails closed without rebinding the lease. Symlinks, foreign-owned
+files and hardlinks are refused. The ledger prepays
 each new pair before native work. The conservative default is four new pairs per
 UTC day, including failed and interrupted pairs. The persisted `daily_pair_limit`
 may be lowered to 1..4; values outside that range fail closed. These defaults are

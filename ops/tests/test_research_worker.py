@@ -221,6 +221,43 @@ class WorkerTests(unittest.TestCase):
         worker.resume_circuit()
         self.assertEqual(len(worker.admission_ledger()['attempts']), 1)
 
+    def test_shared_lease_replacement_blocks_second_role_and_preserves_crash_reservation(self):
+        def replace_lock(role, packet, state):
+            result = self.role(role, packet, state)
+            (self.admission / 'worker.lock').unlink()
+            (self.admission / 'worker.lock').touch(mode=0o600)
+            return result
+        with self.assertRaises(worker.WorkerError) as caught:
+            self.run_worker(runner=replace_lock)
+        self.assertEqual(str(caught.exception), 'lease_identity_changed')
+        self.assertEqual(len(self.calls), 1)
+        self.assertEqual(self.run_worker(saved=self.changed(1))['reason'], 'native_circuit_parked')
+
+    def test_state_aliases_cannot_bypass_fixed_shared_admission(self):
+        self.run_worker()
+        for state in (self.state.parent / 'sibling', self.state.parent / 'unused' / '..' / 'alias'):
+            worker.set_paused(state, False)
+            result = worker.run_once(state, saved=fixture(), role_runner=self.role, now=1794085822)
+            self.assertEqual(result['status'], 'duplicate_no_call')
+        self.assertEqual(len(self.calls), 2)
+
+    def test_shared_admission_rejects_symlink_and_hardlinked_lock_or_ledger(self):
+        self.admission.mkdir(mode=0o700)
+        other = self.state.parent / 'other-admission'
+        other.symlink_to(self.admission, target_is_directory=True)
+        with mock.patch.object(worker, 'ADMISSION_STATE', other), self.assertRaises(worker.WorkerError):
+            self.run_worker()
+        import os
+        target = self.admission / 'original'
+        target.write_text('{}')
+        for name in ('worker.lock', 'admission.json'):
+            with self.subTest(name=name):
+                os.link(target, self.admission / name)
+                with self.assertRaises(worker.WorkerError):
+                    self.run_worker()
+                (self.admission / name).unlink()
+        self.assertEqual(len(self.calls), 0)
+
     def test_each_page_source_envelope_and_metadata_are_admitted_before_combining(self):
         qqq = json.loads(json.dumps(fixture()).replace('SPY', 'QQQ'))
         invalid = [('source', 'public-scan'), ('live', True), ('trade_eligible', True),
