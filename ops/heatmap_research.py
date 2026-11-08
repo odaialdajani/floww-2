@@ -7,7 +7,6 @@ belong to research_worker. This task cannot resume them or install a schedule.
 import hashlib
 import json
 import os
-import re
 import stat
 import time
 from pathlib import Path
@@ -165,15 +164,6 @@ def _header(packet):
             'limitations': LIMITATIONS}
 
 
-def _rationale(value):
-    # Numbers and actions belong to no free-text channel. Semantic source support
-    # still needs the separate auditor and root review; this is not an NLP proof.
-    return (isinstance(value, str) and 1 <= len(value) <= 240 and value.isascii()
-            and not re.search(r'\d|\b(buy|sell|long|short|bullish|bearish|entry|stop|target|order|size|quantity|'
-                              r'profit|profitable|confidence|probability|guarantee|leverage|execute|btc|liquid|live)\b',
-                              value, re.I))
-
-
 def validate_investigator(response):
     try:
         packet = _base_packet()
@@ -200,7 +190,7 @@ def validate_investigator(response):
             spec = QUESTION_SPECS[kind]
             if question['wall_id'] != spec['wall_id'] or not _same(question['fact_ids'], spec['fact_ids']):
                 raise HeatmapError('question_identity_mismatch')
-            if not _rationale(question['rationale']):
+            if question['rationale'] != spec['rationale']:
                 raise HeatmapError('question_narrative_refused')
             selected.add(kind)
             required.update(spec['fact_ids'])
@@ -287,10 +277,10 @@ def prompt_for(packet, role):
     example = fixture_response(packet, role)
     if role == 'research':
         instructions = ('Choose one or two question types from the example. Include every corresponding claim verbatim. '
-                        'Keep the exact scope, limitations and required_evidence. Rationale: at most 240 ASCII characters, '
-                        'source-supported only, no numbers or actions. The named type fixes the conditional question. ')
+                        'Keep the exact scope, limitations and required_evidence. Copy each chosen type\'s registered '
+                        'rationale verbatim; no free-form rationale. The named type fixes the conditional question. ')
     else:
-        instructions = ('Independently check each completed investigator question, including semantic support of its rationale, '
+        instructions = ('Independently check each completed investigator question and its exact registered rationale '
                         'against the original source facts and clocks. Cover every question exactly once. '
                         'Use accept_research_only/supported_conditional_research or reject with one of: '
                         + ','.join(AUDIT_REASONS) + '. Never upgrade actionability. ')

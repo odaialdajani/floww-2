@@ -31,14 +31,15 @@ Scope, snapshot, mode, provider, formula and expiry population must match
 exactly. Missing or duplicate claims, extra fields, altered citations or values,
 unknown question types and omitted fresh-evidence requirements are refused.
 
-The named types fix the conditional research questions. A rationale is limited
-to 240 ASCII characters, contains no numbers and passes an action-word guard.
-This lexical check does not prove semantic support. A separate auditor receives
-the original pinned source projection plus the exact completed, validated
-investigator response and its digest. It must assess every selected question,
-including its rationale, with a closed reason code. Missing/invalid investigator
-output prevents the audit POST. Missing audit output never falls back to the
-investigator response, an example or a deterministic default.
+The named types fix the conditional research questions and their registered
+rationales. The investigator copies each chosen type's rationale verbatim;
+the validator rejects any other text before constructing an audit request.
+A separate auditor receives the original pinned source projection plus the
+exact completed, validated investigator response and its digest. It must assess
+every selected question and its registered rationale with a closed reason code.
+Missing/invalid investigator output prevents the audit POST. Missing audit
+output never falls back to the investigator response, an example or a
+deterministic default.
 
 Both responses remain `review_only`, `executable:false`, with mandatory root
 review. An accepting auditor can only accept conditional research. There is no
