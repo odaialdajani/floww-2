@@ -15,6 +15,7 @@ from types import SimpleNamespace
 
 import duckdb
 import pytest
+
 from scripts.paper_synthetic_fixture import synthetic_policy_body
 from services.agent.paper import execution, risk
 from services.agent.paper.policy import binding_of, create_policy
@@ -504,12 +505,13 @@ async def test_review_exact_same_contract_reduction_target_is_authorized(setup):
 async def service_context(setup, tmp_path):
     # Actual service/admission/guarded repository, with faithful isolated Mongo
     # fake and a private temporary lease. No application book or live service.
+    from test_agent_paper_runner import _FakeDatabase
+
     from scripts.paper_synthetic_fixture import persist_synthetic_policy
     from services.agent.paper.execution_control import PaperExecutionAuthority
     from services.agent.paper.guarded_repository import GuardedPaperRepository
     from services.agent.paper.service import PreparedPaperService
     from services.execution_lease import acquire_lease, release_lease
-    from test_agent_paper_runner import _FakeDatabase
 
     c = setup
     repo = GuardedPaperRepository(_FakeDatabase())

@@ -10,12 +10,13 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from test_agent_paper_admission_supervisor import economics, ready  # noqa: E402
+from test_agent_paper_runner import NOW, POLICY, QUOTE, RULE, UnadmittedPaperRunner  # noqa: E402
+
 from services.agent.paper.admission import MAX_ARTIFACTS, artifact_liabilities  # noqa: E402
 from services.agent.paper.repository import PaperCapacity, PaperConflict, operation_id  # noqa: E402
 from services.agent.paper.service import PreparedPaperService  # noqa: E402
 from services.execution_lease import acquire_lease, release_lease  # noqa: E402
-from test_agent_paper_admission_supervisor import economics, ready  # noqa: E402
-from test_agent_paper_runner import NOW, POLICY, QUOTE, RULE, UnadmittedPaperRunner  # noqa: E402
 
 
 def service_for(runner):
