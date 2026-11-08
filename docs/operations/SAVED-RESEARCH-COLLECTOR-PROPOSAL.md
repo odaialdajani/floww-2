@@ -57,6 +57,15 @@ native total attempts one, auto recovery zero, max iterations one, and a 1024-to
 output cap. Independent HTTP counting remains necessary because native recovery
 can attempt a follow-up despite nominal retry settings.
 
+Offline native fixtures use a unique disposable profile and HOME per call. Only
+the already verified role configuration is copied read-only; production pause
+markers, keys and configuration are not changed. The existing pinned dependency
+venv is required. Fixture-only bootstrap/recovery hooks are disabled, subprocess
+creation and real sockets are refused, and an audit guard refuses production
+private-state reads and all production writes. The live helper still requires the
+exact dedicated production profile. Parallel offline tests monitor real marker
+presence throughout and require unchanged production file identities/timestamps.
+
 Before scheduling, the integrator must freeze and independently review the exact
 source/wire envelope, separately admit the fresh two-POST trial, inspect both
 closed validation receipts and all native diagnostics, and then approve the

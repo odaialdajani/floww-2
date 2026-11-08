@@ -181,6 +181,33 @@ def main():
     sentinel, sentinel_bytes = None, None
     try:
         sys.path.insert(0, str(NATIVE_SOURCE))
+        if offline:
+            # The existing venv supplies dependencies. Never bootstrap/install or
+            # recover the production checkout for an isolated fake-SDK fixture.
+            real_root = Path('/Users/nav/.hermes')
+            permitted = (NATIVE_SOURCE, Path(sys.prefix), Path(sys.base_prefix))
+            def fixture_audit(event, args):
+                if event in ('subprocess.Popen', 'os.system', 'os.exec', 'os.spawn'):
+                    raise NativeError('offline_subprocess_refused')
+                if event in ('socket.connect', 'socket.getaddrinfo'):
+                    raise NativeError('offline_socket_refused')
+                if event in ('open', 'os.remove', 'os.rename', 'os.mkdir', 'os.rmdir', 'os.chmod'):
+                    for value in args[:2] if event == 'os.rename' else args[:1]:
+                        if not isinstance(value, (str, bytes, os.PathLike)):
+                            continue
+                        path = Path(os.fsdecode(value)).resolve()
+                        if path.is_relative_to(real_root):
+                            writing = event != 'open' or args[2] & (os.O_WRONLY | os.O_RDWR | os.O_CREAT | os.O_TRUNC)
+                            if writing or not any(path.is_relative_to(p.resolve()) for p in permitted):
+                                raise NativeError('offline_production_state_refused')
+            sys.addaudithook(fixture_audit)
+            import hermes_cli._early_recovery as recovery
+            import hermes_cli.venv_sync as venv_sync
+            import pm.environments as environments
+            environments.activate_dependencies = lambda *a, **k: None
+            venv_sync.prepare_launch = lambda *a, **k: None
+            recovery.recover_if_needed = lambda *a, **k: None
+            recovery.restore_interrupted_pull = lambda *a, **k: False
         import hermes_bootstrap  # noqa: F401
         import httpx
         if '--self-test' in sys.argv:
@@ -200,7 +227,13 @@ def main():
             raise NativeError('role_input_refused')
         packet = role_view(packet)
         profile = Path(os.environ['HERMES_HOME'])
-        if profile != Path('/Users/nav/.hermes/profiles') / ('floww-' + role):
+        expected = Path('/Users/nav/.hermes/profiles') / ('floww-' + role)
+        if offline:
+            expected = Path.cwd() / 'offline-profile'
+            if (not Path.cwd().name.startswith('offline-replay-') or profile.resolve() != profile
+                    or Path(os.environ['HOME']) != Path.cwd() / 'home'):
+                raise NativeError('offline_profile_refused')
+        if profile != expected:
             raise NativeError('scoped_profile_refused')
         sentinel = profile / 'ESTOP'
         sentinel_bytes = sentinel.read_bytes()

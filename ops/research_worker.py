@@ -20,6 +20,7 @@ import signal
 import stat
 import subprocess
 import sys
+import tempfile
 import time
 import uuid
 from pathlib import Path
@@ -39,6 +40,7 @@ DAILY_PAIR_LIMIT = 4
 MAX_ADMISSIONS = 1024
 HERMES_ROOT = Path('/Users/nav/.hermes')
 NATIVE_PYTHON = HERMES_ROOT / 'tools/python-3.14.9+20261021-darwin-arm64/bin/python3'
+OFFLINE_PYTHON = HERMES_ROOT / 'installs/754b17ae38e8167a/environments/a0c4ec5217bc4b5c9228fc01809ceed0/venv/bin/python'
 ROLE_HELPER = Path(__file__).with_name('research_native_role.py')
 URL_PATHS = {symbol: '/api/flowseeker/scan-public/observations?ticker=' + symbol + '&limit=3&order=received'
              for symbol in ('SPY', 'QQQ')}
@@ -468,39 +470,65 @@ def run_native_role(role, packet, state):
 
 
 def _run_native_role_held(role, packet, state, *, offline_replay=False, offline_fault=None):
-    started = time.monotonic()
     if role not in ('research', 'audit'):
         raise WorkerError('role_not_allowed')
-    profile = HERMES_ROOT / 'profiles' / ('floww-' + role)
+    if not offline_replay:
+        return _run_native_role_process(role, packet, state)
+    scratch = ensure_dir(Path(state) / 'scratch')
+    with tempfile.TemporaryDirectory(prefix='offline-replay-', dir=str(scratch)) as folder:
+        profile = ensure_dir(Path(folder) / 'offline-profile')
+        # Copy only the scoped, independently checked configuration, never .env.
+        config = read_bytes(HERMES_ROOT / 'profiles' / ('floww-' + role) / 'config.yaml')
+        fd = os.open(str(profile / 'config.yaml'), os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(fd, 'wb') as handle:
+            handle.write(config)
+        atomic_json(profile / 'ESTOP', {'reason': 'isolated_offline_fixture'})
+        return _run_native_role_process(role, packet, state, offline_profile=profile, offline_fault=offline_fault)
+
+
+def _run_native_role_process(role, packet, state, *, offline_profile=None, offline_fault=None):
+    started = time.monotonic()
+    offline_replay = offline_profile is not None
+    if role not in ('research', 'audit'):
+        raise WorkerError('role_not_allowed')
+    profile = offline_profile if offline_replay else HERMES_ROOT / 'profiles' / ('floww-' + role)
+    if offline_replay and (profile.name != 'offline-profile' or not profile.parent.name.startswith('offline-replay-')
+            or profile.resolve() != profile or HERMES_ROOT in profile.parents):
+        raise WorkerError('offline_profile_refused')
     sentinel = profile / 'ESTOP'
-    if (HERMES_ROOT / 'ESTOP').exists() or not sentinel.exists():
+    if (not offline_replay and (HERMES_ROOT / 'ESTOP').exists()) or not sentinel.exists():
         raise WorkerError('native_role_not_held')
     protected = [HERMES_ROOT / name for name in ('config.yaml', '.env', 'active_profile', 'kanban/current')]
     protected += [profile / 'config.yaml', profile / '.env',
                   HERMES_ROOT / 'profiles' / ('floww-audit' if role == 'research' else 'floww-research') / 'ESTOP']
+    if offline_replay:
+        protected = []
     before = {str(p): hashlib.sha256(read_bytes(p)).hexdigest() if p.exists() else None for p in protected}
     original_sentinel = read_bytes(sentinel)
     env = {k: v for k, v in os.environ.items() if not re.search('KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL|AUTHORIZATION', k, re.I)
            and not k.startswith('HERMES_')}
     env.update(HERMES_HOME=str(profile), HERMES_IGNORE_RULES='1', PYTHONDONTWRITEBYTECODE='1',
                DO_NOT_TRACK='1', NO_PROXY='*')
+    if offline_replay:
+        env['HOME'] = str(ensure_dir(profile.parent / 'home'))
     for name in list(env):
         if 'PROXY' in name.upper() and name != 'NO_PROXY':
             del env[name]
-    scratch = ensure_dir(Path(state) / 'scratch' / role)
+    scratch = profile.parent if offline_replay else ensure_dir(Path(state) / 'scratch' / role)
     preflight = None
     def ready(message):
         nonlocal preflight
         if message.get('phase') != 'ready' or not message.get('bounded') or message.get('native_valid_tool_names') != [] or not message.get('tool_rejection_passed'):
             raise WorkerError('native_preflight_refused')
-        if (HERMES_ROOT / 'ESTOP').exists() or paused(state):
+        if (not offline_replay and (HERMES_ROOT / 'ESTOP').exists()) or paused(state):
             raise WorkerError('worker_paused')
         # Native resume removes the fleet sentinel too. Never call it: remove only
         # this role sentinel under the worker lease, restoring exact bytes finally.
         sentinel.unlink()
         preflight = message
     try:
-        output = bounded_process([str(NATIVE_PYTHON), '-I', str(ROLE_HELPER)] + (['--offline-replay'] if offline_replay else []),
+        interpreter = OFFLINE_PYTHON if offline_replay else NATIVE_PYTHON
+        output = bounded_process([str(interpreter), '-I', str(ROLE_HELPER)] + (['--offline-replay'] if offline_replay else []),
                                  (canonical({'role': role, 'packet': role_view(packet), 'offline_fault': offline_fault}) + '\n').encode(),
                                  env=env, state=state, on_ready=ready, cwd=str(scratch))
         lines = output.splitlines()

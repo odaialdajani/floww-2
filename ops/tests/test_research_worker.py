@@ -258,6 +258,25 @@ class WorkerTests(unittest.TestCase):
                 (self.admission / name).unlink()
         self.assertEqual(len(self.calls), 0)
 
+    def test_offline_replay_never_uses_production_profile_or_marker(self):
+        root = self.state.parent / 'synthetic-production'
+        profile = root / 'profiles/floww-research'
+        worker.ensure_dir(profile)
+        (profile / 'config.yaml').write_text('{}')
+        (profile / 'ESTOP').write_text('held')
+        def child(command, initial, *, env, on_ready, **kwargs):
+            self.assertNotEqual(Path(env['HERMES_HOME']), profile)
+            self.assertIn('--offline-replay', command)
+            self.assertNotEqual(env['HOME'], str(Path.home()))
+            ready = {'phase': 'ready', 'bounded': True, 'native_valid_tool_names': [], 'tool_rejection_passed': True}
+            on_ready(ready)
+            self.assertTrue((profile / 'ESTOP').exists())
+            return (json.dumps(ready) + '\n' + json.dumps({'success': True}) + '\n').encode()
+        with mock.patch.object(worker, 'HERMES_ROOT', root), mock.patch.object(worker, 'bounded_process', side_effect=child):
+            worker._run_native_role_held('research', intake.compile_snapshot(fixture(), 1794085822),
+                                         self.state, offline_replay=True)
+        self.assertEqual((profile / 'ESTOP').read_text(), 'held')
+
     def test_each_page_source_envelope_and_metadata_are_admitted_before_combining(self):
         qqq = json.loads(json.dumps(fixture()).replace('SPY', 'QQQ'))
         invalid = [('source', 'public-scan'), ('live', True), ('trade_eligible', True),
@@ -589,8 +608,7 @@ class WireTests(unittest.TestCase):
             worker.set_paused(state, False)
             profile = worker.HERMES_ROOT / 'profiles/floww-research'
             before = (profile / 'ESTOP').read_bytes()
-            with worker.Lease(profile / '.floww-saved-research-lease'):
-                result = worker._run_native_role_held('research', packet, state, offline_replay=True)
+            result = worker._run_native_role_held('research', packet, state, offline_replay=True)
         self.assertTrue(result['success'], result)
         self.assertEqual(result['http_request_count'], 1)
         self.assertEqual(result['blocked_http_attempt_count'], 0)
@@ -606,9 +624,8 @@ class WireTests(unittest.TestCase):
                 worker.set_paused(state, False)
                 profile = worker.HERMES_ROOT / 'profiles/floww-research'
                 before = (profile / 'ESTOP').read_bytes()
-                with worker.Lease(profile / '.floww-saved-research-lease'):
-                    result = worker._run_native_role_held('research', packet, state,
-                        offline_replay=True, offline_fault=fault)
+                result = worker._run_native_role_held('research', packet, state,
+                    offline_replay=True, offline_fault=fault)
             self.assertFalse(result['success'])
             self.assertEqual(result['http_request_count'], 1)
             self.assertEqual(result['cost_status'], 'unknown')
@@ -626,23 +643,58 @@ class WireTests(unittest.TestCase):
             self.assertNotIn('Packet:', serialized)
             self.assertEqual(before, (profile / 'ESTOP').read_bytes())
 
+    def test_parallel_offline_replays_keep_real_markers_present_and_unchanged(self):
+        import concurrent.futures
+        import threading
+        packet = intake.compile_snapshot(fixture(), 1794085822)
+        profiles = [worker.HERMES_ROOT / 'profiles' / ('floww-' + role) for role in ('research', 'audit')]
+        protected = [profile / name for profile in profiles for name in ('ESTOP', 'config.yaml', '.env')]
+        before = {p: (p.stat().st_ino, p.stat().st_mtime_ns, p.stat().st_size) for p in protected}
+        stopped, missing = threading.Event(), []
+        def observe():
+            while not stopped.wait(.001):
+                for profile in profiles:
+                    if not (profile / 'ESTOP').is_file():
+                        missing.append(str(profile))
+        observer = threading.Thread(target=observe, daemon=True)
+        observer.start()
+        try:
+            with tempfile.TemporaryDirectory(dir='/Users/nav') as folder, concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+                state = Path(folder) / 'state'
+                worker.set_paused(state, False)
+                futures = [pool.submit(worker._run_native_role_held, role, packet, state, offline_replay=True)
+                           for role in ('research', 'audit')]
+                results = [future.result(timeout=40) for future in futures]
+            self.assertTrue(all(result['success'] for result in results), results)
+        finally:
+            stopped.set()
+            observer.join(timeout=2)
+        self.assertEqual(missing, [])
+        self.assertEqual(before, {p: (p.stat().st_ino, p.stat().st_mtime_ns, p.stat().st_size) for p in protected})
+
     def test_premature_wire_attempt_is_refused_without_consuming_quota(self):
         guard = native.WireGuard('test-secret', self.request()['messages'])
         with self.assertRaises(native.NativeError):
             guard.admit(native.ENDPOINT, 'POST', json.dumps(self.request()).encode())
         self.assertEqual(guard.requests, 0)
 
-    def test_real_native_agent_preflight_keeps_estop_and_makes_no_http(self):
+    def test_isolated_native_agent_preflight_keeps_real_estop_and_makes_no_http(self):
         import os
         packet = intake.compile_snapshot(fixture(), 1794085822)
         env = {k: v for k, v in os.environ.items() if not any(word in k.upper() for word in
                ('TOKEN', 'KEY', 'SECRET', 'PASSWORD', 'CREDENTIAL', 'AUTHORIZATION')) and not k.startswith('HERMES_')}
-        env.update(HERMES_HOME='/Users/nav/.hermes/profiles/floww-research', HERMES_IGNORE_RULES='1',
-                   PYTHONDONTWRITEBYTECODE='1')
-        sentinel = Path(env['HERMES_HOME']) / 'ESTOP'
-        before = sentinel.read_bytes()
-        with tempfile.TemporaryDirectory() as scratch:
-            run = subprocess.run([str(worker.NATIVE_PYTHON), '-I', str(OPS / 'research_native_role.py')],
+        real_profile = worker.HERMES_ROOT / 'profiles/floww-research'
+        real_marker = real_profile / 'ESTOP'
+        before = real_marker.stat()
+        with tempfile.TemporaryDirectory(prefix='offline-replay-', dir='/Users/nav') as folder:
+            scratch = Path(folder)
+            profile = worker.ensure_dir(scratch / 'offline-profile')
+            (profile / 'config.yaml').write_bytes(worker.read_bytes(real_profile / 'config.yaml'))
+            (profile / 'ESTOP').write_text('offline-held')
+            worker.ensure_dir(scratch / 'home')
+            env.update(HERMES_HOME=str(profile), HOME=str(scratch / 'home'), HERMES_IGNORE_RULES='1',
+                       PYTHONDONTWRITEBYTECODE='1')
+            run = subprocess.run([str(worker.OFFLINE_PYTHON), '-I', str(OPS / 'research_native_role.py'), '--offline-replay'],
                 input=(json.dumps({'role': 'research', 'packet': packet}) + '\n').encode(),
                 env=env, cwd=scratch, capture_output=True, timeout=20)
         lines = run.stdout.splitlines()
@@ -653,7 +705,8 @@ class WireTests(unittest.TestCase):
         self.assertEqual(ready['sdk_retries'], 0)
         self.assertEqual(refused['http_request_count'], 0)
         self.assertEqual(refused['refusal_code'], 'role_not_admitted')
-        self.assertEqual(sentinel.read_bytes(), before)
+        after = real_marker.stat()
+        self.assertEqual((before.st_ino, before.st_mtime_ns), (after.st_ino, after.st_mtime_ns))
 
     def test_native_rejection_fixture_is_exercised_without_model_or_network(self):
         interpreter = Path('/Users/nav/.hermes/tools/python-3.14.9+20261021-darwin-arm64/bin/python3')
