@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import ast
 import base64
+import fcntl
 import hashlib
 import json
 import os
@@ -32,9 +33,11 @@ BASE_SHA = '191e3df9ef54db155d512d7e44577fd48188d12c'
 SOURCE_SHA256 = '551f66d35d25d6fa5447e4c8f4510b3ce565cf839e9a8b0d75cc5710bd702388'
 REGISTRY_VERSION = 'floww-coding-registry.v1'
 CHECKER = Path('/Users/nav/floww-continuation-20261107/coding-trusted/check_next_action.py')
-CHECKER_SHA256 = 'c4376a4d8398f3062669315576c69436002a3b4aace11b3dfea3345dc68c2768'
+CHECKER_SHA256 = '7f08a14078c24795dfa55bbe290be578db36279f6b38b39b9de4753afad4d2b8'
 CHECKER_PYTHON = '/Library/Developer/CommandLineTools/usr/bin/python3'
 TARGET = 'ops/operations_receipt.py'
+ADMISSION_LEDGER = Path('/Users/nav/Library/Application Support/FLOWW/operations/coding-admissions')
+ADMISSION_MAX_AGE = 900
 
 
 @dataclass(frozen=True)
@@ -64,14 +67,15 @@ def _unique(pairs):
     return result
 
 
-def _regular_bytes(path, limit=65536):
+def _regular_bytes(path, limit=65536, private=False):
     """Pin parent and regular single-link file; refuse links, races and FIFOs."""
     path = Path(path)
     parent = a._open_directory(path.parent)
     fd = None
     try:
         before = os.stat(path.name, dir_fd=parent, follow_symlinks=False)
-        if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1 or before.st_size > limit:
+        if (not stat.S_ISREG(before.st_mode) or before.st_nlink != 1 or before.st_size > limit
+                or (private and (before.st_uid != os.getuid() or stat.S_IMODE(before.st_mode) & 0o077))):
             raise Refusal('unsafe checker or admission file')
         fd = os.open(path.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent)
         if a._identity(os.fstat(fd)) != a._identity(before):
@@ -183,7 +187,7 @@ def check_candidate(workspace, checker=CHECKER):
     except ValueError as exc:
         raise Refusal('trusted checker returned invalid result') from exc
     if (result.returncode or set(value) != {'accepted', 'checks', 'candidate_sha256', 'scope'}
-            or value['accepted'] is not True or type(value['checks']) is not int or value['checks'] != 260
+            or value['accepted'] is not True or type(value['checks']) is not int or value['checks'] != 772
             or value['candidate_sha256'] != hashes[TARGET]):
         raise Refusal('trusted checker rejected candidate')
     if validate_candidate(workspace) != hashes or digest(_regular_bytes(CHECKER)) != CHECKER_SHA256:
@@ -203,6 +207,101 @@ def task_prompt(source):
             "network, extra files, imports or calls. Then finish.\nSOURCE:\n" + source.decode())
 
 
+def _private_directory(info):
+    if (not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid()
+            or stat.S_IMODE(info.st_mode) & 0o077):
+        raise Refusal('admission ledger must be private and owner controlled')
+
+
+def _consume_admission(value):
+    """One fixed durable namespace, independent of approval/artifact filenames.
+
+    An inode witness in the trusted parent prevents ledger-directory replacement
+    from silently resetting consumed IDs. Partial markers/witnesses park work.
+    """
+    if not re.fullmatch('[a-f0-9]{32}', value.get('admission_id', '')):
+        raise Refusal('invalid externally generated admission id')
+    ledger = ADMISSION_LEDGER
+    parent = a._open_directory(ledger.parent)
+    directory = None
+    try:
+        _private_directory(os.fstat(parent))
+        # Serialize first-time directory/witness creation as well as consumption.
+        # Otherwise two initial contenders could each park the other's setup.
+        try:
+            fcntl.flock(parent, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise Refusal('admission ledger busy; no retry') from exc
+        created = False
+        witness = ledger.name + '.identity'
+        try:
+            os.stat(ledger.name, dir_fd=parent, follow_symlinks=False)
+        except FileNotFoundError:
+            try:
+                os.stat(witness, dir_fd=parent, follow_symlinks=False)
+            except FileNotFoundError:
+                pass
+            else:
+                raise Refusal('admission ledger identity disappeared; review required')
+            try:
+                os.mkdir(ledger.name, 0o700, dir_fd=parent)
+                created = True
+            except FileExistsError:
+                pass
+        directory = os.open(ledger.name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent)
+        _private_directory(os.fstat(directory))
+        try:
+            fcntl.flock(directory, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise Refusal('admission ledger busy; no retry') from exc
+        info = os.fstat(directory)
+        identity = {'device': info.st_dev, 'inode': info.st_ino}
+
+        def assert_current():
+            current = a._open_directory(ledger)
+            try:
+                named = os.fstat(current)
+                _private_directory(named)
+                if (named.st_dev, named.st_ino) != (info.st_dev, info.st_ino):
+                    raise Refusal('admission ledger directory identity changed')
+            finally:
+                os.close(current)
+            if json.loads(_regular_bytes(ledger.parent / witness, private=True), object_pairs_hook=_unique) != identity:
+                raise Refusal('admission ledger identity mismatch; review required')
+
+        if created:
+            fd = os.open(witness, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                         0o600, dir_fd=parent)
+            with os.fdopen(fd, 'w') as handle:
+                handle.write(json.dumps(identity, sort_keys=True) + '\n')
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.fsync(parent)
+        assert_current()
+        try:
+            fd = os.open(value['admission_id'] + '.json', os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                         0o600, dir_fd=directory)
+        except FileExistsError as exc:
+            raise Refusal('live admission already consumed; review required') from exc
+        # Existence alone refuses replay, including zero/partial crash markers.
+        with os.fdopen(fd, 'w') as handle:
+            marker = os.fstat(handle.fileno())
+            handle.write(json.dumps(value, sort_keys=True) + '\n')
+            handle.flush()
+            os.fsync(handle.fileno())
+            named = os.stat(value['admission_id'] + '.json', dir_fd=directory, follow_symlinks=False)
+            if (named.st_dev, named.st_ino) != (marker.st_dev, marker.st_ino) or named.st_nlink != 1:
+                raise Refusal('admission consumption marker identity changed')
+        os.fsync(directory)
+        assert_current()
+    except OSError as exc:
+        raise Refusal('admission ledger no-follow check refused') from exc
+    finally:
+        if directory is not None:
+            os.close(directory)
+        os.close(parent)
+
+
 def _admit_live(path):
     if path is None:
         raise Refusal('explicit reviewed live admission required')
@@ -211,30 +310,22 @@ def _admit_live(path):
     head = a.git(source, 'rev-parse', 'HEAD').strip()
     if a.git(source, 'status', '--porcelain', '--untracked-files=all'):
         raise Refusal('live implementation must be frozen and clean')
-    info = os.stat(path, follow_symlinks=False)
-    if info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) & 0o077:
-        raise Refusal('private admission required')
-    value = json.loads(_regular_bytes(path), object_pairs_hook=_unique)
-    expected = {'schema': 'floww-coding-live-admission.v1', 'task_id': 'receipt-next-action-v1',
+    value = json.loads(_regular_bytes(path, private=True), object_pairs_hook=_unique)
+    expected = {'schema': 'floww-coding-live-admission.v2', 'task_id': 'receipt-next-action-v1',
                 'implementation_commit': head, 'registry': REGISTRY_VERSION, 'base_sha': BASE_SHA,
-                'checker_sha256': CHECKER_SHA256, 'max_generations': 3, 'approved': True}
-    if (value != expected or any(type(value[name]) is not type(item) for name, item in expected.items())):
+                'checker_sha256': CHECKER_SHA256, 'max_generations': 3, 'max_output_tokens': 1024,
+                'max_seconds': 90, 'max_input_bytes': 65536, 'max_output_bytes': 262144,
+                'max_steps': 3, 'approved': True}
+    if (type(value) is not dict or set(value) != set(expected) | {'admission_id', 'issued_at', 'expires_at'}
+            or any(type(value[name]) is not type(item) or value[name] != item for name, item in expected.items())):
         raise Refusal('live admission identity mismatch')
-    # Consume before credentials/launch; ambiguity and crashes cannot auto-retry.
-    parent = a._open_directory(path.parent)
-    try:
-        try:
-            fd = os.open(path.name + '.consumed', os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
-                         0o600, dir_fd=parent)
-        except FileExistsError as exc:
-            raise Refusal('live admission already consumed; review required') from exc
-        with os.fdopen(fd, 'w') as handle:
-            handle.write(head + '\n')
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.fsync(parent)
-    finally:
-        os.close(parent)
+    if (type(value['admission_id']) is not str or not re.fullmatch('[a-f0-9]{32}', value['admission_id'])
+            or type(value['issued_at']) is not int or type(value['expires_at']) is not int
+            or not 0 < value['expires_at'] - value['issued_at'] <= ADMISSION_MAX_AGE
+            or not value['issued_at'] <= time.time() < value['expires_at']):
+        raise Refusal('live admission id or finite validity refused')
+    _consume_admission(value)
+    return value
 
 
 def _native(root, workspace, contract, lease, gate, gateway, receipt, profile):
@@ -327,8 +418,9 @@ def _native(root, workspace, contract, lease, gate, gateway, receipt, profile):
 def run_task(source, artifacts, live=False, admission=None, credential_path=None, hostile=False,
              task_id='receipt-next-action-v1'):
     task = registered_task(task_id)
+    authorization = None
     if live:
-        _admit_live(admission)
+        authorization = _admit_live(admission)
     elif credential_path is not None or admission is not None:
         raise Refusal('offline task cannot use credentials or admission')
     artifacts = Path(artifacts).resolve()
@@ -337,6 +429,8 @@ def run_task(source, artifacts, live=False, admission=None, credential_path=None
     probe_sentinel.write_bytes(b'unchanged\n')
     if any(os.path.lexists(path) for path in a.MANAGED) or digest(_regular_bytes(Path(a.BINARY), 256 * 1024 * 1024)) != a.BINARY_SHA:
         raise Refusal('native binary or managed policy changed')
+    if live and not authorization['issued_at'] <= time.time() < authorization['expires_at']:
+        raise Refusal('consumed admission expired before credential access')
     credential = a.read_credential(credential_path) if live else None
     receipt = {'schema': 'floww-coding-task-receipt.v1', 'task': task.task_id,
                'registry': REGISTRY_VERSION, 'source_base': BASE_SHA, 'mode': 'live' if live else 'offline',
@@ -351,6 +445,9 @@ def run_task(source, artifacts, live=False, admission=None, credential_path=None
         outside = root / 'outside'
         outside.write_bytes(a._snapshot_bytes(workspace, (TARGET,))[TARGET])
         gate = a.RequestGate(contract)
+        if live:
+            gate.deadline = min(gate.deadline, time.monotonic() + authorization['expires_at'] - time.time())
+            receipt['admission'] = authorization
 
         def offline_transport(body, _key, _timeout):
             exchanges.append(body)
@@ -382,6 +479,8 @@ def run_task(source, artifacts, live=False, admission=None, credential_path=None
         with a.WorkspaceLease(contract) as lease:
             def transport(body, key, timeout):
                 lease.assert_current()
+                if live and not authorization['issued_at'] <= time.time() < authorization['expires_at']:
+                    raise Refusal('live admission expired before generation')
                 return (a.official_request if live else offline_transport)(body, key, timeout)
 
             with a.Gateway(gate, credential, transport) as gateway:

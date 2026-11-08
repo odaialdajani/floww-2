@@ -2,6 +2,7 @@
 import importlib.util
 import json
 import os
+import secrets
 import subprocess
 import sys
 import tempfile
@@ -104,11 +105,8 @@ class CodingWorkerTests(unittest.TestCase):
         with self.assertRaises(self.m.Refusal):
             self.m.check_candidate(root)
 
-    def test_checker_rejects_false_success_and_baseline_but_accepts_real_priority(self):
-        root = self.workspace()
-        with self.assertRaisesRegex(self.m.Refusal, 'checker rejected'):
-            self.m.check_candidate(root)
-        good = self.base.replace(b"    elif value['state'] != 'reviewed':\n        action = 'independent_review_required'",
+    def good_candidate(self):
+        return self.base.replace(b"    elif value['state'] != 'reviewed':\n        action = 'independent_review_required'",
             b"    elif value['state'] != 'reviewed':\n"
             b"        if 'mode_binding_unverified' in review['refusal_codes']:\n"
             b"            action = 'verify_liquid_paper_binding'\n"
@@ -117,11 +115,17 @@ class CodingWorkerTests(unittest.TestCase):
             b"        elif 'runtime_unverified' in review['refusal_codes']:\n"
             b"            action = 'verify_runtime_acceptance'\n"
             b"        else:\n            action = 'independent_review_required'")
+
+    def test_checker_rejects_false_success_and_baseline_but_accepts_real_priority(self):
+        root = self.workspace()
+        with self.assertRaisesRegex(self.m.Refusal, 'checker rejected'):
+            self.m.check_candidate(root)
+        good = self.good_candidate()
         target = root / 'ops/operations_receipt.py'
         target.write_bytes(good)
         checked = self.m.check_candidate(root)
         self.assertTrue(checked['accepted'])
-        self.assertEqual(checked['checks'], 260)
+        self.assertEqual(checked['checks'], 772)
         target.write_bytes(good.replace(b"action = 'verify_liquid_paper_binding'", b"action = 'none'"))
         with self.assertRaisesRegex(self.m.Refusal, 'checker rejected'):
             self.m.check_candidate(root)
@@ -168,27 +172,137 @@ class CodingWorkerTests(unittest.TestCase):
                      ('-c', 'core.hooksPath=/dev/null', 'commit', '-qm', 'clean identity')]:
             self.m.a.git(implementation, *args)
         head = self.m.a.git(implementation, 'rev-parse', 'HEAD').strip()
-        value = {'schema': 'floww-coding-live-admission.v1', 'task_id': 'receipt-next-action-v1',
+        value = {'schema': 'floww-coding-live-admission.v2', 'task_id': 'receipt-next-action-v1',
                  'implementation_commit': head, 'registry': 'floww-coding-registry.v1',
                  'base_sha': self.m.BASE_SHA, 'checker_sha256': self.m.CHECKER_SHA256,
-                 'max_generations': 3, 'approved': True}
+                 'max_generations': 3, 'max_output_tokens': 1024, 'max_seconds': 90,
+                 'max_input_bytes': 65536, 'max_output_bytes': 262144, 'max_steps': 3,
+                 'admission_id': secrets.token_hex(16), 'issued_at': 1800000000,
+                 'expires_at': 1800000600, 'approved': True}
         admission = self.root / 'admission.json'
         admission.touch(mode=0o600)
-        with patch.object(self.m, '__file__', str(module_path)):
+        ledger = self.root / 'coding-admissions'
+        with patch.object(self.m, '__file__', str(module_path)), patch.object(self.m, 'ADMISSION_LEDGER', ledger), \
+                patch.object(self.m.time, 'time', return_value=1800000001):
             for field, wrong in [('implementation_commit', '0' * 40), ('base_sha', '0' * 40),
-                                 ('checker_sha256', '0' * 64), ('max_generations', 4), ('approved', 1)]:
+                                 ('checker_sha256', '0' * 64), ('max_generations', 4), ('approved', 1),
+                                 ('expires_at', 1799999999), ('issued_at', 1800000100),
+                                 ('expires_at', 1800001000), ('max_output_tokens', 2048),
+                                 ('schema', 'floww-coding-live-admission.v1'), ('issued_at', True),
+                                 ('admission_id', '../escape'), ('max_input_bytes', 65537),
+                                 ('max_output_bytes', 262145), ('max_steps', 4), ('max_seconds', 91)]:
                 admission.write_text(json.dumps(dict(value, **{field: wrong})))
                 with self.subTest(field=field), self.assertRaises(self.m.Refusal):
                     self.m._admit_live(admission)
-                self.assertFalse(Path(str(admission) + '.consumed').exists())
+                self.assertFalse((ledger / (value['admission_id'] + '.json')).exists())
             admission.write_text(json.dumps(value)[:-1] + ', "approved":true}')
             with self.assertRaisesRegex(self.m.Refusal, 'duplicate'):
                 self.m._admit_live(admission)
             admission.write_text(json.dumps(value))
             self.m._admit_live(admission)
-            self.assertEqual(Path(str(admission) + '.consumed').read_text(), head + '\n')
+            self.assertEqual(json.loads((ledger / (value['admission_id'] + '.json')).read_text())['implementation_commit'], head)
             with self.assertRaisesRegex(self.m.Refusal, 'consumed'):
                 self.m._admit_live(admission)
+            copied = self.root / 'other-directory'
+            copied.mkdir(mode=0o700)
+            copied_file = copied / 'copied.json'
+            copied_file.write_bytes(admission.read_bytes())
+            copied_file.chmod(0o600)
+            with self.assertRaisesRegex(self.m.Refusal, 'consumed'):
+                self.m._admit_live(copied_file)
+            # A fresh artifact directory cannot reset the consumed model budget.
+            with patch.object(self.m.a, 'read_credential', side_effect=AssertionError('credential boundary reached')):
+                with self.assertRaisesRegex(self.m.Refusal, 'consumed'):
+                    self.m.run_task('/does/not/exist', self.root / 'another-artifact-directory',
+                                    live=True, admission=copied_file, credential_path='/does/not/exist')
+            self.assertFalse((self.root / 'another-artifact-directory').exists())
+            admission.rename(self.root / 'renamed.json')
+            with self.assertRaisesRegex(self.m.Refusal, 'consumed'):
+                self.m._admit_live(self.root / 'renamed.json')
+
+    def test_central_ledger_concurrent_and_crashed_owner_replays_refuse(self):
+        ledger = self.root / 'central'
+        value = {'admission_id': 'a' * 32, 'implementation_commit': 'b' * 40}
+        source = Path(self.m.__file__).resolve()
+        script = """import os,sys,json
+sys.path.insert(0,sys.argv[1]);import coding_worker as w
+from pathlib import Path
+w.ADMISSION_LEDGER=Path(sys.argv[2])
+if sys.argv[3]=='crash': w.os.fsync=lambda fd:os._exit(19)
+try: w._consume_admission(json.loads(sys.argv[4]))
+except w.Refusal: sys.exit(42)
+"""
+        command = ['/usr/bin/python3', '-I', '-B', '-c', script, str(source.parent), str(ledger),
+                   'normal', json.dumps(value)]
+        first = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        second = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        outputs = [first.communicate(timeout=4), second.communicate(timeout=4)]
+        self.assertEqual(sorted([first.returncode, second.returncode]), [0, 42], outputs)
+        crash_value = dict(value, admission_id='c' * 32)
+        command[-2:] = ['crash', json.dumps(crash_value)]
+        self.assertEqual(subprocess.run(command, capture_output=True, timeout=4).returncode, 19)
+        command[-2] = 'normal'
+        self.assertEqual(subprocess.run(command, capture_output=True, timeout=4).returncode, 42)
+
+    def test_ledger_replacement_symlink_and_nonprivate_state_refuse(self):
+        ledger = self.root / 'central'
+        with patch.object(self.m, 'ADMISSION_LEDGER', ledger):
+            self.m._consume_admission({'admission_id': 'a' * 32})
+            ledger.rename(self.root / 'retired')
+            ledger.mkdir(mode=0o700)
+            with self.assertRaisesRegex(self.m.Refusal, 'identity'):
+                self.m._consume_admission({'admission_id': 'a' * 32})
+            ledger.rmdir()
+            ledger.symlink_to(self.root / 'retired', target_is_directory=True)
+            with self.assertRaises((self.m.Refusal, OSError)):
+                self.m._consume_admission({'admission_id': 'd' * 32})
+            ledger.unlink()
+            (self.root / 'retired').rename(ledger)
+            ledger.chmod(0o755)
+            with self.assertRaisesRegex(self.m.Refusal, 'private'):
+                self.m._consume_admission({'admission_id': 'd' * 32})
+
+    def test_checker_rejects_unhealthy_and_paused_priority_mutation(self):
+        root = self.workspace()
+        good = self.good_candidate()
+        target = root / 'ops/operations_receipt.py'
+        target.write_bytes(good.replace(b"watchdog['state'] != 'healthy'", b"watchdog['state'] == 'unknown'"))
+        with self.assertRaisesRegex(self.m.Refusal, 'checker rejected'):
+            self.m.check_candidate(root)
+
+    def test_ledger_marker_symlink_partial_marker_and_witness_damage_refuse(self):
+        ledger = self.root / 'central'
+        with patch.object(self.m, 'ADMISSION_LEDGER', ledger):
+            self.m._consume_admission({'admission_id': 'a' * 32})
+            marker = ledger / ('b' * 32 + '.json')
+            marker.symlink_to(self.root / 'outside')
+            with self.assertRaisesRegex(self.m.Refusal, 'consumed'):
+                self.m._consume_admission({'admission_id': 'b' * 32})
+            self.assertFalse((self.root / 'outside').exists())
+            marker.unlink()
+            marker.touch(mode=0o600)
+            with self.assertRaisesRegex(self.m.Refusal, 'consumed'):
+                self.m._consume_admission({'admission_id': 'b' * 32})
+            witness = self.root / 'central.identity'
+            witness.write_text('{}')
+            with self.assertRaisesRegex(self.m.Refusal, 'identity'):
+                self.m._consume_admission({'admission_id': 'c' * 32})
+
+    def test_ledger_directory_replacement_during_consumption_refuses(self):
+        ledger = self.root / 'central'
+        with patch.object(self.m, 'ADMISSION_LEDGER', ledger):
+            self.m._consume_admission({'admission_id': 'a' * 32})
+            identity = ledger.stat().st_ino
+            real_fsync = os.fsync
+
+            def replace_on_directory_flush(fd):
+                if os.fstat(fd).st_ino == identity:
+                    ledger.rename(self.root / 'replaced')
+                    ledger.mkdir(mode=0o700)
+                real_fsync(fd)
+
+            with patch.object(self.m.os, 'fsync', replace_on_directory_flush), self.assertRaisesRegex(self.m.Refusal, 'identity'):
+                self.m._consume_admission({'admission_id': 'b' * 32})
 
     def test_model_policy_exports_only_declared_file_and_fixed_limits(self):
         root = self.workspace()

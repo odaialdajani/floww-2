@@ -106,7 +106,11 @@ The externally owned checker and baseline under the private continuation's
 `coding-trusted` directory are pinned by hash and excluded from model write
 scope. The checker runs under a fixed isolated standard-library Python command
 with network and writes denied, never imports the candidate module, and checks
-260 priority/preservation cases. Its result must match the safe candidate hash.
+772 priority/preservation cases, including all four watchdog states and three
+receipt states. It also structurally freezes the four higher-priority branches,
+the non-reviewed condition and the reviewed `else`. Its result must match the
+safe candidate hash. The checker SHA-256 is
+`7f08a14078c24795dfa55bbe290be578db36279f6b38b39b9de4753afad4d2b8`.
 Neither model text nor a model-provided test result establishes acceptance.
 
 The next prerequisite is selected inside the existing non-reviewed branch:
@@ -127,11 +131,28 @@ Run local positive and hostile native replays without any provider credential:
 
 Live dispatch additionally requires a clean frozen implementation and a private
 externally created admission file. Its closed JSON schema binds `schema` to
-`floww-coding-live-admission.v1`, the task ID, `implementation_commit` to the
-reviewed full SHA, the registry, base SHA, checker SHA, `max_generations: 3` and
-`approved: true`. Duplicate keys and incorrect types refuse. The admission is
-durably consumed before key access or native launch; a failed/crashed attempt
-requires fresh external review. Do not generate this approval from model output.
+`floww-coding-live-admission.v2`, the task ID, `implementation_commit` to the
+reviewed full SHA, the registry, base SHA, checker SHA, literal `approved: true`,
+and all fixed caps: generations 3, output tokens 1024, seconds 90, input bytes
+65536, output bytes 262144 and steps 3. An external reviewer supplies a fresh
+32-character lowercase hexadecimal `admission_id`, integer Unix `issued_at` and
+`expires_at`. The validity interval must contain the current time and span at
+most 900 seconds. Validity is checked again before key access and each model
+generation, and also bounds the generation deadline.
+
+The fixed trusted ledger is
+`/Users/nav/Library/Application Support/FLOWW/operations/coding-admissions`.
+It is independent of approval filenames, directories and artifact locations.
+The central ID marker is created exclusively and fsynced, then the directory is
+fsynced before key access or native launch. No-follow/private-owner checks,
+a nonblocking directory lock, current directory identity checks and an inode
+witness in the private trusted parent guard consumption. Marker/witness damage,
+directory replacement, concurrent ownership and partial crash state refuse;
+consumption records are never automatically deleted or repaired. Copying or
+renaming an approved JSON record cannot create another budget. Duplicate keys,
+incorrect types and old v1 records refuse. A failed/crashed attempt requires
+fresh external review and a new ID. Do not generate approval IDs or grants from
+model output.
 Only an explicitly admitted run uses `--live --admission /PRIVATE/approval.json
 --credential-file /PRIVATE/credential`. There are at most three official model
 POSTs, 1024 output tokens each, with no automatic retry or fallback.
