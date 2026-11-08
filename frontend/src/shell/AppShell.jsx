@@ -67,10 +67,12 @@ function Workspace({collapsed,children,ticker,onTickerChange,relatedOpen,onRelat
  const columns="minmax(0, 1fr)"+(relatedDock?" "+relatedWidth+"px":"")+(layout==="side"?" "+sizing.width+"px":"");
  return <div ref={workspace} className="floww-workspace" data-chat-layout={layout} data-related-layout={relatedOpen?relatedLayout:"closed"}
   style={{marginLeft:railWidth,minWidth:0,minHeight:"100dvh",display:"grid",gridTemplateColumns:columns,columnGap:layout==="side"||relatedDock?CHAT_PANE_GAP:0,"--assistant-pane-width":sizing.width+"px"}}>
-  <main className="floww-workspace-main" style={{minWidth:0,display:"flex",flexDirection:"column",minHeight:"100dvh"}}>{children}</main>
+  <main className="floww-workspace-main" style={{minWidth:0,display:"flex",flexDirection:"column",minHeight:"100dvh"}}>
+   <div className="workspace-utilities" role="group" aria-label="Workspace utilities"><AgentCommandBar/><ProblemStatus/></div>
+   {children}
+  </main>
   {relatedOpen&&<RelatedTickerPanel ticker={ticker} onTickerChange={onTickerChange} onClose={onRelatedClose} layout={relatedLayout} width={relatedWidth} right={layout==="side"?sizing.width+16:12}/>}
   <AgentPanel paneWidth={sizing.width} minWidth={sizing.minWidth} maxWidth={sizing.maxWidth} resizeEnabled={layout==="side"} onPaneWidthChange={changeWidth}/>
-  <AgentCommandBar/><ProblemStatus/>
  </div>;
 }
 

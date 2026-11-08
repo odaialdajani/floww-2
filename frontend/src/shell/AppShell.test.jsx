@@ -126,3 +126,12 @@ test('heatseeker viewport constraints match the docked main while ordinary pages
  view.rerender(<AppShell page="flowseeker-pro"><div>Regular screen rows</div></AppShell>);
  const regular=screen.getByRole('main');expect(matching.some(rule=>rule.selectors.some(selector=>{try{return regular.matches(selector);}catch{return false;}}))).toBe(false);
 });
+
+
+test('Stock utilities remain an accessible in-flow group with working open actions',async()=>{
+ render(<AppShell page="heatseeker"><div className="heatseeker-layout"><div className="price-node-focused"><button>Exit focus</button></div></div></AppShell>);
+ const group=screen.getByRole('group',{name:'Workspace utilities'});expect(screen.getByRole('main')).toContainElement(group);
+ const health=screen.getByRole('button',{name:'App health'});expect(group).toContainElement(health);health.focus();expect(health).toHaveFocus();fireEvent.click(health);expect(health).toHaveAttribute('aria-expanded','true');expect(screen.getByRole('heading',{name:'Problem log'})).toBeInTheDocument();await screen.findByText('The problem log is unavailable. The next check will wait before trying again.');
+ const ask=screen.getByRole('button',{name:'Open Ask Flow'});expect(group).toContainElement(ask);ask.focus();expect(ask).toHaveFocus();fireEvent.click(ask);expect(screen.getByRole('region',{name:'Ask Flow chat'})).toBeInTheDocument();
+ fireEvent.click(screen.getByRole('button',{name:'Close Ask Flow'}));fireEvent.keyDown(window,{key:'k',ctrlKey:true});expect(screen.getByRole('region',{name:'Ask Flow chat'})).toBeInTheDocument();expect(screen.getByRole('button',{name:'Exit focus'})).toBeInTheDocument();
+});
