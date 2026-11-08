@@ -14,6 +14,7 @@ import json
 import os
 import signal
 import socket
+import stat
 import sys
 import tempfile
 import threading
@@ -365,6 +366,8 @@ def main():
                         if not isinstance(value, (str, bytes, os.PathLike)):
                             continue
                         path = Path(os.fsdecode(value)).resolve()
+                        if path.name == '.env' or path.name.startswith('.env.') or path.name.endswith('.env'):
+                            raise NativeError('offline_credential_file_refused')
                         if path.name.startswith('hermes_bootstrap.') and path.is_relative_to(NATIVE_SOURCE):
                             raise NativeError('offline_bootstrap_source_refused')
                         if path.is_relative_to(Path('/Users/nav/Library')):
@@ -383,6 +386,33 @@ def main():
                 raise NativeError('offline_socket_refused')
             bootstrap._happy_eyeballs_create_connection = no_fixture_connection
             sys.modules['hermes_bootstrap'] = bootstrap
+            # Hermes' native managed-worker config snapshot skips dotenv and
+            # external-secret loading before config/agent imports. Bind only the
+            # fixture's explicit config, with ordinary enforcement (no safe-mode
+            # or ignore-user-config bypass); never inspect a real profile here.
+            fixture_config = {}
+            if not self_test:
+                fixture_profile = Path.cwd() / 'offline-profile'
+                if (not Path.cwd().name.startswith('offline-replay-')
+                        or Path(os.environ.get('HERMES_HOME', '')) != fixture_profile
+                        or fixture_profile.resolve() != fixture_profile
+                        or Path(os.environ.get('HOME', '')) != Path.cwd() / 'home'):
+                    raise NativeError('offline_profile_refused')
+                fd = os.open(str(fixture_profile / 'config.yaml'), os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+                with os.fdopen(fd, 'rb') as handle:
+                    info = os.fstat(handle.fileno())
+                    if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_nlink != 1:
+                        raise NativeError('offline_config_refused')
+                    config_bytes = handle.read(MAX_INPUT + 1)
+                if len(config_bytes) > MAX_INPUT:
+                    raise NativeError('offline_config_limit')
+                import hermes_yaml
+                fixture_config = hermes_yaml.safe_load(config_bytes)
+                if not isinstance(fixture_config, dict):
+                    raise NativeError('offline_config_refused')
+                profile_check(fixture_config)
+            from agent.safe_worker_policy import _bind_worker_config
+            _bind_worker_config(fixture_config)
             if self_test:
                 diagnostic_home = tempfile.TemporaryDirectory(prefix='floww-native-selftest-')
                 for name in list(os.environ):

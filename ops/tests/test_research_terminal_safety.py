@@ -125,6 +125,9 @@ def audit(event, args):
             if not isinstance(value, (str, bytes, os.PathLike)):
                 continue
             path = Path(os.fsdecode(value)).resolve()
+            if path.name == '.env' or path.name.startswith('.env.') or path.name.endswith('.env'):
+                events.append('credential_shaped_file_access')
+                raise RuntimeError('outer_denied_credential_file')
             if path.name.startswith('hermes_bootstrap.') and path.is_relative_to(root / 'hermes-agent'):
                 events.append('bootstrap_source_access')
                 raise RuntimeError('outer_denied_bootstrap')
@@ -137,6 +140,12 @@ def audit(event, args):
                     events.append('production_private_access')
                     raise RuntimeError('outer_denied_private')
 sys.addaudithook(audit)
+registered = []
+original_addaudithook = sys.addaudithook
+def record_inner_guard(hook):
+    original_addaudithook(hook)
+    registered.append(hook)
+sys.addaudithook = record_inner_guard
 sys.argv = [sys.argv[1], '--self-test' if sys.argv[2] == 'selftest' else '--offline-replay']
 try:
     runpy.run_path(sys.argv[0], run_name='__main__')
@@ -144,9 +153,20 @@ except SystemExit as exc:
     status = exc.code
 except BaseException as exc:
     status = type(exc).__name__
+inner_refusals = {}
+for hook in registered:
+    if getattr(hook, '__name__', None) == 'fixture_audit':
+        for name in ('.env', '.env.private', '.op.env'):
+            try:
+                # Call the real registered inner policy directly; no file is
+                # opened and the independently registered outer guard stays on.
+                hook('open', (str(root / 'hermes-agent' / name), 'r', os.O_RDONLY))
+            except BaseException as exc:
+                inner_refusals[name] = str(exc)
 os.write(1, (json.dumps({'guard_events': events, 'exit_status': status,
     'bootstrap_source_loaded': getattr(sys.modules.get('hermes_bootstrap'), '__file__', None) is not None,
-    'native_agent_loaded': 'run_agent' in sys.modules}) + '\n').encode())
+    'native_agent_loaded': 'run_agent' in sys.modules,
+    'inner_credential_refusals': inner_refusals}) + '\n').encode())
 '''
 
 
@@ -224,6 +244,14 @@ class GuardedOfflineModeTests(unittest.TestCase):
                     self.assertEqual(lines[-2]['http_request_count'], 1)
                 else:
                     self.assertEqual(lines[-2]['http_request_count'], 0)
+
+    def test_registered_inner_guard_denies_even_absent_source_credential_paths(self):
+        lines = self.run_mode('preflight')
+        self.assertEqual(lines[-1]['guard_events'], [], lines)
+        self.assertEqual(lines[-1]['inner_credential_refusals'], {
+            '.env': 'offline_credential_file_refused',
+            '.env.private': 'offline_credential_file_refused',
+            '.op.env': 'offline_credential_file_refused'})
 
     def test_fault_modes_never_load_bootstrap_or_make_more_than_one_fake_post(self):
         for fault in ('partial_timeout', 'missing_done', 'length', 'pending', 'response_limit'):
