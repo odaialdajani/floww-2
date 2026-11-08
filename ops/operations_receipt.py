@@ -381,7 +381,14 @@ def _summarize(value, now):
     elif watchdog['state'] != 'healthy':
         action = 'inspect_local_availability'
     elif value['state'] != 'reviewed':
-        action = 'independent_review_required'
+        if 'mode_binding_unverified' in review['refusal_codes']:
+            action = 'verify_liquid_paper_binding'
+        elif 'provider_parked' in review['refusal_codes']:
+            action = 'inspect_parked_provider'
+        elif 'runtime_unverified' in review['refusal_codes']:
+            action = 'verify_runtime_acceptance'
+        else:
+            action = 'independent_review_required'
     else:
         action = 'none'
     outputs, interventions, cost = review['counters']['accepted_outputs'], review['counters']['interventions'], review['cost_usd']

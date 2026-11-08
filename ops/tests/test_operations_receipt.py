@@ -266,6 +266,35 @@ class ReceiptTests(unittest.TestCase):
         self.assertEqual(result['review']['paper']['positions'], 2)
         self.assertEqual(result['next_action'], 'resolve_paper_ledger')
 
+    def test_named_prerequisites_have_stable_priority_without_granting_effects(self):
+        self.prepare()
+        cases = [(['runtime_unverified'], 'verify_runtime_acceptance'),
+                 (['provider_parked', 'runtime_unverified'], 'inspect_parked_provider'),
+                 (['runtime_unverified', 'provider_parked', 'mode_binding_unverified'],
+                  'verify_liquid_paper_binding')]
+        for codes, expected in cases:
+            with self.subTest(codes=codes):
+                sample = acceptance()
+                sample['refusal_codes'] = codes
+                self.write('acceptance.json', sample)
+                result = self.collect()
+                self.assertEqual(result['next_action'], expected)
+                self.assertFalse(any(result['capabilities'].values()))
+
+    def test_every_unavailable_watchdog_state_precedes_named_prerequisites(self):
+        self.prepare()
+        sample = acceptance()
+        sample['refusal_codes'] = ['mode_binding_unverified', 'provider_parked', 'runtime_unverified']
+        self.write('acceptance.json', sample)
+        for state in ('unknown', 'unhealthy', 'paused'):
+            with self.subTest(state=state):
+                observed = watchdog()
+                observed['state'] = state
+                self.write('status.json', observed)
+                result = self.collect()
+                self.assertEqual(result['next_action'], 'inspect_local_availability')
+                self.assertFalse(any(result['capabilities'].values()))
+
     def test_retention_removes_only_old_valid_derived_daily_receipts(self):
         self.prepare()
         self.collect()
