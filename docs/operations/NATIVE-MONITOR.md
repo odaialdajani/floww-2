@@ -38,7 +38,7 @@ When a bundle contains a new event, it may also include already-consumed eligibl
 
 Monitor mode returns exit 3 and no stdout on any hold. Native Hermes treats a nonzero monitor source as an early error before inference, including its first tick. Successful empty stdout is not used: native monitor mode would treat its first empty output as a changed baseline. No-agent mode instead returns exit 0, empty stdout and empty stderr on a hold; on eligibility it emits the same research JSON.
 
-After independent source acceptance, install **copies, never symlinks**, of `native_monitor.py`, its existing `research_intake.py` companion and `native_monitor_no_agent.sh` under the existing `floww-research` profile's `scripts/` directory. No configuration, personal context or keys need copying. The shell wrapper is required because native cron takes a script path rather than arbitrary CLI arguments.
+After independent source acceptance, install **copies, never symlinks**, of `native_monitor.py`, its existing `research_intake.py` companion and `native_monitor_no_agent.sh` under the owning profile's `scripts/` directory. No configuration, personal context or keys need copying. The shell wrapper is required because native cron takes a script path rather than arbitrary CLI arguments. The observed running gateway serves **default only**; its scheduler does not discover the standalone, stopped `floww-research` profile. The paused role-profile templates below remain preparation, not an instruction to remove its ESTOP or start another gateway.
 
 Exact prepared commands; neither was executed:
 
@@ -48,6 +48,14 @@ hermes --profile floww-research cron create '*/5 * * * *' --name 'FLOWW model-fr
 ```
 
 Do not resume the model-backed recipe as a substitute for shared budget admission. The second recipe performs zero model calls by native contract. `--no-agent` and `--monitor-script` are mutually incompatible. Native scripts must resolve inside their owning profile's `scripts/`; these templates use only that supported layout. Native CLI flags and first-tick semantics were checked against installed Hermes source `2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19` (`hermes_cli/subcommands/cron.py`, `cron/monitor.py`, `cron/scheduler_script.py`, `cron/scheduler.py`).
+
+## Commissioned model-free check — November 7, 23:00 New York
+
+Root installed the three hash-verified copies in `/Users/nav/.hermes/scripts/`, manually observed a silent successful hold, and used the existing default owner to create job `eaa6e27b396c` (`FLOWW model-free readiness check`). It is explicitly `no_agent:true`, local delivery, no catch-up, New York time, five-minute cadence and **96 total checks**. The first natural run completed at 23:00:47 with status `ok`; existing 22 job rows were unchanged when the new job was added. No new daemon or sleep blocker was installed.
+
+The role ESTOPs, PAUSED/control, failed-helper circuit and consumed admission IDs remain intact. These make the current script return silently before any cache GET. The consumed-event index and an atomic shared-reservation owner are uncommissioned. This job therefore proves native scheduling and readiness holds; it does not run recurring research, refresh provider data, watch a full heatmap/orderflow feed, place paper orders or establish an edge. Execution requires the Mac and its native gateway to remain available; this is not a hosted cloud worker.
+
+Installed copies and natural-run evidence are in `/Users/nav/floww-heatmap-agents-20261107/native-desktop-ops/`. Inspect only this job with `hermes --profile default cron runs eaa6e27b396c --limit 5`. Pause this job with the native cron command when needed; do not alter the older role stops to change its output.
 
 ## Verification
 
