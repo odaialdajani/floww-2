@@ -22,6 +22,7 @@ import { loadStudyInstances, saveStudyInstances } from "./chart/persistence/stud
 import { eligibleMappedPairsFor, parseMappedLevelsResponse } from "./chart/mappedLevelsClient";
 import { projectWhitespace } from "./chart/scenarioProjection";
 import { chartTime } from "./recordedPriceChartData";
+import { DEFAULT_PANE_SETTINGS } from "./chart/chartReducer";
 
 
 
@@ -34,7 +35,7 @@ function savedViewLabel(scope,index){
  return mode+" | "+sorted.length+" "+(sorted.length===1?"expiry":"expiries")+" | "+sorted[0]+(sorted.length>1?" to "+sorted.at(-1):"");
 }
 
-export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen, onOpenChange, primary = false, toolbarActions = null, exposureLine = null, darkLevels = null, flowBars = null, alertLines = null, showAtlas = true, forcedScope = null, onRecordNodes = null, cvdLine = null, onQuality = null, onEnvelopes = null, fitMode = "fit-visible", onReplayState = null, onChartReading = null, onReplayController = null, replaySourceId = null, replayEpoch = null, sync = null, onSyncEvent = null, chartFocus = false, onChartFocusChange = null }) {
+export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen, onOpenChange, primary = false, toolbarActions = null, exposureLine = null, darkLevels = null, flowBars = null, alertLines = null, showAtlas = true, forcedScope = null, onRecordNodes = null, cvdLine = null, onQuality = null, onEnvelopes = null, fitMode = "fit-visible", onReplayState = null, onChartReading = null, onReplayController = null, replaySourceId = null, replayEpoch = null, sync = null, onSyncEvent = null, visibilitySettings = null, onVisibilitySettingsChange = null, chartFocus = false, onChartFocusChange = null }) {
   const [localOpen, setLocalOpen] = useState(false);
   const open = controlledOpen ?? (primary || localOpen);
   const setOpen = value => { setLocalOpen(value); onOpenChange?.(value); };
@@ -136,7 +137,9 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
   // stable tabs (Indicators / Data / Review), explicit close, authoritative
   // selection stays with this pane. Open by default on desktop entry so the
   // studies/catalog discovery is never buried under Tools→another disclosure.
-  const [chartOverlays, setChartOverlays] = useState({ vwap: true, bands: false, profile: true, cvd: true, volume: true });
+  const [localChartOverlays, setLocalChartOverlays] = useState(DEFAULT_PANE_SETTINGS);
+  const chartOverlays = visibilitySettings ?? localChartOverlays;
+  const setChartOverlays = onVisibilitySettingsChange ?? setLocalChartOverlays;
   // Pane study configuration (C118 CVD / C121 profile / C124-126 TPO): one
   // per-ticker persisted scope, committed whole — settings that visibly change
   // the real plots and survive reload. Defaults are the incumbent behaviors.

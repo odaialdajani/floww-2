@@ -3,7 +3,7 @@ import PriceNodeHistory from '../PriceNodeHistory';
 import ChartPane from './ChartPane';
 import AtlasChart from './AtlasChart';
 import PaneLayouts, { LAYOUT_PRESETS, layoutById } from './PaneLayouts';
-import { createPanes, panesReducer, resolveSync, LINK_DIMS } from './chartReducer';
+import { createPanes, panesReducer, resolveSync, LINK_DIMS, DEFAULT_PANE_SETTINGS, cleanPaneSettings, applyPaneSettings } from './chartReducer';
 import { createLayout, migrate, sanitizeImport, serialize } from './persistence/layoutSchema';
 import { listLocal, loadLocal, saveLocal, scheduleAutosave } from './persistence/layoutStore';
 import { DEFAULT_SHORTCUTS, LONG_PRESS_MS, actionFor, keyOf, nextFitMode, rebind, watermark } from './ChartShortcuts';
@@ -79,6 +79,46 @@ export default function ChartWorkspace({
   // last set or adopted — carried by the durable layout store and re-seeded
   // into the sync bus on restore, so per-pane state survives a reload.
   const [paneStates, setPaneStates] = useState({});
+  const [settingsSync, setSettingsSync] = useState(false);
+  const settingsSyncRef = useRef(settingsSync); settingsSyncRef.current = settingsSync;
+  const settingsOwner = useRef({ signature: '', epoch: 0, panes });
+  const settingsSignature = JSON.stringify([layoutId, panes.map(pane => [pane.id, pane.symbol, pane.generation, pane.focused])]);
+  if (settingsOwner.current.signature !== settingsSignature) {
+    settingsOwner.current = { signature: settingsSignature, epoch: settingsOwner.current.epoch + 1, panes };
+  }
+  const settingsHandler = pane => {
+    // Capture at render, never at delivery: a delayed old callback cannot
+    // acquire the generation of a replacement pane with the same id.
+    const binding = { ...pane, epoch: settingsOwner.current.epoch };
+    return value => setPaneStates(previous => applyPaneSettings(settingsOwner.current.panes, previous,
+      binding, settingsOwner.current.epoch, value, settingsSyncRef.current));
+  };
+  const toggleSettingsSync = () => {
+    const enabled = !settingsSyncRef.current;
+    setSettingsSync(enabled);
+    if (!enabled) return;
+    const owner = settingsOwner.current;
+    const focused = owner.panes.find(pane => pane.focused) || owner.panes[0];
+    const binding = { ...focused, epoch: owner.epoch };
+    setPaneStates(previous => applyPaneSettings(owner.panes, previous, binding, owner.epoch,
+      previous[focused.id]?.settings || DEFAULT_PANE_SETTINGS, true));
+  };
+  const selectLayout = next => {
+    const action = { type: 'layout', layout: next, symbol: ticker };
+    const owner = settingsOwner.current;
+    const added = panesReducer(owner.panes, action).filter(pane => !owner.panes.some(current => current.id === pane.id));
+    if (settingsSyncRef.current && added.length) {
+      const focused = owner.panes.find(pane => pane.focused) || owner.panes[0];
+      setPaneStates(previous => {
+        const settings = { ...DEFAULT_PANE_SETTINGS, ...cleanPaneSettings(previous[focused.id]?.settings) };
+        const updated = { ...previous };
+        for (const pane of added) updated[pane.id] = { ...previous[pane.id], settings: { ...settings } };
+        return updated;
+      });
+    }
+    setLayoutId(next);
+    dispatch(action);
+  };
   const syncSeqRef = useRef(0);
   const emitSync = (originId, patch) => {
     const origin = panes.find(p => p.id === originId);
@@ -232,23 +272,37 @@ export default function ChartWorkspace({
     const focusedIdx = Number.isInteger(data.focusedIndex) && data.focusedIndex >= 0 && data.focusedIndex < 3 ? data.focusedIndex : 0;
     dispatch({ type: 'focus', id: 'pane-' + focusedIdx });
     if (data.fitMode === 'fit-visible' || data.fitMode === 'fit-all') setFitMode(data.fitMode);
+    setSettingsSync(data.settingsSync === true);
     // S2: re-seed each pane's persisted interval/session/view/price into
     // the sync bus (seq 1) — the panes adopt their own state at mount, so
     // their first real request and renderer window already use it.
     if (data.paneStates && typeof data.paneStates === 'object') {
+      const restoredStates = Object.fromEntries(Object.entries(data.paneStates).map(([id, state]) => {
+        if (!state || typeof state !== 'object') return [id, {}];
+        const { settings, ...links } = state;
+        const clean = cleanPaneSettings(settings);
+        return [id, clean ? { ...links, settings: { ...DEFAULT_PANE_SETTINGS, ...clean } } : links];
+      }));
       setSyncByPane(prev => {
         const next = { ...prev };
-        for (const [id, st] of Object.entries(data.paneStates)) {
+        for (const [id, st] of Object.entries(restoredStates)) {
           if (!st || typeof st !== 'object') continue;
           next[id] = { ...(prev[id] || {}), ...st, seq: 1 };
         }
         return next;
       });
-      setPaneStates(data.paneStates);
+      setPaneStates(restoredStates);
       // the restored panes adopt at seq 1; the FIRST user emission must get
       // a seq ABOVE it or adopting panes would skip it as already applied
       // (the first sync after any reload would silently drop).
       syncSeqRef.current = Math.max(syncSeqRef.current, 1);
+    } else {
+      // A pre-settings layout has no saved appearance. Clear visibility only;
+      // retain the legacy interval/session/time/price restore semantics.
+      setPaneStates(previous => Object.fromEntries(Object.entries(previous).map(([id, state]) => {
+        const { settings, ...links } = state;
+        return [id, links];
+      })));
     }
     return true;
   };
@@ -275,9 +329,10 @@ export default function ChartWorkspace({
       symbols: panes.map(p => p.symbol),
       focusedIndex: focusedIdx,
       fitMode,
+      settingsSync,
     }));
     return undefined;
-  }, [layoutId, panes, fitMode, paneStates]);
+  }, [layoutId, panes, fitMode, paneStates, settingsSync]);
 
   // B27 mounted keyboard map: typing fields never fire shortcuts (actionFor
   // guards), a pending rebind captures the next key with typed refusals,
@@ -367,7 +422,12 @@ export default function ChartWorkspace({
   };
 
   const exportLayoutIdentity = async () => {
-    const text = serialize(createLayout({ layoutId, symbols: panes.map(p => p.symbol), focusedIndex: focusedIdx, fitMode }));
+    // Extend the existing identity-only export with visibility, never with
+    // price windows or arbitrary imported per-pane evidence.
+    const visibility = Object.fromEntries(panes.map(pane => [pane.id,
+      { settings: paneStates[pane.id]?.settings || DEFAULT_PANE_SETTINGS }]));
+    const text = serialize(createLayout({ layoutId, symbols: panes.map(p => p.symbol), focusedIndex: focusedIdx,
+      fitMode, settingsSync, paneStates: visibility }));
     try {
       if (navigator.clipboard && navigator.clipboard.writeText) {
         await navigator.clipboard.writeText(text);
@@ -402,7 +462,7 @@ export default function ChartWorkspace({
   const saveNamedLayout = () => {
     const name = 'layout-' + (listLocal().length + 1);
     try {
-      saveLocal(name, createLayout({ layoutId, symbols: panes.map(p => p.symbol), focusedIndex: focusedIdx, fitMode, paneStates }));
+      saveLocal(name, createLayout({ layoutId, symbols: panes.map(p => p.symbol), focusedIndex: focusedIdx, fitMode, paneStates, settingsSync }));
       setLayoutNote('Saved ' + name + '.');
     } catch (error) {
       setLayoutNote('Save refused: ' + (error && error.message) + '.');
@@ -426,6 +486,8 @@ export default function ChartWorkspace({
         {/* B27 Replay control sits ABOVE the chips row on every viewport,
             with a touch-sized target and a visible replay state. */}
         <div className="workspace-controls" aria-label="Workspace controls">
+        <button type="button" className="workspace-settings-sync" aria-label="Settings sync" aria-pressed={settingsSync} onClick={toggleSettingsSync}
+          title="Link chart overlay visibility; each pane keeps its own data and scope">Settings sync: {settingsSync ? 'on' : 'off'}</button>
         <button type="button" data-testid="replay-touch" className="touch-replay" aria-pressed={replaying}
           onClick={toggleReplay}>
           {replaying ? 'Pause replay' : 'Replay'}
@@ -444,7 +506,7 @@ export default function ChartWorkspace({
               type="button"
               data-testid={'layout-' + p.id}
               aria-pressed={layoutId === p.id}
-              onClick={() => { setLayoutId(p.id); dispatch({ type: 'layout', layout: p.id, symbol: ticker }); }}
+              onClick={() => selectLayout(p.id)}
             >
               {p.label}
             </button>
@@ -472,8 +534,12 @@ export default function ChartWorkspace({
                   onQuality={setQuality} onEnvelopes={setEnvelopes} onReplayController={handleReplayController}
                   onReplayState={handlePaneReplayState} onChartReading={setChartReading} replaySourceId={pane.id}
                   replayEpoch={layoutId + ':' + pane.generation}
+                  visibilitySettings={paneStates[pane.id]?.settings || DEFAULT_PANE_SETTINGS}
+                  onVisibilitySettingsChange={settingsHandler(pane)}
                   sync={syncByPane[pane.id] || null} onSyncEvent={patch => emitSync(pane.id, patch)} />
-              : <PriceNodeHistory ticker={pane.symbol} open={open} primary={false} showAtlas={showAtlas} fitMode={fitMode} sync={syncByPane[pane.id] || null} onSyncEvent={patch => emitSync(pane.id, patch)} chartFocus={chartFocus} onChartFocusChange={onChartFocusChange} />)}
+              : <PriceNodeHistory ticker={pane.symbol} open={open} primary={false} showAtlas={showAtlas} fitMode={fitMode}
+                  visibilitySettings={paneStates[pane.id]?.settings || DEFAULT_PANE_SETTINGS} onVisibilitySettingsChange={settingsHandler(pane)}
+                  sync={syncByPane[pane.id] || null} onSyncEvent={patch => emitSync(pane.id, patch)} chartFocus={chartFocus} onChartFocusChange={onChartFocusChange} />)}
           />
         </div>
         <details className="workspace-evidence" data-testid="workspace-evidence">

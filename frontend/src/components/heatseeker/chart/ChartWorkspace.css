@@ -15,7 +15,7 @@
   .recorded-flow-pane { height: 36px; padding: 4px 6px; }
 }
 
-/* B11 pane layouts: desktop grids + phone stacking. */
+/* B11 pane layouts: desktop grids + readable narrow-desktop stacking. */
 .pane-layout-picker { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0; }
 .pane-layout-picker button { font: inherit; font-size: 11px; border: 1px solid #435260; border-radius: 4px; background: #16212b; color: #dce8f2; padding: 4px 10px; min-height: 28px; cursor: pointer; }
 .pane-layout-picker button[aria-pressed="true"] { border-color: #e3c16a; color: #f2d795; }
@@ -30,8 +30,8 @@
 .pane-focus-btn[aria-pressed="true"] { border-color: #e3c16a; color: #f2d795; }
 .pane-focus-btn:focus-visible { outline: 2px solid #e3c16a; outline-offset: 2px; }
 .pane-layout-note { display: block; margin-top: 6px; font-size: 11px; color: #8ba3b0; }
-/* Phone stacking: panes become one readable column under 620px. */
-@media (max-width: 620px) {
+/* Narrow desktop/high zoom: preserve chart width without invoking the phone sheet. */
+@media (max-width: 960px) {
   .pane-layout.pane-count-2, .pane-layout.pane-count-3 { grid-template-columns: minmax(0, 1fr); }
 }
 
@@ -90,6 +90,9 @@
 .workspace-controls .touch-replay { margin:0; min-height:32px; padding:4px 10px; font-size:12px; }
 .workspace-controls [data-testid="atlas-toggle"] { font:inherit; font-size:12px; color:#c7b5e8; border:1px solid #435260; background:#131820; border-radius:4px; padding:4px 9px; min-height:32px; }
 .workspace-controls .pane-layout-picker { margin:0; }
+.workspace-settings-sync { font:inherit; font-size:12px; border:1px solid #435260; border-radius:4px; background:#16212b; color:#dce8f2; padding:4px 10px; min-height:32px; cursor:pointer; }
+.workspace-settings-sync[aria-pressed="true"] { border-color:#e3c16a; color:#f2d795; }
+.workspace-settings-sync:focus-visible { outline:2px solid #e3c16a; outline-offset:2px; }
 .workspace-evidence { margin:8px 0; padding-top:6px; border-top:1px solid #26303a; }
 .workspace-evidence > summary { cursor:pointer; color:#b5c4d0; font-size:12px; min-height:30px; display:flex; align-items:center; }
 .workspace-evidence > summary::before { content:'▸ '; margin-right:6px; color:#d3b877; }
