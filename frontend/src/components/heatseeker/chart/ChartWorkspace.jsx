@@ -103,6 +103,22 @@ export default function ChartWorkspace({
     setPaneStates(previous => applyPaneSettings(owner.panes, previous, binding, owner.epoch,
       previous[focused.id]?.settings || DEFAULT_PANE_SETTINGS, true));
   };
+  const selectLayout = next => {
+    const action = { type: 'layout', layout: next, symbol: ticker };
+    const owner = settingsOwner.current;
+    const added = panesReducer(owner.panes, action).filter(pane => !owner.panes.some(current => current.id === pane.id));
+    if (settingsSyncRef.current && added.length) {
+      const focused = owner.panes.find(pane => pane.focused) || owner.panes[0];
+      setPaneStates(previous => {
+        const settings = { ...DEFAULT_PANE_SETTINGS, ...cleanPaneSettings(previous[focused.id]?.settings) };
+        const updated = { ...previous };
+        for (const pane of added) updated[pane.id] = { ...previous[pane.id], settings: { ...settings } };
+        return updated;
+      });
+    }
+    setLayoutId(next);
+    dispatch(action);
+  };
   const syncSeqRef = useRef(0);
   const emitSync = (originId, patch) => {
     const origin = panes.find(p => p.id === originId);
@@ -280,6 +296,13 @@ export default function ChartWorkspace({
       // a seq ABOVE it or adopting panes would skip it as already applied
       // (the first sync after any reload would silently drop).
       syncSeqRef.current = Math.max(syncSeqRef.current, 1);
+    } else {
+      // A pre-settings layout has no saved appearance. Clear visibility only;
+      // retain the legacy interval/session/time/price restore semantics.
+      setPaneStates(previous => Object.fromEntries(Object.entries(previous).map(([id, state]) => {
+        const { settings, ...links } = state;
+        return [id, links];
+      })));
     }
     return true;
   };
@@ -483,7 +506,7 @@ export default function ChartWorkspace({
               type="button"
               data-testid={'layout-' + p.id}
               aria-pressed={layoutId === p.id}
-              onClick={() => { setLayoutId(p.id); dispatch({ type: 'layout', layout: p.id, symbol: ticker }); }}
+              onClick={() => selectLayout(p.id)}
             >
               {p.label}
             </button>

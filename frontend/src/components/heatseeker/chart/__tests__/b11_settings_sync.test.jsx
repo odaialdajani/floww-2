@@ -110,6 +110,64 @@ test('Indicators hide/show functional updates use the latest pane visibility whi
   expect(screen.getAllByTestId('volume-pane')).toHaveLength(2);
 });
 
+test.each(['split', 'three'])('linked visibility applies to newly added %s panes and their saved state', async layout => {
+  render(<ChartWorkspace ticker="SPY" open useNew />);
+  await waitFor(() => expect(screen.getAllByTestId('volume-pane')).toHaveLength(1));
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Settings sync' })); });
+  await changeVolume(panes()[0]);
+  await act(async () => { fireEvent.click(screen.getByTestId('layout-' + layout)); });
+  const count = layout === 'split' ? 2 : 3;
+  await waitFor(() => expect(screen.getAllByTestId('recorded-price-chart')).toHaveLength(count));
+  expect(screen.getByRole('button', { name: 'Settings sync' })).toHaveAttribute('aria-pressed', 'true');
+  panes().forEach(pane => expect(volume(pane)).not.toBeChecked());
+  expect(screen.queryAllByTestId('volume-pane')).toHaveLength(0);
+  await waitFor(() => {
+    const saved = JSON.parse(localStorage.getItem('floww.chart.layout.workspace-current'));
+    expect(saved.settingsSync).toBe(true);
+    for (let i = 0; i < count; i += 1) expect(saved.paneStates['pane-' + i].settings.volume).toBe(false);
+  });
+  // Removed pane ids still have stored false values. Re-expansion must use
+  // the focused pane's newer true value rather than resurrect that history.
+  await act(async () => { fireEvent.click(screen.getByTestId('layout-single')); });
+  await changeVolume(panes()[0]);
+  await act(async () => { fireEvent.click(screen.getByTestId('layout-' + layout)); });
+  await waitFor(() => expect(screen.getAllByTestId('volume-pane')).toHaveLength(count));
+  panes().forEach(pane => expect(volume(pane)).toBeChecked());
+});
+
+test.each([
+  ['cycle', 'absent', undefined, true], ['import', 'absent', undefined, true],
+  ['cycle', 'empty', {}, true], ['import', 'empty', {}, true],
+  ['cycle', 'explicit false', { 'pane-0': { settings: { volume: false } } }, false],
+  ['import', 'explicit false', { 'pane-0': { settings: { volume: false } } }, false],
+])('%s layout restores %s visibility instead of inheriting the previous appearance', async (method, state, paneStates, visible) => {
+  const legacy = createLayout({ layoutId: 'single', symbols: ['SPY'], focusedIndex: 0,
+    ...(paneStates === undefined ? {} : { paneStates }) });
+  saveLocal('legacy-layout', legacy);
+  // The legacy load must not reset unrelated interval/session state.
+  saveLocal('workspace-current', createLayout({ layoutId: 'single', symbols: ['SPY'], focusedIndex: 0,
+    paneStates: { 'pane-0': { interval: 15, session: 'all' } } }));
+  render(<ChartWorkspace ticker="SPY" open useNew />);
+  await waitFor(() => expect(screen.getAllByTestId('volume-pane')).toHaveLength(1));
+  if (visible) {
+    await changeVolume(panes()[0]);
+    expect(screen.queryAllByTestId('volume-pane')).toHaveLength(0);
+  }
+  if (method === 'cycle') {
+    await act(async () => { fireEvent.click(screen.getByTestId('layout-cycle')); });
+    expect(screen.getByTestId('layout-status')).toHaveTextContent('Loaded legacy-layout.');
+  } else {
+    const file = new File([JSON.stringify(legacy)], 'legacy.json', { type: 'application/json' });
+    await act(async () => { fireEvent.change(screen.getByTestId('layout-import'), { target: { files: [file] } }); });
+    await waitFor(() => expect(screen.getByTestId('layout-status')).toHaveTextContent('Layout imported.'));
+  }
+  expect(screen.getByRole('button', { name: 'Settings sync' })).toHaveAttribute('aria-pressed', 'false');
+  expect(volume(panes()[0]).checked).toBe(visible);
+  expect(within(panes()[0]).queryByTestId('volume-pane') !== null).toBe(visible);
+  expect(within(panes()[0]).getByLabelText('Candle interval')).toHaveValue('15');
+  expect(within(panes()[0]).getByLabelText('Session coverage')).toHaveValue('all');
+});
+
 test('layout export/import retains visibility without exporting unrelated per-pane values', async () => {
   await mountSplit({ paneStates: { 'pane-0': { price: { low: 88, high: 99 }, privateReading: 123 } } });
   await changeVolume(panes()[0]);
