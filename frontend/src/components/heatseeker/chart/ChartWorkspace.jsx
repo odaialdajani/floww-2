@@ -486,7 +486,7 @@ export default function ChartWorkspace({
         {/* B27 Replay control sits ABOVE the chips row on every viewport,
             with a touch-sized target and a visible replay state. */}
         <div className="workspace-controls" aria-label="Workspace controls">
-        <button type="button" aria-label="Settings sync" aria-pressed={settingsSync} onClick={toggleSettingsSync}
+        <button type="button" className="workspace-settings-sync" aria-label="Settings sync" aria-pressed={settingsSync} onClick={toggleSettingsSync}
           title="Link chart overlay visibility; each pane keeps its own data and scope">Settings sync: {settingsSync ? 'on' : 'off'}</button>
         <button type="button" data-testid="replay-touch" className="touch-replay" aria-pressed={replaying}
           onClick={toggleReplay}>
