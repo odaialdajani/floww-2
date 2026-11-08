@@ -28,7 +28,7 @@ import './ChartWorkspace.css';
 // B30 Atlas toggle stays default-off so existing screens never change unless
 // the user flips it.
 // B11: the flag-on branch adds the mounted pane manager — real layout presets
-// (single/split/three), focusable panes each rendering a real chart, atomic
+// (through five panes), focusable panes each rendering a real chart, atomic
 // evidence invalidation on layout change, and phone-stacked grids. The
 // FOCUSED pane always carries the full incumbent prop set; extra panes are
 // real per-instrument chart instances with their own lifecycles.
@@ -298,7 +298,7 @@ export default function ChartWorkspace({
     setLayoutId(next);
     dispatch({ type: 'layout', layout: next, symbol: ticker });
     if (Array.isArray(data.symbols)) dispatch({ type: 'symbols', symbols: data.symbols });
-    const focusedIdx = Number.isInteger(data.focusedIndex) && data.focusedIndex >= 0 && data.focusedIndex < 3 ? data.focusedIndex : 0;
+    const focusedIdx = Number.isInteger(data.focusedIndex) && data.focusedIndex >= 0 && data.focusedIndex < layoutById(next).panes ? data.focusedIndex : 0;
     dispatch({ type: 'focus', id: 'pane-' + focusedIdx });
     if (data.fitMode === 'fit-visible' || data.fitMode === 'fit-all') setFitMode(data.fitMode);
     setSettingsSync(data.settingsSync === true);
@@ -529,7 +529,7 @@ export default function ChartWorkspace({
             count; every layout change invalidates pane evidence atomically
             (generations advance together, late results are rejected). */}
         <div className="pane-layout-picker" role="group" aria-label="Chart pane layout">
-          {LAYOUT_PRESETS.map(p => (
+          {LAYOUT_PRESETS.filter(p => p.quick).map(p => (
             <button
               key={p.id}
               type="button"
@@ -540,6 +540,15 @@ export default function ChartWorkspace({
               {p.label}
             </button>
           ))}
+          <details className="pane-layout-more">
+            <summary>More layouts{!preset.quick ? ' · ' + preset.label : ''}</summary>
+            <div className="pane-layout-more-options">
+              {LAYOUT_PRESETS.filter(p => !p.quick).map(p => (
+                <button key={p.id} type="button" data-testid={'layout-' + p.id}
+                  aria-pressed={layoutId === p.id} onClick={() => selectLayout(p.id)}>{p.label}</button>
+              ))}
+            </div>
+          </details>
           {/* B27 two auto-fit modes, persisted with the composition. */}
           <button type="button" data-testid="fit-mode" aria-label="Auto-fit mode"
             onClick={() => setFitMode(nextFitMode)}>

@@ -23,7 +23,8 @@ test('focus/sync/generation guards', () => {
 });
 
 test('B11 layout presets: three-pane and single are real, named presets', () => {
-  expect(LAYOUT_PRESETS.map(p => p.id)).toEqual(['single', 'split', 'three']);
+  expect(LAYOUT_PRESETS.filter(p => p.quick).map(p => p.id)).toEqual(['single', 'split', 'three']);
+  expect(Math.max(...LAYOUT_PRESETS.map(p => p.panes))).toBe(5);
   expect(LAYOUT_PRESETS.find(p => p.id === 'three').panes).toBe(3);
   expect(LAYOUT_PRESETS.find(p => p.id === 'split').panes).toBe(2);
   expect(LAYOUT_PRESETS.find(p => p.id === 'single').panes).toBe(1);
@@ -142,4 +143,15 @@ test('R21-06: the FOCUSED pane requests and renders its OWN symbol, not the glob
     const symbols = panes.map(p => p.querySelector('.price-chart-symbol')?.textContent);
     expect(symbols.filter(Boolean).sort()).toEqual(['QQQ', 'SPY']);
   } finally { window.__FLOWW_CHART_WORKSPACE__ = false; }
+});
+
+test('C016 removed and re-added slots never reuse a generation after repeated focus', () => {
+  let panes = panesReducer(createPanes(1, 'SPY'), { type: 'layout', layout: 'five-stack' });
+  for (let i = 0; i < 5; i += 1) panes = panesReducer(panes, { type: 'focus', id: 'pane-4' });
+  const old = panes[4];
+  panes = panesReducer(panes, { type: 'layout', layout: 'single' });
+  panes = panesReducer(panes, { type: 'layout', layout: 'five-stack' });
+  expect(panes.every(pane => pane.generation > old.generation)).toBe(true);
+  const unchanged = panesReducer(panes, { type: 'result', id: old.id, result: { generation: old.generation, data: 'stale' } });
+  expect(unchanged[4].data).toBeUndefined();
 });

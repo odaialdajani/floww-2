@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import ChartWorkspace from '../ChartWorkspace';
 import { _clear, saveLocal } from '../persistence/layoutStore';
 
@@ -11,10 +11,11 @@ jest.mock('../../PriceNodeHistory', () => {
   const React = require('react');
   const Actual = jest.requireActual('../../PriceNodeHistory').default;
   return { __esModule: true, default: function ObservedActualHistory(props) {
+    const { onChartReading } = props;
     const onReading = React.useCallback(value => {
-      if (value) mockReadings.push({ value, deliver: props.onChartReading });
-      props.onChartReading?.(value);
-    }, [props.onChartReading]);
+      if (value) mockReadings.push({ value, deliver: onChartReading });
+      onChartReading?.(value);
+    }, [onChartReading]);
     return <Actual {...props} onChartReading={props.onChartReading ? onReading : null} />;
   } };
 });
@@ -81,3 +82,109 @@ test('C016 ownership: retained actual reading callback cannot overwrite a replac
   expect(last.descriptor.cursor).toBe(current.value.cursor);
 });
 
+const NEW_LAYOUTS = [
+  ['two-stack', 2], ['three-stack', 3], ['one-plus-two', 3], ['one-beside-two', 3],
+  ['four-grid', 4], ['four-up', 4], ['four-stack', 4], ['five-stack', 5],
+];
+test.each(NEW_LAYOUTS)('C016 arrangement %s mounts %i actual charts behind More layouts', async (id, count) => {
+  render(<ChartWorkspace ticker="SPY" open useNew />);
+  await waitFor(() => expect(screen.getAllByTestId('recorded-price-chart')).toHaveLength(1));
+  expect(screen.getByTestId('layout-single')).toBeVisible();
+  expect(screen.getByTestId('layout-split')).toBeVisible();
+  expect(screen.getByTestId('layout-three')).toBeVisible();
+  const choice = screen.getByTestId('layout-' + id);
+  expect(choice).not.toBeVisible();
+  fireEvent.click(screen.getByText('More layouts'));
+  expect(choice).toBeVisible();
+  fireEvent.click(choice);
+  await waitFor(() => expect(screen.getAllByTestId('recorded-price-chart')).toHaveLength(count));
+  expect(screen.getByTestId('pane-layout')).toHaveAttribute('data-layout', id);
+  expect(slots().filter(slot => slot.querySelector('.pane-focus-btn[aria-pressed="true"]'))).toHaveLength(1);
+});
+
+test.each([['four-grid', 3], ['five-stack', 4]])('C016 %s reopens with its last pane focused and own saved state', async (layoutId, focusedIndex) => {
+  const names = ['SPY', 'QQQ', 'IWM', 'DIA', 'TLT'].slice(0, focusedIndex + 1);
+  const id = 'pane-' + focusedIndex;
+  saveLocal('workspace-current', { layoutId, symbols: names, focusedIndex, settingsSync: false,
+    paneStates: { [id]: { interval: 5, session: 'all', settings: { volume: false } } } });
+  const view = render(<ChartWorkspace ticker="SPY" open useNew />);
+  await waitFor(() => expect(screen.getAllByTestId('recorded-price-chart')).toHaveLength(names.length));
+  expect(symbols()).toEqual(names);
+  expect(screen.getByTestId('focus-' + id)).toHaveAttribute('aria-pressed', 'true');
+  const focused = slots()[focusedIndex];
+  expect(focused.querySelector('[aria-label="Candle interval"]')).toHaveValue('5');
+  expect(focused.querySelector('[aria-label="Session coverage"]')).toHaveValue('all');
+  await waitFor(() => expect(JSON.parse(localStorage.getItem('floww.chart.layout.workspace-current')).focusedIndex).toBe(focusedIndex));
+  view.unmount();
+  render(<ChartWorkspace ticker="SPY" open useNew />);
+  await waitFor(() => expect(screen.getAllByTestId('recorded-price-chart')).toHaveLength(names.length));
+  expect(symbols()).toEqual(names);
+  expect(screen.getByTestId('focus-' + id)).toHaveAttribute('aria-pressed', 'true');
+  expect(screen.getByRole('button', { name: 'Settings sync' })).toHaveAttribute('aria-pressed', 'false');
+});
+
+test('C016 five mixed panes keep settings local off and link only visibility without refetch', async () => {
+  saveLocal('workspace-current', { layoutId: 'five-stack', symbols: ['SPY', 'QQQ', 'IWM', 'DIA', 'TLT'], focusedIndex: 4 });
+  render(<ChartWorkspace ticker="SPY" open useNew />);
+  await waitFor(() => expect(screen.getAllByTestId('recorded-price-chart')).toHaveLength(5));
+  const volume = pane => within(pane).getByLabelText('Toggle volume pane');
+  const first = slots()[0];
+  await act(async () => {
+    fireEvent.click(within(first).getByRole('button', { name: 'Chart tools' }));
+    fireEvent.click(volume(first));
+  });
+  expect(volume(first)).not.toBeChecked();
+  slots().slice(1).forEach(pane => expect(volume(pane)).toBeChecked());
+  // The recorded-scope fixture also schedules one existing attribute read per
+  // chart after150ms. Finish initial mount before counting visibility traffic.
+  await waitFor(() => expect(require('axios').get.mock.calls.filter(call => String(call[0]).includes('/solstice/attribute/'))).toHaveLength(5));
+  const reads = require('axios').get.mock.calls.length;
+  fireEvent.click(screen.getByRole('button', { name: 'Settings sync' }));
+  await waitFor(() => slots().forEach(pane => expect(volume(pane)).toBeChecked()));
+  // Enabling copies the live focused fifth pane's true setting, not pane0's false.
+  expect(symbols()).toEqual(['SPY', 'QQQ', 'IWM', 'DIA', 'TLT']);
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 180)); });
+  expect(require('axios').get.mock.calls).toHaveLength(reads);
+});
+
+test('C016 five-pane export/import and saved cycling retain focus and revoke previous callbacks', async () => {
+  const layout = { layoutId: 'five-stack', symbols: ['SPY', 'QQQ', 'IWM', 'DIA', 'TLT'], focusedIndex: 4 };
+  saveLocal('workspace-current', layout); saveLocal('five', layout);
+  const contexts = [];
+  render(<ChartWorkspace ticker="SPY" open useNew onChartContext={value => contexts.push(value)} />);
+  await waitFor(() => expect(mockReadings.some(reading => reading.value.source === 'pane-4' && reading.value.scope)).toBe(true));
+  const old = [...mockReadings].reverse().find(reading => reading.value.source === 'pane-4' && reading.value.scope);
+  const writeText = jest.fn(async () => {});
+  Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+  fireEvent.click(screen.getByTestId('layouts-panel').querySelector('summary'));
+  await act(async () => { fireEvent.click(screen.getByTestId('layout-export')); });
+  const exported = JSON.parse(writeText.mock.calls[0][0]);
+  expect(exported.layoutId).toBe('five-stack'); expect(exported.focusedIndex).toBe(4);
+  expect(exported.symbols).toEqual(layout.symbols);
+  fireEvent.click(screen.getByTestId('layout-single'));
+  await act(async () => { fireEvent.change(screen.getByTestId('layout-import'), { target: { files: [new File([JSON.stringify(exported)], 'five.json', { type: 'application/json' })] } }); });
+  await waitFor(() => expect(screen.getByTestId('focus-pane-4')).toHaveAttribute('aria-pressed', 'true'));
+  await waitFor(() => expect(contexts[contexts.length - 1]?.descriptor.status).toBe('bound'));
+  const count = contexts.length;
+  await act(async () => { old.deliver(old.value); });
+  expect(contexts).toHaveLength(count);
+  fireEvent.click(screen.getByTestId('layout-single'));
+  await act(async () => { fireEvent.click(screen.getByTestId('layout-cycle')); });
+  await waitFor(() => expect(screen.getByTestId('focus-pane-4')).toHaveAttribute('aria-pressed', 'true'));
+  expect(symbols()).toEqual(layout.symbols);
+});
+
+test('C016 default-off incumbent follows the host and closed five-pane workspace starts no reads', async () => {
+  const view = render(<ChartWorkspace ticker="SPY" open />);
+  await waitFor(() => expect(screen.getAllByTestId('recorded-price-chart')).toHaveLength(1));
+  expect(screen.queryByTestId('pane-layout')).not.toBeInTheDocument();
+  view.rerender(<ChartWorkspace ticker="QQQ" open />);
+  await waitFor(() => expect(screen.getByRole('region', { name: 'QQQ candle chart' })).toBeInTheDocument());
+  view.unmount();
+  saveLocal('workspace-current', { layoutId: 'five-stack', symbols: ['SPY', 'QQQ', 'IWM', 'DIA', 'TLT'], focusedIndex: 4 });
+  require('axios').get.mockClear();
+  render(<ChartWorkspace ticker="SPY" open={false} useNew />);
+  await waitFor(() => expect(screen.getByTestId('pane-layout')).toHaveAttribute('data-panes', '5'));
+  await settle();
+  expect(require('axios').get.mock.calls).toHaveLength(0);
+});

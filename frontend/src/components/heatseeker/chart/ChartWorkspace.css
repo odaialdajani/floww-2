@@ -24,6 +24,17 @@
 .pane-layout.pane-count-1 { grid-template-columns: minmax(0, 1fr); }
 .pane-layout.pane-count-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .pane-layout.pane-count-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+/* Explicit wide-desktop arrangements; responsive stacking is a separate rule. */
+.pane-layout.pane-layout-two-stack, .pane-layout.pane-layout-three-stack,
+.pane-layout.pane-layout-four-stack, .pane-layout.pane-layout-five-stack { grid-template-columns: minmax(0, 1fr); }
+.pane-layout.pane-layout-one-plus-two, .pane-layout.pane-layout-one-beside-two,
+.pane-layout.pane-layout-four-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.pane-layout.pane-layout-four-up { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.pane-layout-one-plus-two > .pane-slot:first-child { grid-column: 1 / -1; }
+.pane-layout-one-beside-two > .pane-slot:first-child { grid-row: span 2; }
+.pane-layout-more > summary { cursor: pointer; font-size: 11px; color: #b9c6d2; min-height: 28px; padding: 4px 8px; border: 1px solid #435260; border-radius: 4px; background: #16212b; }
+.pane-layout-more > summary:focus-visible { outline: 2px solid #e3c16a; outline-offset: 2px; }
+.pane-layout-more-options { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 0; }
 .pane-slot { min-width: 0; display: flex; flex-direction: column; gap: 4px; border: 1px solid #232c36; border-radius: 4px; padding: 6px; }
 .pane-slot-focused { border-color: #9b824b; }
 .pane-focus-btn { align-self: flex-start; font: inherit; font-size: 11px; border: 1px solid #3a4a5a; border-radius: 4px; background: #101820; color: #b9c6d2; padding: 3px 9px; min-height: 26px; cursor: pointer; }
@@ -33,6 +44,8 @@
 /* Narrow desktop/high zoom: preserve chart width without invoking the phone sheet. */
 @media (max-width: 960px) {
   .pane-layout.pane-count-2, .pane-layout.pane-count-3 { grid-template-columns: minmax(0, 1fr); }
+  .pane-layout[class] { grid-template-columns: minmax(0, 1fr); }
+  .pane-layout[class] > .pane-slot { grid-column: auto; grid-row: auto; }
 }
 
 /* B12 layouts panel: compact, collapsible, keyboard-reachable. */

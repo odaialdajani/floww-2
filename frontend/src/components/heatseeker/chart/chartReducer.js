@@ -1,3 +1,5 @@
+import { LAYOUT_PRESETS } from './paneLayoutPresets';
+export { LAYOUT_PRESETS } from './paneLayoutPresets';
 // B11 pane reducer: focus owns symbol, 5 link dims, no echo, price off for unlike
 // symbols, allowlist-only sync, atomic invalidation, reject late generations.
 // B11 extension: layout presets, atomic evidence invalidation on layout change,
@@ -34,11 +36,6 @@ export function applyPaneSettings(panes, states, binding, epoch, value, linked) 
   return next;
 }
 
-export const LAYOUT_PRESETS = [
-  { id: 'single', panes: 1 },
-  { id: 'split', panes: 2 },
-  { id: 'three', panes: 3 },
-];
 export function createPanes(count = 1, symbol = 'SPY') {
   return Array.from({ length: count }, (_, i) => ({ id: `pane-${i}`, symbol, focused: i === 0, generation: 0 }));
 }
