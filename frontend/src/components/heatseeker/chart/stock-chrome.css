@@ -134,6 +134,17 @@ Imported by RecordedPriceChart (Stock-local); shared files untouched. */
 @container (max-width: 900px) {
   .recorded-chart-tools.recorded-chart-tools { flex-wrap: wrap; white-space: normal; row-gap: 4px; }
   .recorded-chart-tools.recorded-chart-tools > * { white-space: normal; }
+  /* Four-up panes can be narrower than either action group. Wrapping only
+     the outer row leaves their inline-flex/nowrap children overflowing. */
+  .recorded-chart-tools .stock-dock-actions,
+  .recorded-chart-tools .recorded-chart-replay-inline {
+    flex-wrap: wrap; min-width: 0; max-width: 100%; box-sizing: border-box;
+  }
+  .recorded-chart-tools .price-history-replay.price-history-replay {
+    flex-wrap: wrap; max-width: 100%; box-sizing: border-box;
+  }
+  .recorded-chart-tools .stock-dock-actions > button,
+  .recorded-chart-tools .price-history-replay > button { flex: 0 0 auto; }
 }
 
 /* Root's actual-46 geometry finding: the closed inspector still carried
