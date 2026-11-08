@@ -648,7 +648,7 @@ async def _assemble_chain(
     contracts: list[dict[str, Any]] = []
     exp_dates = []
     now_utc = datetime.now(UTC)
-    received_at = now_utc.isoformat()
+    received_at = None
     n_expired_dropped = 0
 
     max_attempts = min(len(expiry_walk), max_expiries + MAX_EXPIRY_SKIPS)
@@ -686,6 +686,9 @@ async def _assemble_chain(
             if skip_log is not None:
                 skip_log.append({"expiry": str(exp), "reason": "CHAIN_FETCH_FAILED"})
             continue
+        # Each serial response owns its receipt clock, including after a
+        # compatible-signature retry. Vendor quote clocks stay unchanged.
+        received_at = datetime.now(UTC).isoformat()
         for side in ("calls", "puts"):
             for oc in parsed.get(side, []):
                 # R7-06: series metadata reaches the clock (SPX monthly AM vs

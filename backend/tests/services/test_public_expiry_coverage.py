@@ -1,6 +1,8 @@
 """Usable expiry coverage comes from accepted contracts, not request success."""
 
+import asyncio
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -250,3 +252,105 @@ async def test_index_contract_uses_its_own_root_on_monthly_expiry(monkeypatch):
     assert [c["osi"] for c in result["contracts"]] == ["SPXW261016C06000000"]
     assert result["contracts"][0]["series"] == "SPXW"
     assert result["contracts"][0]["T"] == pytest.approx(6 / (24 * 365))
+
+
+@pytest.fixture
+def response_clock(monkeypatch):
+    clock = {"now": datetime(2026, 9, 11, 14, tzinfo=UTC)}
+
+    class ResponseDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return clock["now"]
+
+    monkeypatch.setattr(adapter, "datetime", ResponseDateTime)
+    return clock
+
+
+@pytest.mark.asyncio
+async def test_each_expiry_uses_its_response_completion_receipt(response_clock):
+    expiries = ["2026-09-18", "2026-09-25"]
+    completions = [datetime(2026, 9, 11, 14, 0, 3, tzinfo=UTC),
+                   datetime(2026, 9, 11, 14, 0, 12, tzinfo=UTC)]
+
+    async def chain(symbol, expiry, account_id, **kwargs):
+        await asyncio.sleep(0)
+        response_clock["now"] = completions[expiries.index(expiry)]
+        contract = make_contract(expiration=expiry)
+        contract.bid_timestamp = "2026-09-11T14:00:01+00:00"
+        contract.ask_timestamp = "2026-09-11T14:00:02+00:00"
+        return {"calls": [contract], "puts": [contract]}
+
+    result = await adapter._assemble_chain(
+        SimpleNamespace(get_option_chain_parsed=chain), "SPY", "SPY", "fixture", "EQUITY",
+        expiries, 2, {"price": 530, "source": "fixture"})
+
+    assert [c["received_at"] for c in result["contracts"]] == [
+        "2026-09-11T14:00:03+00:00", "2026-09-11T14:00:03+00:00",
+        "2026-09-11T14:00:12+00:00", "2026-09-11T14:00:12+00:00",
+    ]
+    assert result["received_at"] == "2026-09-11T14:00:12+00:00"
+    assert result["event_time"] is None
+    for contract in result["contracts"]:
+        assert contract["bid_timestamp"] == contract["bid_event_time"] == "2026-09-11T14:00:01+00:00"
+        assert contract["ask_timestamp"] == contract["ask_event_time"] == "2026-09-11T14:00:02+00:00"
+        assert contract["oi_effective_date"] is None
+        assert contract["greeks_source"] is None
+
+
+@pytest.mark.asyncio
+async def test_expiry_receipt_follows_successful_legacy_signature_retry(response_clock):
+    async def chain(symbol, expiry, account_id, **kwargs):
+        await asyncio.sleep(0)
+        if kwargs:
+            response_clock["now"] = datetime(2026, 9, 11, 14, 0, 2, tzinfo=UTC)
+            raise TypeError("unexpected keyword argument 'instrument_type'")
+        response_clock["now"] = datetime(2026, 9, 11, 14, 0, 9, tzinfo=UTC)
+        return {"calls": [make_contract(expiration=expiry)], "puts": []}
+
+    result = await adapter._assemble_chain(
+        SimpleNamespace(get_option_chain_parsed=chain), "SPY", "SPY", "fixture", "EQUITY",
+        ["2026-09-18"], 1, {"price": 530, "source": "fixture"})
+
+    assert result["contracts"][0]["received_at"] == "2026-09-11T14:00:09+00:00"
+    assert result["received_at"] == "2026-09-11T14:00:09+00:00"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failed_first", [True, False])
+async def test_failed_expiry_cannot_supply_another_expirys_receipt(response_clock, failed_first):
+    expiries = ["2026-09-18", "2026-09-25"]
+    failed = expiries[0 if failed_first else 1]
+
+    async def chain(symbol, expiry, account_id, **kwargs):
+        await asyncio.sleep(0)
+        if expiry == failed:
+            response_clock["now"] += timedelta(seconds=20)
+            raise ConnectionError("synthetic failed response")
+        response_clock["now"] = datetime(2026, 9, 11, 14, 0, 30, tzinfo=UTC)
+        return {"calls": [make_contract(expiration=expiry)], "puts": []}
+
+    skipped = []
+    result = await adapter._assemble_chain(
+        SimpleNamespace(get_option_chain_parsed=chain), "SPY", "SPY", "fixture", "EQUITY",
+        expiries, 2, {"price": 530, "source": "fixture"}, skip_log=skipped)
+
+    assert len(result["contracts"]) == 1
+    assert result["contracts"][0]["received_at"] == "2026-09-11T14:00:30+00:00"
+    assert result["received_at"] == "2026-09-11T14:00:30+00:00"
+    assert skipped == [{"expiry": failed, "reason": "CHAIN_FETCH_FAILED"}]
+
+
+@pytest.mark.asyncio
+async def test_no_successful_expiry_has_no_response_receipt(response_clock):
+    async def chain(*args, **kwargs):
+        await asyncio.sleep(0)
+        response_clock["now"] += timedelta(seconds=20)
+        raise ConnectionError("synthetic failed response")
+
+    result = await adapter._assemble_chain(
+        SimpleNamespace(get_option_chain_parsed=chain), "SPY", "SPY", "fixture", "EQUITY",
+        ["2026-09-18"], 1, {"price": 530, "source": "fixture"})
+
+    assert result["contracts"] == []
+    assert result["received_at"] is None
