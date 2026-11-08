@@ -500,7 +500,8 @@ class ResearchCollector:
     async def capture_cycle(self, cycle_id):
         if self._running or self._quarantined:
             return {"status": "stopped", "reason": "collector_busy_or_quarantined",
-                    "research_only": True, "trusted_for_admission": False, "executable": False}
+                    "research_only": True, "trusted_for_admission": False, "executable": False,
+                    "has_gaps": True, "durable_finalization": "unattested", "post_write_check": "not_run"}
         self._running = True
         self._last_wall = None
         self._wall_regressed = False
@@ -508,6 +509,7 @@ class ResearchCollector:
         receipt = {"cycle_id": cycle_id, "status": "collecting", "research_only": True,
                    "trusted_for_admission": False, "executable": False, "has_gaps": False,
                    "dispatch_attempts": 0, "responses_committed": 0, "parsed_rows": 0,
+                   "capture_complete": False, "durable_finalization": "unattested", "post_write_check": "not_run",
                    "source_event_freshness": "not_evaluated",
                    "budget_scope": "process_local_only_global_quota_unverified"}
         current = None
@@ -571,7 +573,7 @@ class ResearchCollector:
                     receipt.update(status="stopped", reason="public_cooldown" if metadata["http_status"] == 429 else "transport_protocol_invalid")
                     break
             else:
-                receipt["status"] = "committed"
+                receipt.update(status="committed", capture_complete=True)
         except asyncio.CancelledError:
             receipt.update(status="stopped", reason="cancelled", has_gaps=True)
             if current:
@@ -594,13 +596,15 @@ class ResearchCollector:
             try:
                 self.store.finish_cycle(cycle_id, receipt)
                 reason = self._gate(mono, wall)
-                if reason and receipt["status"] == "committed":
-                    receipt.update(status="stopped", reason=reason, has_gaps=True)
-                    self.store.finish_cycle(cycle_id, receipt)
+                if reason:
+                    if receipt["status"] == "committed":
+                        receipt.update(status="stopped", reason=reason, has_gaps=True)
+                    receipt["post_write_check"] = "failed_or_unverified"
+                    receipt["post_write_gate_reason"] = reason
+                elif receipt["status"] == "committed":
+                    receipt["post_write_check"] = "passed_in_current_process"
             except asyncio.CancelledError:
                 receipt.update(status="stopped", reason="cancelled", has_gaps=True)
-                with contextlib.suppress(ResearchRefusal):
-                    self.store.finish_cycle(cycle_id, receipt)
                 raise
             except ResearchRefusal:
                 self._quarantined = True

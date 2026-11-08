@@ -108,6 +108,24 @@ def _safe_json(value, maximum):
     return text
 
 
+def _unattested_receipt(receipt, response_digests):
+    """Journal facts never attest post-write timing, even for legacy clean rows."""
+    value = json.loads(canonical(receipt))
+    if not isinstance(value, dict):
+        raise ResearchRefusal("cycle_receipt_invalid")
+    value.update(capture_status=value.get("capture_status", value.get("status", "unknown")),
+                 capture_has_gaps=value.get("capture_has_gaps", value.get("has_gaps", True)),
+                 capture_complete=value.get("capture_complete"),
+                 capture_counts=value.get("capture_counts", {
+                     key: value[key] for key in ("dispatch_attempts", "responses_committed", "parsed_rows") if key in value}),
+                 response_digests=response_digests,
+                 status="stopped", has_gaps=True, durable_finalization="unattested",
+                 post_write_check="not_durably_attested", research_only=True,
+                 trusted_for_admission=False, executable=False, source_event_freshness="not_evaluated")
+    value.setdefault("reason", "durable_finalization_unattested")
+    return value
+
+
 class ResearchStore:
     """One local writer; the guard inode persists and remains locked until close."""
 
@@ -317,9 +335,9 @@ class ResearchStore:
         if row:
             if row["session"] != session:
                 raise ResearchRefusal("cycle_session_mismatch")
-            return json.loads(row["receipt"]) if row["receipt"] else {
-                "cycle_id": cycle_id, "status": row["status"], "research_only": True,
-                "trusted_for_admission": False, "executable": False, "has_gaps": True}
+            previous = json.loads(row["receipt"]) if row["receipt"] else {
+                "cycle_id": cycle_id, "status": row["status"], "has_gaps": True}
+            return _unattested_receipt(previous, self._response_digests(cycle_id))
         with self._transaction():
             if self._conn.execute("SELECT 1 FROM cycles WHERE status='collecting' LIMIT 1").fetchone():
                 raise ResearchRefusal("cycle_in_progress")
@@ -443,13 +461,24 @@ class ResearchStore:
                                    [(attempt_id, index, value) for index, value in enumerate(values)])
             self._conn.execute("UPDATE attempts SET status='committed',parsed=? WHERE attempt_id=?", (text, attempt_id))
 
+    def _response_digests(self, cycle_id):
+        rows = self._conn.execute(
+            "SELECT attempt_id,body_sha256,response FROM attempts WHERE cycle_id=? ORDER BY rowid LIMIT ?",
+            (cycle_id, self._limits["max_attempts"] + 1)).fetchall()
+        if len(rows) > self._limits["max_attempts"]:
+            raise ResearchRefusal("attempt_cap")
+        return [{"attempt_id": row[0], "retained_body_sha256": row[1],
+                 "source_body_sha256": json.loads(row[2]).get("source_body_sha256") if row[2] else None}
+                for row in rows]
+
     def finish_cycle(self, cycle_id, receipt):
-        text = _safe_json(receipt, 16384)
-        downgrade = receipt.get("status") == "stopped" and receipt.get("has_gaps") is True
         with self._transaction():
-            if self._conn.execute("UPDATE cycles SET status=?,receipt=? WHERE cycle_id=? AND (status='collecting' OR (? AND status='committed'))",
-                                  (receipt.get("status", "failed"), text, cycle_id, downgrade)).rowcount != 1:
+            held = _unattested_receipt(receipt, self._response_digests(cycle_id))
+            text = _safe_json(held, 16384)
+            if self._conn.execute("UPDATE cycles SET status='stopped',receipt=? WHERE cycle_id=? AND status='collecting'",
+                                  (text, cycle_id)).rowcount != 1:
                 raise ResearchRefusal("cycle_not_collecting")
+        return held
 
     def attempts(self, cycle_id):
         self._check_owner()

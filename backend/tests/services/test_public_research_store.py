@@ -2,6 +2,7 @@
 import copy
 import hashlib
 import importlib
+import json
 import os
 import sqlite3
 import subprocess
@@ -78,7 +79,9 @@ def test_exact_entity_bytes_and_parse_link_survive_writer_exit_and_reopen(tmp_pa
         assert rows[0]["response"]["source_body_sha256"] == hashlib.sha256(body).hexdigest()
         assert rows[0]["retained_body_sha256"] == hashlib.sha256(body).hexdigest()
         assert reopened.observations(attempt)[0]["oi_effective_date"] is None
-        assert reopened.begin_cycle("cycle-1", "XNYS:2026-11-06") == receipt
+        held = reopened.begin_cycle("cycle-1", "XNYS:2026-11-06")
+        assert held["status"] == "stopped" and held["has_gaps"] is True
+        assert held["capture_status"] == "committed" and held["durable_finalization"] == "unattested"
         assert reopened.status()["reserved_attempts"] == 1
 
 
@@ -89,7 +92,7 @@ def test_dispatch_reservation_is_consumed_across_restart_and_existing_cycle_is_n
         first = reserved(store)
     with m.ResearchStore(path, manifest(max_attempts=2)) as store:
         interrupted = store.begin_cycle("cycle-1", "XNYS:2026-11-06")
-        assert interrupted["status"] == "interrupted"
+        assert interrupted["status"] == "stopped" and interrupted["capture_status"] == "interrupted"
         assert interrupted["trusted_for_admission"] is False
         assert store.attempts("cycle-1")[0]["status"] == "interrupted"
         assert store.attempts("cycle-1")[0]["attempt_id"] == first
@@ -132,7 +135,8 @@ os._exit(17)
     assert result.returncode == 17, result.stderr
     with m.ResearchStore(path, manifest()) as store:
         receipt = store.begin_cycle("cycle-crash", "XNYS:2026-11-06")
-        assert receipt["status"] == "interrupted" and receipt["trusted_for_admission"] is False
+        assert receipt["status"] == "stopped" and receipt["capture_status"] == "interrupted"
+        assert receipt["trusted_for_admission"] is False
         assert store.status()["reserved_attempts"] == 1
         assert store.attempts("cycle-crash")[0]["status"] == "interrupted"
 
@@ -322,3 +326,68 @@ def test_old_parser_manifest_cannot_silently_receive_corrected_identity_semantic
     with pytest.raises(m.ResearchRefusal, match="manifest_invalid"):
         m.ResearchStore(tmp_path / "research", old)
     assert not (tmp_path / "research").exists()
+
+
+def test_first_finalization_write_is_unattested_with_exact_hash_provenance(tmp_path):
+    m = module()
+    with m.ResearchStore(tmp_path / "research", manifest()) as store:
+        attempt = reserved(store)
+        body = b'{"calls":[],"puts":[]}'
+        store.record_response(attempt, metadata(body), body)
+        store.finish_cycle("cycle-1", {"cycle_id": "cycle-1", "status": "committed", "has_gaps": False,
+                                       "capture_complete": True, "dispatch_attempts": 1, "responses_committed": 1})
+        row = store._conn.execute("SELECT status,receipt FROM cycles").fetchone()
+        assert row[0] == "stopped"
+        saved = json.loads(row[1])
+        assert saved["has_gaps"] is True and saved["durable_finalization"] == "unattested"
+        assert saved["capture_complete"] is True and saved["capture_status"] == "committed"
+        assert saved["capture_counts"]["responses_committed"] == 1
+        assert saved["response_digests"][0]["source_body_sha256"] == hashlib.sha256(body).hexdigest()
+        assert store.attempts("cycle-1")[0]["body"] == body
+
+
+def test_process_crash_after_finalization_keeps_held_raw_receipt_and_consumed_counter(tmp_path):
+    m = module()
+    path = tmp_path / "research"
+    backend = Path(__file__).resolve().parents[2]
+    code = """
+import json,os,sys
+sys.path.insert(0,sys.argv[1])
+from services.public_research_store import ResearchStore
+s=ResearchStore(sys.argv[2],json.loads(sys.argv[3]))
+s.begin_cycle('cycle-1','XNYS:2026-11-06')
+a=s.reserve_attempt('cycle-1',{'kind':'quotes','symbol':'SPY','expiry':None})
+s.mark_dispatch(a['attempt_id'],'2026-11-06T15:00:00+00:00')
+s.record_response(a['attempt_id'],json.loads(sys.argv[4]),b'{}')
+s.finish_cycle('cycle-1',{'status':'committed','capture_complete':True,'has_gaps':False,'responses_committed':1})
+os._exit(17)
+"""
+    result = subprocess.run([sys.executable, "-I", "-B", "-c", code, str(backend), str(path),
+                             m.canonical(manifest()), json.dumps(metadata(b"{}"))],
+                            capture_output=True, text=True, timeout=5)
+    assert result.returncode == 17, result.stderr
+    with m.ResearchStore(path, manifest()) as store:
+        held = store.begin_cycle("cycle-1", "XNYS:2026-11-06")
+        assert held["status"] == "stopped" and held["has_gaps"] is True
+        assert held["durable_finalization"] == "unattested" and held["capture_complete"] is True
+        assert store.status()["reserved_attempts"] == 1
+        assert store.attempts("cycle-1")[0]["body"] == b"{}"
+        assert held["response_digests"][0]["source_body_sha256"] == hashlib.sha256(b"{}").hexdigest()
+
+
+def test_legacy_clean_receipt_projects_to_held_without_rewriting_journal(tmp_path):
+    m = module()
+    path = tmp_path / "research"
+    with m.ResearchStore(path, manifest()) as store:
+        attempt = reserved(store)
+        body = b"{}"
+        store.record_response(attempt, metadata(body), body)
+        legacy = '{"cycle_id":"cycle-1","status":"committed","has_gaps":false}'
+        store._conn.execute("UPDATE cycles SET status='committed',receipt=?", (legacy,))
+        before = (path / "collector.sqlite3").read_bytes()
+        held = store.begin_cycle("cycle-1", "XNYS:2026-11-06")
+        assert held["status"] == "stopped" and held["has_gaps"] is True
+        assert held["capture_status"] == "committed" and held["capture_complete"] is None
+        assert held["durable_finalization"] == "unattested"
+        assert (path / "collector.sqlite3").read_bytes() == before
+        assert store.attempts("cycle-1")[0]["body"] == body

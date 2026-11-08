@@ -142,7 +142,12 @@ async def test_exact_raw_responses_unknown_authority_and_distinct_expiry_receipt
         assert row["multiplier"] is None and row["adjusted"] is None
         assert row["contract"]["oi_effective_date"] is None
         calls = len(transport.calls)
-        assert await make(m, store, transport, clock).capture_cycle("cycle-1") == result
+        assert result["post_write_check"] == "passed_in_current_process"
+        assert result["durable_finalization"] == "unattested"
+        replay = await make(m, store, transport, clock).capture_cycle("cycle-1")
+        assert replay["status"] == "stopped" and replay["has_gaps"] is True
+        assert replay["durable_finalization"] == "unattested"
+        assert replay["capture_complete"] is True
         assert len(transport.calls) == calls
 
 
@@ -711,7 +716,9 @@ async def test_post_storage_gate_cannot_bless_expired_closed_or_cancelled_cycle(
             with pytest.raises(asyncio.CancelledError):
                 await task
             result = store.begin_cycle("cycle-1", "XNYS:2026-11-06")
-            assert result["reason"] == "cancelled"
+            # A cancellation after the final write cannot retroactively attest
+            # its reason; durable replay was already held before that event.
+            assert result["reason"] == ("durable_finalization_unattested" if phase == "receipt" else "cancelled")
         else:
             result = await task
             assert result["reason"] == ("cycle_deadline" if condition == "deadline" else "session_closed_or_unknown")
@@ -723,6 +730,54 @@ async def test_post_storage_gate_cannot_bless_expired_closed_or_cancelled_cycle(
         row = store.attempts("cycle-1")[-1]
         assert row["body"] == body_for(transport.calls[-1])
         assert row["response"]["source_body_sha256"] == hashlib.sha256(row["body"]).hexdigest()
+
+
+@pytest.mark.asyncio
+async def test_lost_finalization_acknowledgement_never_replays_clean_or_dispatches_again(tmp_path):
+    m, clock = module(), Clock()
+    path = tmp_path / "research"
+    with ResearchStore(path, m.build_plan(["2026-11-13"])) as store:
+        real = store.finish_cycle
+        def finish(*args):
+            real(*args)
+            raise ResearchRefusal("store_commit_failed")
+        store.finish_cycle = finish
+        transport = Transport(m, store, clock)
+        returned = await make(m, store, transport, clock).capture_cycle("cycle-1")
+        assert returned["status"] == "failed" and returned["has_gaps"] is True
+        held = store.begin_cycle("cycle-1", "XNYS:2026-11-06")
+        assert held["status"] == "stopped" and held["has_gaps"] is True
+        assert held["durable_finalization"] == "unattested"
+        before = [(row["attempt_id"], row["body"], row["retained_body_sha256"]) for row in store.attempts("cycle-1")]
+    with ResearchStore(path, m.build_plan(["2026-11-13"])) as store:
+        transport = Transport(m, store, Clock())
+        replay = await make(m, store, transport, Clock()).capture_cycle("cycle-1")
+        assert replay["status"] == "stopped" and replay["has_gaps"] is True
+        assert transport.calls == []
+        assert [(row["attempt_id"], row["body"], row["retained_body_sha256"]) for row in store.attempts("cycle-1")] == before
+
+
+@pytest.mark.asyncio
+async def test_fresh_checked_completion_reopens_only_as_held_without_new_dispatch(tmp_path):
+    m, clock = module(), Clock()
+    path, plan = tmp_path / "research", m.build_plan(["2026-11-13"])
+    with ResearchStore(path, plan) as store:
+        transport = Transport(m, store, clock)
+        fresh = await make(m, store, transport, clock).capture_cycle("cycle-1")
+        assert fresh["status"] == "committed" and fresh["has_gaps"] is False
+        assert fresh["post_write_check"] == "passed_in_current_process"
+        assert fresh["durable_finalization"] == "unattested"
+        assert fresh["source_event_freshness"] == "not_evaluated"
+        assert fresh["trusted_for_admission"] is False and fresh["executable"] is False
+        before = store.status()
+    with ResearchStore(path, plan) as store:
+        transport = Transport(m, store, clock)
+        replay = await make(m, store, transport, clock).capture_cycle("cycle-1")
+        assert replay["status"] == "stopped" and replay["has_gaps"] is True
+        assert replay["post_write_check"] == "not_durably_attested"
+        assert replay["durable_finalization"] == "unattested" and replay["capture_complete"] is True
+        assert len(replay["response_digests"]) == 6 and transport.calls == []
+        assert store.status() == before
 
 
 def test_offline_cli_preview_has_no_capture_flag_or_store_side_effect(tmp_path):
