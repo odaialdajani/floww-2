@@ -6,17 +6,25 @@ import { _clear, saveLocal } from '../persistence/layoutStore';
 jest.setTimeout(15000);
 jest.mock('axios', () => ({ get: jest.fn(), post: jest.fn() }));
 const mockReadings = [];
+const mockQualities = [];
+const mockFocusedProps = [];
 let mockFrameAdvance = 0;
 jest.mock('../../PriceNodeHistory', () => {
   const React = require('react');
   const Actual = jest.requireActual('../../PriceNodeHistory').default;
   return { __esModule: true, default: function ObservedActualHistory(props) {
-    const { onChartReading } = props;
+    const { onChartReading, onQuality } = props;
+    if (onChartReading) mockFocusedProps.push(props);
     const onReading = React.useCallback(value => {
       if (value) mockReadings.push({ value, deliver: onChartReading });
       onChartReading?.(value);
     }, [onChartReading]);
-    return <Actual {...props} onChartReading={props.onChartReading ? onReading : null} />;
+    const onQualityReport = React.useCallback(value => {
+      if (value) mockQualities.push({ value, deliver: onQuality });
+      onQuality?.(value);
+    }, [onQuality]);
+    return <Actual {...props} onChartReading={onChartReading ? onReading : null}
+      onQuality={onQuality ? onQualityReport : null} />;
   } };
 });
 const frames = [
@@ -27,7 +35,8 @@ const slots = () => [...document.querySelectorAll('.pane-slot')];
 const symbols = () => slots().map(slot => slot.querySelector('.price-chart-symbol')?.textContent);
 const settle = async () => { await act(async () => { await new Promise(resolve => setTimeout(resolve, 120)); }); };
 beforeEach(() => {
-  _clear(); localStorage.clear(); mockReadings.length = 0; mockFrameAdvance = 0;
+  _clear(); localStorage.clear(); mockReadings.length = 0; mockQualities.length = 0;
+  mockFocusedProps.length = 0; mockFrameAdvance = 0;
   require('axios').get.mockReset();
   require('axios').get.mockImplementation(async url => {
     const ticker = String(url).match(/price-history\/([A-Z]+)/)?.[1] || 'SPY';
@@ -36,6 +45,68 @@ beforeEach(() => {
   });
 });
 afterEach(() => { cleanup(); _clear(); });
+
+test('C016 ownership: ordinary rerenders retain every focused callback identity', async () => {
+  const onContext = () => {};
+  const view = render(<ChartWorkspace ticker="SPY" open useNew onChartContext={onContext} />);
+  await waitFor(() => expect(mockReadings.some(reading => reading.value.scope)).toBe(true));
+  const before = mockFocusedProps[mockFocusedProps.length - 1];
+  view.rerender(<ChartWorkspace ticker="SPY" open useNew notice="Same pane" onChartContext={onContext} />);
+  const after = mockFocusedProps[mockFocusedProps.length - 1];
+  for (const name of ['onChartReading', 'onQuality', 'onEnvelopes', 'onReplayState', 'onReplayController']) {
+    expect(after[name]).toBe(before[name]);
+  }
+});
+
+test.each(['reading', 'quality'])('C016 ownership: retained actual %s cannot revive across repeated close/reopen', async family => {
+  const contexts = [];
+  const onContext = value => contexts.push(value);
+  const view = render(<ChartWorkspace ticker="SPY" open useNew onChartContext={onContext} />);
+  await waitFor(() => expect(mockReadings.some(reading => reading.value.scope)).toBe(true));
+  await waitFor(() => expect(mockQualities.some(quality => quality.value.sourceTime != null)).toBe(true));
+  const originalReading = [...mockReadings].reverse().find(reading => reading.value.scope);
+  const originalQuality = [...mockQualities].reverse().find(quality => quality.value.sourceTime != null);
+  for (const advance of [3600, 7200]) {
+    view.rerender(<ChartWorkspace ticker="SPY" open={false} useNew onChartContext={onContext} />);
+    const closedProps = mockFocusedProps[mockFocusedProps.length - 1];
+    mockFrameAdvance = advance;
+    view.rerender(<ChartWorkspace ticker="SPY" open useNew onChartContext={onContext} />);
+    await waitFor(() => expect(contexts[contexts.length - 1]?.descriptor.cursor).toBe(1791297000 + advance));
+    const currentReading = [...mockReadings].reverse().find(reading => reading.value.cursor === 1791297000 + advance);
+    const currentQuality = [...mockQualities].reverse().find(quality => quality.value.sourceTime !== originalQuality.value.sourceTime && quality.value.sourceTime != null);
+    expect(currentReading.value.epoch).toBe(originalReading.value.epoch);
+    expect(currentReading.value.generation).not.toBe(originalReading.value.generation);
+    const qualityText = screen.getByTestId('workspace-quality').textContent;
+    expect(qualityText).toContain(String(currentQuality.value.sourceTime));
+    const count = contexts.length;
+    await act(async () => {
+      // Both deliveries carry unchanged reports emitted by the real child.
+      // A callback captured while closed also has no authority after reopen.
+      if (family === 'reading') {
+        originalReading.deliver(originalReading.value);
+        closedProps.onChartReading(originalReading.value);
+      } else {
+        originalQuality.deliver(originalQuality.value);
+        closedProps.onQuality(originalQuality.value);
+      }
+    });
+    expect(contexts[contexts.length - 1].descriptor.cursor).toBe(1791297000 + advance);
+    expect(contexts).toHaveLength(count);
+    expect(screen.getByTestId('workspace-quality')).toHaveTextContent(qualityText);
+  }
+});
+
+test('C016 ownership: callbacks captured during a closed period cannot change visible quality', async () => {
+  const view = render(<ChartWorkspace ticker="SPY" open useNew />);
+  await waitFor(() => expect(mockQualities.some(quality => quality.value.sourceTime != null)).toBe(true));
+  view.rerender(<ChartWorkspace ticker="SPY" open={false} useNew />);
+  const closedProps = mockFocusedProps[mockFocusedProps.length - 1];
+  const qualityText = screen.getByTestId('workspace-quality').textContent;
+  const different = mockQualities.find(quality => !qualityText.includes('Latest reading ' + (quality.value.sourceTime ?? 'time unknown')));
+  expect(different).toBeDefined();
+  await act(async () => { closedProps.onQuality(different.value); });
+  expect(screen.getByTestId('workspace-quality')).toHaveTextContent(qualityText);
+});
 
 test('C016 ownership: genuine host ticker change retargets only the focused real pane', async () => {
   saveLocal('workspace-current', { layoutId: 'split', symbols: ['SPY', 'QQQ'], focusedIndex: 1 });

@@ -225,17 +225,27 @@ export default function ChartWorkspace({
   const focusedEpoch = useNew ? layoutId + ':' + contextPane?.generation : 'default';
   const previousHostTicker = useRef(ticker);
   const retargeting = useNew && previousHostTicker.current !== ticker;
-  // Bind every focused callback to this actual pane lifetime, not just its
-  // reusable slot ID. Memoization keeps the chart's reporting effects stable.
+  // Each transition owns a distinct token, even when its values return to
+  // an earlier state (open/close/open). Ordinary rerenders retain the token
+  // and callbacks so the chart's reporting effects stay stable.
   const callbackBinding = JSON.stringify([open, focusedSource, focusedTicker, focusedEpoch, retargeting]);
-  const callbackOwner = useRef(callbackBinding); callbackOwner.current = callbackBinding;
+  const callbackOwner = useRef({ binding: callbackBinding });
+  if (callbackOwner.current.binding !== callbackBinding) {
+    callbackOwner.current = { binding: callbackBinding };
+  }
+  const callbackLifetime = callbackOwner.current;
+  const callbackMounted = useRef(true);
+  useLayoutEffect(() => {
+    callbackMounted.current = true;
+    return () => { callbackMounted.current = false; };
+  }, []);
   const focusedCallbacks = useMemo(() => {
     const admit = apply => value => {
-      if (callbackOwner.current === callbackBinding) apply(value);
+      if (open && callbackMounted.current && callbackOwner.current === callbackLifetime) apply(value);
     };
     return { reading: admit(setChartReading), quality: admit(setQuality), envelopes: admit(setEnvelopes),
       replay: admit(handlePaneReplayState), controller: admit(handleReplayController) };
-  }, [callbackBinding, handlePaneReplayState, handleReplayController]);
+  }, [open, callbackLifetime, handlePaneReplayState, handleReplayController]);
   useLayoutEffect(() => {
     if (previousHostTicker.current === ticker) return;
     previousHostTicker.current = ticker;
