@@ -60,6 +60,23 @@ test('the narrow-pane container lets the action and replay groups wrap inside th
   expect(buttons).toMatch(/flex:\s*0 0 auto/);
 });
 
+test('the narrow-pane container lets the price-scale group wrap inside the pane', () => {
+  const css = fs.readFileSync(CSS_PATH, 'utf8');
+  const block = narrowContainerBlock(css);
+
+  // The scale group is the THIRD merged child with its own nowrap/auto-width
+  // rule (RecordedPriceChart.css: .recorded-chart-scale{flex:0 0 auto}). At a
+  // 961px viewport the four-up pane is ~143px wide and the three scale
+  // buttons need ~152px, so "Auto scale on" painted past the pane edge.
+  const scale = ruleBody(block, '.recorded-chart-tools .recorded-chart-scale');
+  expect(scale).not.toBeNull();
+  expect(scale).toMatch(/flex-wrap:\s*wrap/);
+  expect(scale).toMatch(/flex:\s*0 1 auto/);
+  expect(scale).toMatch(/min-width:\s*0/);
+  expect(scale).toMatch(/max-width:\s*100%/);
+  expect(scale).toMatch(/box-sizing:\s*border-box/);
+});
+
 test('the narrow-pane rule still leaves the wide-pane command row unwrapped', () => {
   const css = fs.readFileSync(CSS_PATH, 'utf8');
   // The wide rule is the doubled-class declaration OUTSIDE the container.

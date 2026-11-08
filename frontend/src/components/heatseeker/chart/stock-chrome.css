@@ -145,6 +145,12 @@ Imported by RecordedPriceChart (Stock-local); shared files untouched. */
   }
   .recorded-chart-tools .stock-dock-actions > button,
   .recorded-chart-tools .price-history-replay > button { flex: 0 0 auto; }
+  /* The price-scale group carries its own flex:0 0 auto rule, so its three
+     buttons (~152px) paint past a ~143px four-up pane at 961px. Let the
+     group wrap and shrink inside the pane instead. */
+  .recorded-chart-tools .recorded-chart-scale {
+    flex-wrap: wrap; flex: 0 1 auto; min-width: 0; max-width: 100%; box-sizing: border-box;
+  }
 }
 
 /* Root's actual-46 geometry finding: the closed inspector still carried
