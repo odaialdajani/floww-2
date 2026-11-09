@@ -13,7 +13,82 @@ def test_known_at_and_age_and_partial():
           {"event_time": 20, "available_at": 30, "open": 2, "close": 3}]
     out = partial_bar(ev, 25)
     assert out["close"] == 2 and out["complete"] is False
-    assert partial_bar(ev, 5) is None
+    assert partial_bar(ev, 5) == {
+        "open": None, "close": None, "complete": False, "count": 0,
+        "pending": 2, "lastAvailableAt": None, "bucketStart": 0,
+        "bucketEnd": 900,
+    }
+
+
+def test_partial_bar_uses_only_cursor_owning_bucket_and_keeps_pending():
+    from services.chart_replay import partial_bar
+
+    events = [
+        {"event_time": 0, "available_at": 900, "open": 100, "close": 110},
+        {"event_time": 900, "available_at": 1800, "open": 200, "close": 210},
+        {"event_time": 1500, "available_at": 1800, "open": 205, "close": 215},
+        {"event_time": 1800, "available_at": 1800, "open": 300, "close": 310},
+    ]
+    assert partial_bar(events, 1500) == {
+        "open": None, "close": None, "complete": False, "count": 0,
+        "pending": 2, "lastAvailableAt": None, "bucketStart": 900,
+        "bucketEnd": 1800,
+    }
+    assert partial_bar(events, 500) == {
+        "open": None, "close": None, "complete": False, "count": 0,
+        "pending": 1, "lastAvailableAt": None, "bucketStart": 0,
+        "bucketEnd": 900,
+    }
+    assert partial_bar(events, 1500, bar_seconds=300) == {
+        "open": None, "close": None, "complete": False, "count": 0,
+        "pending": 1, "lastAvailableAt": None, "bucketStart": 1500,
+        "bucketEnd": 1800,
+    }
+    assert partial_bar(events, 4000) is None
+
+
+def test_partial_bar_refuses_unknown_or_malformed_event_and_availability_times():
+    from services.chart_replay import partial_bar
+
+    events = [
+        {"event_time": 10, "available_at": None, "open": 1, "close": 2},
+        {"event_time": 15, "open": 3, "close": 4},
+        {"event_time": "bad", "available_at": 20, "open": 5, "close": 6},
+        {"event_time": float("nan"), "available_at": 20, "open": 7, "close": 8},
+        {"event_time": 30, "available_at": "bad", "open": 9, "close": 10},
+    ]
+    assert partial_bar(events, 50) == {
+        "open": None, "close": None, "complete": False, "count": 0,
+        "pending": 3, "lastAvailableAt": None, "bucketStart": 0,
+        "bucketEnd": 900,
+    }
+
+
+def test_partial_bar_rejects_invalid_cursor_or_duration():
+    from services.chart_replay import partial_bar
+
+    events = [{"event_time": 10, "available_at": 10, "open": 1, "close": 2}]
+    for cursor in (None, "bad", float("nan"), float("inf")):
+        assert partial_bar(events, cursor) is None
+    for duration in (None, 0, -1, "bad", float("nan"), float("inf")):
+        assert partial_bar(events, 10, duration) is None
+
+
+def test_partial_bar_preserves_exact_default_and_custom_boundaries():
+    from services.chart_replay import partial_bar
+
+    events = [
+        {"event_time": 899.999, "available_at": 900, "open": 1, "close": 2},
+        {"event_time": 900, "available_at": 900, "open": 3, "close": 4},
+        {"event_time": 1799.999, "available_at": 1800, "open": 5, "close": 6},
+        {"event_time": 1800, "available_at": 1800, "open": 7, "close": 8},
+        {"event_time": 30, "available_at": 60, "open": 9, "close": 10},
+    ]
+    assert partial_bar(events, 900)["bucketStart"] == 900
+    assert partial_bar(events, 900)["bucketEnd"] == 1800
+    custom = partial_bar(events, 30, bar_seconds=30)
+    assert custom["bucketStart"] == 30 and custom["bucketEnd"] == 60
+    assert custom["pending"] == 1 and custom["count"] == 0
 
 
 def _bar(at: str, o: float, h: float, low: float, c: float):
