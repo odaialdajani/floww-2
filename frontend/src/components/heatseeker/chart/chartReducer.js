@@ -110,8 +110,23 @@ export function panesReducer(panes, action) {
       return panes.map((p) => (p.id === action.id ? applyResult(p, action.result) : p)).filter(Boolean);
     // B12 persistence restore: set pane symbols in order without touching focus
     // or generations — durable layout identity, not a new composition.
-    case 'symbols':
-      return panes.map((p, i) => (action.symbols && typeof action.symbols[i] === 'string' && action.symbols[i] ? { ...p, symbol: action.symbols[i] } : p));
+    //
+    // The supplied array IS the composition: it must fully determine every
+    // pane it addresses. A pane beyond the array previously kept its OLD
+    // symbol, so importing a short array into a wider arrangement silently
+    // blended the imported composition with the previous layout's symbols
+    // (and the blend was autosaved, so it survived reload). Surplus panes are
+    // therefore cleared to the host symbol instead of inheriting a stale one:
+    // the result is always exactly what the array describes.
+    case 'symbols': {
+      const supplied = Array.isArray(action.symbols) ? action.symbols : [];
+      const fallback = action.symbol || (panes[0] && panes[0].symbol) || 'SPY';
+      return panes.map((p, i) => {
+        const next = supplied[i];
+        const symbol = (typeof next === 'string' && next) ? next : fallback;
+        return symbol === p.symbol ? p : { ...p, symbol };
+      });
+    }
     default:
       return panes;
   }

@@ -228,7 +228,57 @@ export default function ChartWorkspace({
   // Each transition owns a distinct token, even when its values return to
   // an earlier state (open/close/open). Ordinary rerenders retain the token
   // and callbacks so the chart's reporting effects stay stable.
-  const callbackBinding = JSON.stringify([open, focusedSource, focusedTicker, focusedEpoch, retargeting]);
+  //
+  // R02: the token must ALSO rotate when the focused pane's READ identity
+  // changes — its scope or read generation. That change is same-pane (pane
+  // id, symbol, layout and pane generation are all unchanged), so the token
+  // stayed identical and a callback retained from the OLD read stayed
+  // admitted: it could then supply its old report, and because chartCurrent
+  // derives BOTH the generation and the scope from that one report, the
+  // retained old scope replaced the newer actual scope. The current read
+  // identity is tracked from the pane's own reports, so a NEW read advances
+  // it (rotating the token and refusing every callback retained from the
+  // previous read), while an OLDER read can never regress it.
+  const readKey = focusedSource + '|' + focusedTicker + '|' + focusedEpoch;
+  const readIdentity = useRef({ key: null, scope: null, generation: null, order: null });
+  // A new pane identity starts a new read identity — the counter below only
+  // orders reports within one pane/session.
+  if (readIdentity.current.key !== readKey) {
+    readIdentity.current = { key: readKey, scope: null, generation: null, order: null };
+  }
+  // The pane's read generation is `${ticker}:${readGeneration}:${epoch}`; its
+  // readGeneration counter only advances within a session, so it orders two
+  // reports of the same pane.
+  const readOrder = (generation) => {
+    const parts = String(generation ?? '').split(':');
+    const order = Number(parts[1]);
+    return Number.isFinite(order) ? order : null;
+  };
+  const admitReading = (value) => {
+    // A NULL emission is the pane's honest revocation signal (an unrecorded
+    // cursor): it must clear the binding, so it is admitted as-is. It carries
+    // no identity of its own, so it never advances the read identity.
+    if (value === null || value === undefined) return true;
+    if (typeof value !== 'object') return false;
+    const scope = value.scope == null ? null : String(value.scope);
+    const generation = value.generation == null ? null : String(value.generation);
+    const order = readOrder(generation);
+    const current = readIdentity.current;
+    // An older read never supersedes the current one, and a report at the
+    // same read order but a different scope is inconsistent — both are
+    // refused before they can advance the identity.
+    if (order !== null && current.order !== null && order < current.order) return false;
+    if (order !== null && current.order !== null && order === current.order
+        && current.scope !== null && scope !== null && scope !== current.scope) return false;
+    if (scope !== current.scope || generation !== current.generation) {
+      readIdentity.current = { key: readKey, scope, generation, order: order ?? current.order };
+    }
+    return true;
+  };
+  const callbackBinding = JSON.stringify([
+    open, focusedSource, focusedTicker, focusedEpoch, retargeting,
+    readIdentity.current.scope, readIdentity.current.generation,
+  ]);
   const callbackOwner = useRef({ binding: callbackBinding });
   if (callbackOwner.current.binding !== callbackBinding) {
     callbackOwner.current = { binding: callbackBinding };
@@ -243,7 +293,15 @@ export default function ChartWorkspace({
     const admit = apply => value => {
       if (open && callbackMounted.current && callbackOwner.current === callbackLifetime) apply(value);
     };
-    return { reading: admit(setChartReading), quality: admit(setQuality), envelopes: admit(setEnvelopes),
+    // The reading is admitted only when it is the pane's CURRENT read: an
+    // older or inconsistent report is refused here, so it can never replace
+    // the newer actual scope/generation that chartCurrent publishes.
+    const reading = value => {
+      if (!open || !callbackMounted.current || callbackOwner.current !== callbackLifetime) return;
+      if (!admitReading(value)) return;
+      setChartReading(value);
+    };
+    return { reading, quality: admit(setQuality), envelopes: admit(setEnvelopes),
       replay: admit(handlePaneReplayState), controller: admit(handleReplayController) };
   }, [open, callbackLifetime, handlePaneReplayState, handleReplayController]);
   useLayoutEffect(() => {
@@ -307,7 +365,7 @@ export default function ChartWorkspace({
     const next = LAYOUT_PRESETS.some(p => p.id === data.layoutId) ? data.layoutId : 'single';
     setLayoutId(next);
     dispatch({ type: 'layout', layout: next, symbol: ticker });
-    if (Array.isArray(data.symbols)) dispatch({ type: 'symbols', symbols: data.symbols });
+    if (Array.isArray(data.symbols)) dispatch({ type: 'symbols', symbols: data.symbols, symbol: ticker });
     const focusedIdx = Number.isInteger(data.focusedIndex) && data.focusedIndex >= 0 && data.focusedIndex < layoutById(next).panes ? data.focusedIndex : 0;
     dispatch({ type: 'focus', id: 'pane-' + focusedIdx });
     if (data.fitMode === 'fit-visible' || data.fitMode === 'fit-all') setFitMode(data.fitMode);
