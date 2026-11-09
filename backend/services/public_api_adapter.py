@@ -701,12 +701,12 @@ async def _assemble_chain(
                 # A monthly SPX request can return PM-settled SPXW contracts.
                 # The actual option root owns its clock, not the display ticker.
                 import re
-                root_match = re.fullmatch(r"(SPXW|SPX)\s*\d{6}[CP]\d{8}", str(oc.symbol).upper())
+                root_match = re.fullmatch(r"(SPXW|SPX|SPY|QQQ)\s*\d{6}[CP]\d{8}", str(oc.symbol).upper())
                 clock_ticker = root_match.group(1) if root_match else ticker
                 oc_series = resolve_series(clock_ticker, exp_d.isoformat())
                 T, floored, t_reason = time_to_expiry_years(
                     oc.expiration or exp, now=now_utc, series=oc_series,
-                    ticker=ticker)
+                    ticker=ticker, option_root=root_match.group(1) if root_match else None)
                 if T is None:
                     if t_reason == "EXPIRED":
                         n_expired_dropped += 1
