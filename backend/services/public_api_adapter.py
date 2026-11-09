@@ -627,7 +627,11 @@ async def _assemble_chain(
     via skip_log. Returns the floww-shaped chain dict (contracts may be
     empty — the caller decides the refusal).
     """
-    from services.solstice_time import resolve_series, time_to_expiry_years
+    from services.solstice_time import (
+        expiry_clock_lineage,
+        resolve_series,
+        time_to_expiry_years,
+    )
 
     # 3. Fetch chain for each expiry (up to max_expiries ACCEPTED). Only
     # expiries that actually return data are reported (requested vs returned
@@ -721,7 +725,7 @@ async def _assemble_chain(
                 # MagicMock/test doubles without explicit attrs must stay None.
                 def _ts(v: Any) -> str | None:
                     return v if isinstance(v, str) and v else None
-                contracts.append({
+                contract_row = {
                     "osi": oc.symbol,
                     "expiry": oc.expiration,
                     "series": oc_series,
@@ -756,7 +760,17 @@ async def _assemble_chain(
                     "ask_event_time": _timestamp_text(getattr(oc, "ask_timestamp", None)),
                     "exposure_basis": "OI" if oi_raw is not None else "OI_UNKNOWN",
                     "chain_instrument_type": chain_type,
-                })
+                }
+                clock_lineage = expiry_clock_lineage(
+                    oc.expiration or exp, series=oc_series, ticker=ticker,
+                    option_root=root_match.group(1) if root_match else None)
+                if clock_lineage is not None:
+                    contract_row.update({
+                        "clock_version": clock_lineage["version"],
+                        "clock_deadline_utc": clock_lineage["deadline_utc"],
+                        "clock_authority": clock_lineage["authority"],
+                    })
+                contracts.append(contract_row)
                 # Available coverage describes accepted contracts, not a
                 # successful empty request or contracts rejected above.
                 accepted_expiry = exp_d.isoformat()

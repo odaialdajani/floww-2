@@ -28,6 +28,9 @@ YEAR_DAYS = 365.0
 MIN_T_YEARS = 1.0 / (365.0 * 24.0 * 60.0)  # ~1 minute in years
 # Clock construction version. Bump when product/series rules change.
 CLOCK_VERSION = "clock.v2"
+# New results that use the separately versioned designated-ETF deadline.
+# Legacy and all other product clocks retain CLOCK_VERSION semantics.
+ETF_CLOCK_VERSION = "clock.v3"
 
 
 def third_friday(year: int, month: int) -> int:
@@ -155,6 +158,41 @@ def last_trading_utc(expiry: str, series: str | None = None, ticker: str | None 
         except (TypeError, ValueError):
             pass
     return day_et.replace(hour=16, minute=0).astimezone(UTC)
+
+
+def expiry_clock_lineage(expiry: str, series: str | None = None,
+                         ticker: str | None = None,
+                         option_root: str | None = None) -> dict[str, Any] | None:
+    """Additive provenance for calculations using the designated ETF rule.
+
+    Returns None for legacy/default and other product clocks, preserving their
+    existing output shape and the interpretation of stored clock.v2 values.
+    """
+    from services.etf_expiry_authority import etf_authority_for
+
+    authority = etf_authority_for(option_root, ticker=ticker, series=series)
+    if authority.get("status") != "authoritative":
+        return None
+    deadline = last_trading_utc(expiry, series=series, ticker=ticker,
+                                option_root=option_root)
+    if deadline is None:
+        return None
+    # Emit a new-clock label only when the designated authority actually
+    # changes the resolved deadline. Unknown calendar/date cases retain the
+    # conservative legacy deadline and must not be relabeled as clock.v3.
+    legacy_deadline = last_trading_utc(expiry, series=series, ticker=ticker)
+    if legacy_deadline is None or deadline == legacy_deadline:
+        return None
+    return {
+        "version": ETF_CLOCK_VERSION,
+        "deadline_utc": deadline.isoformat(),
+        "authority": {
+            "version": authority["authority"],
+            "status": authority["status"],
+            "sources": list(authority["sources"]),
+            "reason": authority.get("reason"),
+        },
+    }
 
 
 def time_to_expiry_years(expiry: str, now: datetime | None = None, series: str | None = None,
