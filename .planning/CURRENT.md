@@ -1,10 +1,14 @@
 # FLOWW current work
 
-## Current consolidation — November 12, 2026
+## Current release — November 12, 2026
 
-Canonical product source is `5d5389908c89d9cd90cad50036dc7d3c3c3dddf0`. This documentation checkpoint preserves its frontend tree `081f1d358a6d4cc8107270fd2845a70a66240f5c` and backend tree `f92d3d321f12953879295b28f464221dabd992ac`. Later documentation commits do not constitute application delivery.
+Canonical product source is `a6197f57d2629ad16f10c35d0791c6579c701204`, the merge of pull request 146. Its frontend tree is `081f1d358a6d4cc8107270fd2845a70a66240f5c` and its backend tree is `00020c379d6a0bb72f2d7b6f8dc1a0a5cb24c997`. That merge changed tests only; the product code checkpoint stays `5d5389908c89d9cd90cad50036dc7d3c3c3dddf0`. The backend tree hash moved because the corrected tests live under `backend/`. Later documentation commits do not constitute application delivery.
 
-The managed frontend on port 3000 and backend on port 8213 currently serve accepted release `213dcee64`. Candidate release attempts rolled back without an acceptance receipt. Current product source is integrated and reviewed, but its full seven-check native runtime acceptance remains open. Use the guarded release process with a fresh baseline, exact source pins, full closed-copy backup, continuity verification, and staged acceptance runner. Never infer the served release from the Git branch.
+The managed frontend on port 3000 and backend on port 8213 now serve release `a6197f57d`. The release finished with a native acceptance receipt at 2026-11-12T18:56:45Z after all seven required UI checks passed against the live candidate. The first acceptance attempt in the same window failed two checks because a cold-restarted backend held the first chart load on a provider slot for longer than the settle wait; no receipt was written for that attempt, and the same checks passed on the immediate rerun with the backend warm. Release `213dcee64` stays on disk as the rollback target. Never infer the served release from the Git branch.
+
+The live release also fixes a serving defect: the old frontend hardcoded `http://localhost:8000` as its API base, while the current build derives the base from the page origin and points loopback traffic at `http://127.0.0.1:8213`.
+
+The release required free disk capacity before it would start, because the helper keeps a closed full copy plus a verified restore. That space was created by retiring one already-archived old backup and by clearing regenerable installer caches. The capacity rule itself was not weakened, and the accepted backup is still retained for rollback.
 
 Integrated source includes the R02 current-read scope binding and complete layout-symbol import (`777b68871`), backend replay bucket/pending parity (`e424c19bc`), W-2 analytical ETF expiry clock and lineage (`5c6aa5914`, `6783107ff`), and narrow-desktop pane stacking (`5d5389908`). Source evidence includes the complete frontend run of 302 suites / 2,970 tests and the affected backend tests and independent reviews retained in the continuation evidence. Those checks do not close runtime, account, or trading commissioning.
 
