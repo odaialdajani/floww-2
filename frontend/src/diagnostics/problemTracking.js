@@ -1,13 +1,15 @@
 import {API, BACKEND_URL} from "../config/api";
+import {permanentRefusal,retryDelay} from "./retryPolicy";
 const KEY="floww.problemQueue";
 const SAFE_READS=new Set(["/api/flowseeker/scan","/api/flowseeker/scan/history","/api/flowseeker/alerts/feed","/api/agent/models","/api/agent/prefs","/api/health"]);
 const NAMES=new Set(["Error","TypeError","ReferenceError","RangeError","SyntaxError","AbortError","NetworkError"]);
 let queue=[],installed=false,nativeFetch=null,flushing=false;
+let retryAt=0,failures=0,refused=false,flushController=null,generation=0;
 // Problem reports are a loopback-only surface: the managed backend refuses
 // them from LAN clients by design. A phone opening the app on the Mac's LAN
 // address therefore must not queue and retry reports that can only fail; the
-// App health panel stays read-only there.
-function localPage(){try{const h=window.location.hostname;return h==="localhost"||h==="127.0.0.1"||h==="::1"||h==="[::1]";}catch{return true;}}
+// Both the upload and summary routes require local access.
+export function isLocalProblemPage(){try{const h=window.location.hostname;return h==="localhost"||h==="127.0.0.1"||h==="::1"||h==="[::1]";}catch{return true;}}
 try {const saved=JSON.parse(localStorage.getItem(KEY)||"[]");if(Array.isArray(saved))queue=saved.slice(-30).map(clean);}catch{}
 function clean(event) {
  const row={kind:event.kind};
@@ -20,31 +22,37 @@ function clean(event) {
  return row;
 }
 export function reportProblem(event) {
- if(!localPage())return;
+ if(!isLocalProblemPage())return;
  try {queue.push(clean(event));queue=queue.slice(-30);localStorage.setItem(KEY,JSON.stringify(queue));}catch{}
 }
 export async function flushProblems() {
- if(!nativeFetch || !queue.length || flushing)return;
+ if(!nativeFetch || !isLocalProblemPage() || !queue.length || flushing || refused || Date.now()<retryAt)return;
  flushing=true;
+ const current=generation,send=nativeFetch;
  const batch=queue.slice(0,30);
  const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),4000);
+ flushController=controller;
  try {
-  const response=await nativeFetch(API+"/diagnostics/events",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({events:batch}),signal:controller.signal});
-  if(response.ok){queue=queue.filter(row=>!batch.includes(row));try{localStorage.setItem(KEY,JSON.stringify(queue));}catch{}}
- }catch{}finally{clearTimeout(timeout);flushing=false;}
+  const response=await send(API+"/diagnostics/events",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({events:batch}),signal:controller.signal});
+  if(current!==generation)return;
+  if(response.ok){failures=0;retryAt=0;queue=queue.filter(row=>!batch.includes(row));try{localStorage.setItem(KEY,JSON.stringify(queue));}catch{}}
+  else if(permanentRefusal(response))refused=true;
+  else retryAt=Date.now()+retryDelay(response,++failures,5000);
+ }catch{if(current===generation)retryAt=Date.now()+retryDelay(null,++failures,5000);}
+ finally{clearTimeout(timeout);if(current===generation){flushing=false;flushController=null;}}
 }
 export function startProblemTracking() {
- if(installed || typeof window.fetch!=="function" || !localPage())return ()=>{};
- installed=true;nativeFetch=window.fetch.bind(window);
+ if(installed || typeof window.fetch!=="function" || !isLocalProblemPage())return ()=>{};
+ installed=true;const send=window.fetch.bind(window);nativeFetch=send;
  const prior=window.fetch,retried=new Map();
  const wrapped=async(input,options={})=>{
-  let url;try{url=new URL(typeof input==="string" || input instanceof URL?input:input.url,window.location.href);}catch{return nativeFetch(input,options);}
+  let url;try{url=new URL(typeof input==="string" || input instanceof URL?input:input.url,window.location.href);}catch{return send(input,options);}
   const method=String(options.method || input?.method || "GET").toUpperCase(),signal=options.signal || input?.signal;
   const local=url.origin===new URL(BACKEND_URL,window.location.href).origin && url.pathname.startsWith("/api/") && !url.pathname.startsWith("/api/diagnostics");
-  if(!local)return nativeFetch(input,options);
+  if(!local)return send(input,options);
   const start=performance.now();
   let response,error;
-  try {response=await nativeFetch(input,options);}catch(e){error=e;}
+  try {response=await send(input,options);}catch(e){error=e;}
   const aborted=signal?.aborted || error?.name==="AbortError";
   if(aborted)throw error || new DOMException("Aborted","AbortError");
   const duration=performance.now()-start;
@@ -57,7 +65,7 @@ export function startProblemTracking() {
    await new Promise(resolve=>setTimeout(resolve,750));
    if(signal?.aborted)throw error || new DOMException("Aborted","AbortError");
    try {
-    const recovered=await nativeFetch(input,options);
+    const recovered=await send(input,options);
     reportProblem({kind:"recovery",route:url.pathname,method,result:recovered.ok?"succeeded":"failed"});
     return recovered;
    }catch(e){if(e.name!=="AbortError")reportProblem({kind:"recovery",route:url.pathname,method,result:"failed"});throw e;}
@@ -90,5 +98,5 @@ export function startProblemTracking() {
  if(TrackedSocket)window.WebSocket=TrackedSocket;
  const flush=setInterval(flushProblems,5000);
  flushProblems();
- return ()=>{if(TrackedSocket && window.WebSocket===TrackedSocket)window.WebSocket=OriginalSocket;if(xhr?.open===watchedOpen)xhr.open=oldOpen;if(xhr?.send===watchedSend)xhr.send=oldSend;if(window.fetch===wrapped)window.fetch=prior;installed=false;clearInterval(heartbeat);clearInterval(flush);window.removeEventListener("error",onError,true);window.removeEventListener("unhandledrejection",onReject);};
+ return ()=>{generation++;flushController?.abort();flushController=null;flushing=false;nativeFetch=null;if(TrackedSocket && window.WebSocket===TrackedSocket)window.WebSocket=OriginalSocket;if(xhr?.open===watchedOpen)xhr.open=oldOpen;if(xhr?.send===watchedSend)xhr.send=oldSend;if(window.fetch===wrapped)window.fetch=prior;installed=false;clearInterval(heartbeat);clearInterval(flush);window.removeEventListener("error",onError,true);window.removeEventListener("unhandledrejection",onReject);};
 }

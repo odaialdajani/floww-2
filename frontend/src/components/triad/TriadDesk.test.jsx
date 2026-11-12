@@ -180,6 +180,15 @@ test('an empty selected chain is unavailable instead of ready', async () => {
  expect(screen.queryByRole('table')).not.toBeInTheDocument();
 });
 
+test('an empty selected chain reports the completed read instead of claiming it is still pending', async () => {
+ mockRoutes(EXPIRIES, { ...CHAIN, contracts: [], expiries: [] });
+ render(<TriadDesk ticker="SPY" />);
+ await screen.findByText(/returned no usable contracts/);
+ const scopeLine = screen.getByText(/2026-10-07 · 0 DTE/);
+ expect(scopeLine).toHaveTextContent('chain unavailable');
+ expect(scopeLine).not.toHaveTextContent('chain pending');
+});
+
 test('invalid listed dates cannot prove absence of a same-day series', async () => {
  mockRoutes({ ...EXPIRIES, expiries: [{ expiry: '2026-10-07garbage', admitted: false,
   dte: null, reason: 'UNPARSEABLE_EXPIRY' }] });

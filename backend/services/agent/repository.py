@@ -443,6 +443,24 @@ class AgentRepository:
         next_cursor = history_cursor(turns[-1]["created_at"], turns[-1]["turn_id"]) if more else None
         return {"turns": turns, "next_cursor": next_cursor, "has_more": more}
 
+    async def citation_documents(self, owner, *, limit=30):
+        """The owner's saved answers that carry an evidence ledger.
+
+        A citation index is read from the owner's own saved turns, so the
+        scope is the owner, never a global search. Only the ledger and the
+        section references are read; no provider is called and no answer is
+        rewritten.
+        """
+        if type(limit) is not int or not 1 <= limit <= 200:
+            raise ValueError("Choose between one and two hundred saved answers")
+        projection = {"_id": 0, "turn_id": 1, "owner": 1, "status": 1,
+                      "answer.facts": 1, "answer.sections": 1}
+        query = self.turns.find({"owner": owner, "status": "completed"},
+                                projection).sort([("created_at", -1), ("turn_id", -1)]).limit(limit)
+        if hasattr(query, "max_time_ms"):
+            query = query.max_time_ms(HISTORY_DB_TIME_MS)
+        return await query.to_list(length=limit)
+
     async def history_candidates(self, owner, *, ticker, horizon, before, start=None, end=None,
                                  coverage_id=None, source=None, unit=None, close_time=None, compatible=True):
         """Filter stored source observations before loading a bounded price-only set.

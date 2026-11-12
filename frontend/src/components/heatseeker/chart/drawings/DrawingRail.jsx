@@ -1,4 +1,5 @@
 import React from 'react';
+import './DrawingRail.css';
 // G10 drawings rail: additive list over the drawing reducer. Selection,
 // deletion, lock and hide only — no broker writes. Evaluation/server
 // ownership of alerts is untouched by this rail.
@@ -28,7 +29,7 @@ export default function DrawingRail({ drawings = [], selectedId = null,
     ? (presetList.find((p) => p && p.id === selected.presetId && isDirty(selected, p)) || {}).id
     : undefined;
   return (
-    <div data-testid="drawing-rail" aria-label="Drawings">
+    <div className="drawing-rail" data-testid="drawing-rail" aria-label="Drawings">
       {!!tools.length && (
         <div className="rail-tools" role="group" aria-label="Drawing tools">
           {tools.map(tool => (
@@ -93,7 +94,7 @@ export default function DrawingRail({ drawings = [], selectedId = null,
           )}
           {atCap && <div className="rail-preset-cap" data-testid="rail-preset-cap" role="status">Preset limit reached (50) — delete one to save another.</div>}
           {presetList.map((p) => (
-            <div key={p.id} data-testid="rail-preset" data-starred={!!p.starred} data-active={!!p.active} data-builtin={p.kind === 'built-in'}>
+            <div key={p.id} className="rail-preset" data-testid="rail-preset" data-starred={!!p.starred} data-active={!!p.active} data-builtin={p.kind === 'built-in'}>
               <span data-testid={'rail-preset-name-' + p.id}>{p.name}{p.active ? ' · active' : ''}{p.kind === 'built-in' ? ' · built-in' : ''}</span>
               {p.id === linkedDirtyId && <span className="rail-preset-dirty" data-testid={'rail-preset-dirty-' + p.id} title="Selected drawing differs from this preset">• modified</span>}
               {onPresetApply && <button type="button" data-testid={'rail-preset-apply-' + p.id}
@@ -115,7 +116,7 @@ export default function DrawingRail({ drawings = [], selectedId = null,
         </div>
       )}
       {(Array.isArray(drawings) ? drawings : []).map((d) => (
-        <div key={d.id} data-testid="rail-drawing" data-selected={d.id === selectedId}
+        <div key={d.id} className="rail-drawing" data-testid="rail-drawing" data-selected={d.id === selectedId}
           data-locked={!!d.locked} data-visible={d.visible !== false}>
           <span>{d.tool} · {d.id}</span>
           <button type="button" data-testid={'rail-select-' + d.id} onClick={() => onSelect?.(d.id)}>Select</button>

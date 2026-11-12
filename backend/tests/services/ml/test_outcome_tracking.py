@@ -6,6 +6,22 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def isolated_forecast(monkeypatch):
+    """Exercise real persistence independently of vendor/model availability."""
+    from services.ml.inference import PredictionResult, inference_engine
+
+    async def forecast(ticker):
+        return PredictionResult(
+            ticker=ticker, prediction=2, confidence=0.75,
+            probabilities=[0.1, 0.15, 0.75], model_id="fixture-only",
+            features_used=["ret_1d"], feature_values={"ret_1d": 0.0125},
+            timestamp="2026-11-06T14:30:00+00:00", gex_signal=None,
+        )
+
+    monkeypatch.setattr(inference_engine, "predict", forecast)
+
+
 @pytest.mark.asyncio
 async def test_record_prediction(aclient):
     """Test recording a prediction."""
@@ -17,6 +33,27 @@ async def test_record_prediction(aclient):
     assert "prediction" in data
     assert "confidence" in data
     assert "outcome_date" in data
+    saved = (await aclient.get("/api/ml/outcome/recent?ticker=SPY&limit=1")).json()["predictions"][0]
+    assert saved["model_id"] == "fixture-only"
+    assert saved["prediction"] == 2
+    assert saved["probabilities"] == {"down": 0.1, "hold": 0.15, "up": 0.75}
+    assert saved["feature_snapshot"] == {"ret_1d": 0.0125}
+
+
+@pytest.mark.asyncio
+async def test_failed_forecast_does_not_record_a_prediction(aclient, monkeypatch):
+    import server
+    from services.ml.inference import inference_engine
+
+    before = await server.db.ml_predictions.count_documents({})
+
+    async def unavailable(ticker):
+        raise RuntimeError("fixture provider unavailable")
+
+    monkeypatch.setattr(inference_engine, "predict", unavailable)
+    response = await aclient.post("/api/ml/outcome/record?ticker=SPY")
+    assert response.status_code == 503
+    assert await server.db.ml_predictions.count_documents({}) == before
 
 
 @pytest.mark.asyncio

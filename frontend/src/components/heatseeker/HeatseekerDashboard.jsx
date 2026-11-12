@@ -1,8 +1,9 @@
 /** One visible study family; visited panels retain their controls and readings. */
 
-import React, { useMemo, useState, useEffect, useRef, memo } from "react";
+import React, { Activity, useMemo, useState, useEffect, useLayoutEffect, useRef, memo } from "react";
 import "./HeatseekerDashboard.css";
 import NavigationScreenContext from "../../agent/NavigationScreenContext";
+import useScreenContext, {publishScreenContext} from "../../agent/useScreenContext";
 import CharmDecayPanel from "./CharmDecayPanel";
 import BriefingStrip from "./BriefingStrip";
 
@@ -200,9 +201,10 @@ const STUDIES = [
 
 function StudyFamily({ id, active, visited, children }) {
   if (!visited.has(id)) return null;
-  // Once visited, keep the actual panel mounted. Its controls and original
-  // reading clocks survive study changes; hidden families take no page space.
-  return <section className="study-family" data-study-family={id} hidden={active !== id}>{children}</section>;
+  // Preserve controls and DOM while releasing hidden readers and timers.
+  return <section className="study-family" data-study-family={id} hidden={active !== id}>
+    <Activity mode={active === id ? "visible" : "hidden"}>{children}</Activity>
+  </section>;
 }
 
 export default function HeatseekerDashboard({
@@ -212,9 +214,19 @@ export default function HeatseekerDashboard({
   const normalizedTicker = useMemo(() => String(ticker).toUpperCase(), [ticker]);
   const [study, setStudy] = useState("levels");
   const [visited, setVisited] = useState(() => new Set(["levels"]));
+  const [checkedContext] = useScreenContext();
+  const releaseChecked = useRef(null);
+  useLayoutEffect(() => () => releaseChecked.current?.(), []);
   const chooseStudy = event => {
     const next = event.target.value;
-    if (!STUDIES.some(([id]) => id === next)) return;
+    if (next === study || !STUDIES.some(([id]) => id === next)) return;
+    // The user's selected checked reading outlives the reader being paused.
+    // Transfer its exact snapshot and clocks to the visible workspace; do
+    // not retain failed reads or contexts belonging to another stock/page.
+    if (checkedContext.page === "heatseeker" && !checkedContext.navigationOnly
+      && String(checkedContext.ticker || "").replace(/^\^/, "").toUpperCase() === normalizedTicker.replace(/^\^/, "")) {
+      releaseChecked.current = publishScreenContext(checkedContext);
+    }
     setStudy(next);
     setVisited(previous => previous.has(next) ? previous : new Set([...previous, next]));
   };

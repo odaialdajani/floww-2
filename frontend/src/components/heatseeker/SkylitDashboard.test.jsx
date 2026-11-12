@@ -57,8 +57,15 @@ jest.mock("./SkylitHeatmapGrid",     () => ({ onCellClick, onStrikeClick, window
   </div>
 ));
 jest.mock("./SkylitMetricsSidebar",  () => (props) => <div data-testid="mock-metrics" data-spot={JSON.stringify(props.spot ?? null)} data-regime={JSON.stringify(props.regime ?? null)} />);
-jest.mock("./ExposureStrip", () => () => null);
-jest.mock("../flowseeker/AlertEngineStrip", () => () => null);
+var mockRealStrips=false;
+jest.mock("./ExposureStrip", () => {
+  const React=require("react"),Strip=jest.requireActual("./ExposureStrip").default;
+  return props=>mockRealStrips?<Strip {...props}/>:null;
+});
+jest.mock("../flowseeker/AlertEngineStrip", () => {
+  const React=require("react"),Strip=jest.requireActual("../flowseeker/AlertEngineStrip").default;
+  return props=>mockRealStrips?<Strip {...props}/>:null;
+});
 
 // Mock the steal-list top-3 components (they fetch from :8000 which is not
 // running in tests). Use the same data-testids the components expose in
@@ -86,8 +93,27 @@ import SkylitDashboardView from "./SkylitDashboard";
 // Existing matrix contracts explicitly start at the secondary options desk.
 function SkylitDashboard(props) { return <SkylitDashboardView defaultStudy="options" {...props} />; }
 import useScreenContext from "../../agent/useScreenContext";
+import AgentProvider from "../../agent/AgentProvider";
 import coverageFixture from "../../fixtures/integration/coverage-read.v1.json";
 import {skylitViewScope,readSkylitView,writeSkylitView} from "./skylitViewPreferences";
+
+test('the closed options desk makes no badge reads and reopening retains its layout',async()=>{
+  mockRealStrips=true;sessionStorage.clear();
+  const reads=()=>axios.get.mock.calls.filter(([url])=>/\/alerts\/SPY|\/flowseeker\/alerts\/feed\?ticker=SPY/.test(String(url)));
+  try{
+    await act(async()=>render(<SkylitDashboardView ticker="SPY" data={selectionMap()} spot={650} defaultStudy="price"/>));
+    expect(reads()).toHaveLength(0);
+    await act(async()=>fireEvent.click(screen.getByRole('button',{name:'Options desk'})));
+    expect(reads()).toHaveLength(2);
+    fireEvent.change(screen.getByRole('combobox',{name:'Canvas layout'}),{target:{value:'profile'}});
+    const initialSignals=reads().map(([,options])=>options.signal);
+    await act(async()=>fireEvent.click(screen.getByRole('button',{name:'Price chart'})));
+    expect(initialSignals.every(signal=>signal.aborted)).toBe(true);
+    await act(async()=>fireEvent.click(screen.getByRole('button',{name:'Options desk'})));
+    expect(reads()).toHaveLength(4);
+    expect(screen.getByRole('combobox',{name:'Canvas layout'})).toHaveValue('profile');
+  }finally{cleanup();mockRealStrips=false;}
+});
 
 test('chart layouts are reachable from the normal Stock chart without a hidden browser flag', async () => {
   window.__FLOWW_CHART_WORKSPACE__=false;
@@ -97,6 +123,51 @@ test('chart layouts are reachable from the normal Stock chart without a hidden b
   expect(screen.getByTestId('chart-workspace')).toBeInTheDocument();
   await act(async()=>fireEvent.click(screen.getByRole('button',{name:'Chart layouts'})));
   expect(screen.queryByTestId('chart-workspace')).not.toBeInTheDocument();
+});
+
+test.each([[false, true], [true, true], [false, false], [true, false]])(
+  'Stock chart AskFlow uses the recorded cursor with layouts=%s and saved scope=%s', async (layouts, hasScope) => {
+  window.__FLOWW_CHART_WORKSPACE__ = layouts;
+  const previousFetch = global.fetch;
+  const previousCrypto = global.crypto;
+  Object.defineProperty(globalThis, 'crypto', {value: require('crypto').webcrypto, configurable: true});
+  const scope = 'SPY:4:day:None:False';
+  const time = '2026-11-06T19:00:00Z';
+  axios.get.mockImplementation(async (url) => ({ data: String(url).includes('/price-history/') ? {
+    ticker: 'SPY', query_key: scope, node_status: 'available', candles_with_recorded_nodes: 0, scopes: hasScope ? [scope] : [],
+    frames: [{time, open: 650, high: 651, low: 649, close: 650, nodes: []}],
+  } : {} }));
+  const askBodies = [];
+  global.fetch = jest.fn(async (url, init) => {
+    if (String(url).endsWith('/ask')) {
+      askBodies.push(JSON.parse(init.body));
+      return {ok: false, status: 422, json: async () => ({detail: 'Fixture refusal'})};
+    }
+    return {ok: true, json: async () => ({})};
+  });
+  try {
+    render(<AgentProvider><SkylitDashboardView ticker="SPY" data={{...selectionMap(), history_scope: scope}} spot={650}/></AgentProvider>);
+    await screen.findByTestId('recorded-price-chart');
+    const ask = screen.getAllByTestId('askflow-trigger')[0];
+    fireEvent.click(ask.querySelector('summary'));
+    fireEvent.click(ask.querySelector('[data-testid="ask-lodestar-btn"]'));
+    expect(askBodies).toHaveLength(0);
+    fireEvent.click(ask.querySelector('[data-testid="ask-lodestar-q-0"]'));
+    if (!hasScope) {
+      expect(ask.querySelector('[data-testid="ask-lodestar-note"]')).toHaveTextContent('saved scope unavailable');
+      expect(global.fetch).not.toHaveBeenCalled();
+      return;
+    }
+    await waitFor(() => expect(askBodies).toHaveLength(1));
+    expect(askBodies[0]).toMatchObject({
+      scope: 'selected', ticker: 'SPY', screen: {page: 'heatseeker', ticker: 'SPY', displayMode: 'price-history'},
+      chart_context: {status: 'bound', focus: 'SPY', query: 'focused-chart', scope, cursor: Date.parse(time) / 1000},
+    });
+  } finally {
+    global.fetch = previousFetch;
+    Object.defineProperty(globalThis, 'crypto', {value: previousCrypto, configurable: true});
+    window.__FLOWW_CHART_WORKSPACE__ = false;
+  }
 });
 
 test('another cell in the same wall resets exact contract inputs, but a tab switch does not', async () => {

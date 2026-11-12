@@ -179,7 +179,7 @@ async def test_flow_qqq_refused_not_in_paid_tickers(aclient):
     assert "paid" in (data.get("error", "").lower()), f"unexpected error: {data}"
 
 
-def test_admin_window_check_is_dst_aware():
+def test_admin_window_check_is_dst_aware(monkeypatch):
     """`/api/databento/usage` must not under-report the window during EDT.
 
     It previously computed the current time as
@@ -190,24 +190,69 @@ def test_admin_window_check_is_dst_aware():
     `in_window_now` getting the wrong answer.
 
     The check now delegates to `server._in_window_now_et`, which resolves the
-    zone properly. This pins that the two agree at a boundary hour, which is
-    where the bug actually bit.
+    zone properly and uses the SAME exclusive stop bound as the trade route
+    that gates `/api/flow` (`hhmm < start or hhmm >= stop` refuses there).
+    The two must never disagree about the same minute, so the stop instant
+    is exclusive for both.
+
+    The clock is pinned here: the boundary is asserted exactly at the start,
+    just inside it, exactly at the stop and just after it, in both Eastern
+    daylight time and Eastern standard time. The result never depends on
+    when the suite runs.
     """
     from datetime import datetime as _dt
     from zoneinfo import ZoneInfo
 
     from server import LIVE_WINDOW, _in_window_now_et
 
-    et = _dt.now(ZoneInfo("America/New_York"))
-    hhmm = et.strftime("%H:%M")
+    eastern = ZoneInfo("America/New_York")
+    utc = ZoneInfo("UTC")
+
+    class _FrozenDatetime(_dt):
+        _frozen = _dt(2026, 1, 1, tzinfo=utc)
+
+        @classmethod
+        def now(cls, tz=None):
+            if tz is None:
+                return cls._frozen.replace(tzinfo=None)
+            return cls._frozen.astimezone(tz)
+
+    monkeypatch.setattr("services.eastern_clock.datetime", _FrozenDatetime)
+
     start = LIVE_WINDOW.get("start_hhmm", "09:00")
     stop = LIVE_WINDOW.get("stop_hhmm", "16:00")
-    expected = not (hhmm < start or hhmm >= stop)
+    monkeypatch.setitem(LIVE_WINDOW, "start_hhmm", start)
+    monkeypatch.setitem(LIVE_WINDOW, "stop_hhmm", stop)
 
-    assert _in_window_now_et() is expected, (
-        f"window check disagrees with zoneinfo at {hhmm} ET "
-        f"(window {start}-{stop})"
-    )
+    def _minutes(hhmm: str) -> int:
+        hour, minute = (int(part) for part in hhmm.split(":"))
+        return hour * 60 + minute
+
+    def _gate_at(total_minutes: int, month: int) -> bool:
+        hour, minute = divmod(total_minutes, 60)
+        wall = _dt(2026, month, 15, hour, minute, tzinfo=eastern)
+        _FrozenDatetime._frozen = wall.astimezone(utc)
+        return _in_window_now_et()
+
+    start_min = _minutes(start)
+    stop_min = _minutes(stop)
+    assert start_min < stop_min, f"the live window {start}-{stop} is empty"
+
+    for month, label in ((1, "EST"), (7, "EDT")):
+        if start_min > 0:
+            assert _gate_at(start_min - 1, month) is False, (
+                f"{label}: the window opened before its {start} start")
+        assert _gate_at(start_min, month) is True, (
+            f"{label}: the window did not open at its {start} start")
+        assert _gate_at(start_min + 1, month) is True, (
+            f"{label}: the window closed one minute after it opened")
+        assert _gate_at(stop_min - 1, month) is True, (
+            f"{label}: the window closed before its {stop} stop")
+        assert _gate_at(stop_min, month) is False, (
+            f"{label}: the window stayed open AT its {stop} stop")
+        if stop_min + 1 < 24 * 60:
+            assert _gate_at(stop_min + 1, month) is False, (
+                f"{label}: the window stayed open after its {stop} stop")
 
 
 async def test_flow_spy_outside_window_emits_error(aclient):

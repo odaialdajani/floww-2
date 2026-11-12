@@ -12,7 +12,7 @@ async def test_pagination_retains_every_provider_ticker(monkeypatch):
     data = {"instruments": [{"symbol": f"S{i:05d}"} for i in range(13135)],
             "total": 13135, "source": "public-instruments", "complete_exchange_catalog": False,
             "complete_provider_catalog": True, "stale": False}
-    monkeypatch.setattr(market_catalog, "get_catalog", AsyncMock(return_value=data))
+    monkeypatch.setattr(market_catalog, "_catalog_snapshot", AsyncMock(return_value=data))
     first = await list_all_tickers(limit=5000, page=1, refresh=False)
     last = await list_all_tickers(limit=5000, page=3, refresh=False)
     assert first["total"] == 13135 and len(first["tickers"]) == 5000 and first["has_more"]
@@ -25,7 +25,7 @@ async def test_pagination_retains_every_provider_ticker(monkeypatch):
 async def test_custom_scan_list_does_not_restrict_full_browse(monkeypatch):
     monkeypatch.setenv("FLOWW_PUBLIC_UNIVERSE", "SPY")
     data = {"instruments": [{"symbol": "AAPL"}, {"symbol": "SPY"}], "total": 2}
-    monkeypatch.setattr(market_catalog, "get_catalog", AsyncMock(return_value=data))
+    monkeypatch.setattr(market_catalog, "_catalog_snapshot", AsyncMock(return_value=data))
     result = await list_all_tickers(limit=1000, page=1, refresh=False)
     assert result["tickers"] == ["AAPL", "SPY"]
 
@@ -34,7 +34,7 @@ async def test_custom_scan_list_does_not_restrict_full_browse(monkeypatch):
 async def test_refresh_and_stale_flags_remain_truthful(monkeypatch):
     load = AsyncMock(return_value={"instruments": [], "total": 0,
                                   "stale": True, "complete_provider_catalog": False})
-    monkeypatch.setattr(market_catalog, "get_catalog", load)
+    monkeypatch.setattr(market_catalog, "_catalog_snapshot", load)
     result = await list_all_tickers(limit=1000, page=1, refresh=True)
     load.assert_awaited_once_with(refresh=True)
     assert result["tickers"] == [] and not result["has_more"]

@@ -594,14 +594,12 @@ class PublicBroker:
         # Preserve missing Greeks as unknown, independently of quote fields.
         if greeks is None:
             greeks = {}
-        try:
-            bid_size = int(quote_data["bidSize"]) if quote_data.get("bidSize") is not None else None
-        except (TypeError, ValueError):
-            bid_size = None
-        try:
-            ask_size = int(quote_data["askSize"]) if quote_data.get("askSize") is not None else None
-        except (TypeError, ValueError):
-            ask_size = None
+        def displayed_size(value):
+            if isinstance(value, str):
+                digits = value.strip()
+                if len(digits) <= 19 and digits.isascii() and digits.isdecimal():
+                    value = int(digits)
+            return value if type(value) is int and 0 <= value < 2**63 else None
         return OptionContract(
             symbol=sym,
             option_type=otype,
@@ -610,8 +608,8 @@ class PublicBroker:
             last=float(quote_data["last"]) if quote_data.get("last") is not None else None,
             bid=float(quote_data["bid"]) if quote_data.get("bid") is not None else None,
             ask=float(quote_data["ask"]) if quote_data.get("ask") is not None else None,
-            bid_size=bid_size,
-            ask_size=ask_size,
+            bid_size=displayed_size(quote_data.get("bidSize")),
+            ask_size=displayed_size(quote_data.get("askSize")),
             volume=int(quote_data["volume"]) if quote_data.get("volume") is not None else None,
             open_interest=int(quote_data["openInterest"]) if quote_data.get("openInterest") is not None else None,
             iv=float(greeks.get("impliedVolatility")) if greeks.get("impliedVolatility") is not None else None,

@@ -117,14 +117,20 @@ function VelocityGauge({ velocity }) {
 // ============ Nodes Table ============
 // ============ Ticker Search ============
 // One verified symbol picker across the header and chart; favorites do not restrict scanning.
-function TickerSearch({ tickers, value, onChange, status, onRetry }) {
+function TickerSearch({ tickers, value, onChange, status, onRetry, diagnosticsDisclosure = false }) {
   return <TickerPicker value={value} onChange={onChange} tickers={tickers}
-    status={status} onRetry={onRetry} ariaLabel="Search stocks" className="floww-header-symbol-picker" />;
+    status={status} onRetry={onRetry} diagnosticsDisclosure={diagnosticsDisclosure} ariaLabel="Search stocks" className="floww-header-symbol-picker" />;
 }
 
 // ============ AlphaPod-style Header ============
 export function ApHeader({ page, navigation, ticker, onTickerChange, tickers, stockSearchStatus, retryStockSearch, relatedOpen=false, onToggleRelated, data, onSignOut, userEmail, userTier }) {
   const pageName = PAGE_NAMES[page] || page;
+  const [narrowHeader, setNarrowHeader] = useState(() => window.innerWidth <= 960);
+  useEffect(() => {
+    const resize = () => setNarrowHeader(window.innerWidth <= 960);
+    window.addEventListener("resize", resize);
+    return () => window.removeEventListener("resize", resize);
+  }, []);
 
   return (
     <header className="ap-header">
@@ -138,7 +144,7 @@ export function ApHeader({ page, navigation, ticker, onTickerChange, tickers, st
         {/* Right side actions */}
         <div className="ap-header-actions">
           {/* Ticker search for relevant pages */}
-          <TickerSearch tickers={tickers?buildTickerUniverse(tickers):null} value={ticker} onChange={onTickerChange} status={stockSearchStatus} onRetry={retryStockSearch}/>
+          <TickerSearch tickers={tickers?buildTickerUniverse(tickers):null} value={ticker} onChange={onTickerChange} status={stockSearchStatus} onRetry={retryStockSearch} diagnosticsDisclosure={page === "heatseeker" && narrowHeader}/>
           <button type="button" className="related-workspace-toggle" aria-label="Related stocks and funds" aria-expanded={relatedOpen} onClick={onToggleRelated}>Related</button>
 
           <DataAccountMenu ticker={ticker} data={data} userEmail={userEmail} onSignOut={onSignOut} />

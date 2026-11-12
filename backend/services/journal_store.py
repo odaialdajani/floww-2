@@ -23,6 +23,7 @@ import contextlib
 import json
 import logging
 import math
+import os
 import threading
 from datetime import datetime
 from pathlib import Path
@@ -37,13 +38,23 @@ _ET = ZoneInfo("America/New_York")
 # (rebuilt each process start) — fine for scan-derived data, wrong for a
 # trade journal, which must survive restarts. Same file-per-concern pattern
 # as graph_trade_service.research_kg.duckdb.
-_DB_PATH = Path(__file__).resolve().parents[2] / "data" / "journal.duckdb"
+def _journal_db_path() -> Path:
+    configured = os.getenv("FLOWW_JOURNAL_DB_PATH", "").strip()
+    if configured:
+        path = Path(configured).expanduser()
+        if not path.is_absolute():
+            raise ValueError("FLOWW_JOURNAL_DB_PATH must be absolute so releases share one journal")
+        return path
+    return Path(__file__).resolve().parents[2] / "data" / "journal.duckdb"
+
+
+_DB_PATH = _journal_db_path()
 _engine = None
 _lock = threading.Lock()
 
 
 def get_engine():
-    """Lazily-created singleton DuckDBEngine at data/journal.duckdb."""
+    """Lazily open the configured durable journal, retaining the legacy default."""
     global _engine
     if _engine is None:
         with _lock:
@@ -563,10 +574,12 @@ def update_whales(engine, snaps: dict) -> dict[str, dict]:
 
 
 def read_whales(engine, *, state: str | None = None, days: int = 30) -> list[dict]:
-    """Live badge read: open tracks (optionally state-filtered)."""
+    """Read the requested 1–365-day history, optionally state-filtered."""
     try:
-        sql = "SELECT * FROM whale_tracks WHERE asof_date >= current_date - INTERVAL '30' DAY"
-        params: list = []
+        if isinstance(days, bool) or not isinstance(days, int) or not 1 <= days <= 365:
+            raise ValueError("days must be an integer from 1 to 365")
+        sql = "SELECT * FROM whale_tracks WHERE asof_date >= current_date - ? * INTERVAL '1' DAY"
+        params: list = [days]
         if state:
             sql += " AND state = ?"
             params.append(state)

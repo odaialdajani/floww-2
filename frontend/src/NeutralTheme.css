@@ -1,5 +1,7 @@
-/* Surface-only dark theme. Data palettes and workspace geometry stay owned
-   by their existing components; body portals share these same surface tokens. */
+/* Dark theme surfaces plus the shared floating-control lane. Data palettes
+   stay owned by their existing components; body portals share these same
+   surface tokens. The bottom-right floating-control lane is theme-independent
+   geometry owned here (see the S02 block at the end of this file). */
 @media screen {
   html:not([data-theme="light"]) {
     --bg: #090909;
@@ -30,7 +32,10 @@
   }
   html:not([data-theme="light"]) :is(.skylit-full-dashboard, .trinity-layout) {
     --desk-bg: #111111; --desk-panel: #191919; --desk-border: #454545;
+    --text: var(--text-primary);
+    --text-dim: var(--text-secondary);
     background: var(--floww-surface);
+    color: var(--text-primary);
   }
   html:not([data-theme="light"]) :is(
     .skylit-control-bar, .skylit-col-bar, .skylit-selection-strip,
@@ -47,7 +52,13 @@
     .assistant-settings-dialog header, .related-ticker-panel, .related-product-list li,
     .range-workspace, .range-matrix th, .skylit-info-popover, .saved-stock-activity,
     .saved-stock-activity tbody tr:nth-child(even), .tv-root, .tv-header,
-    .tv-cell, .tv-legend, .tidehunter-public-bridge
+    .tv-cell, .tv-legend, .tv-cell-h-notes, .tv-status,
+    .tv-error-panel, .tv-renderer-panel, .wall-desk .panelhead, .tidehunter-public-bridge,
+    .heatmap-landmarks, .replay-readout, .profiles-panel,
+    .workspace-layouts, .triad-scenario, .floww-account-menu-content,
+    .trinity-layout .triad-control-band, .trinity-layout .triad-context-disclosure,
+    .trinity-layout .triad-empty-desk, .triad-scope-notice, .context-mini,
+    .triad-pane-units-body, .review-inspector-tabs, .quick-trade-panel
   ) {
     background: var(--floww-raised);
     border-color: var(--floww-line);
@@ -67,8 +78,16 @@
     .range-replay-controls button, .range-replay-controls input, .range-replay-controls select,
     .range-inspector button, .range-inspector input, .range-inspector select,
     .saved-stock-activity button, .saved-stock-activity th,
-    .tv-controls select, .tv-subtab:not(.on), .public-handoff-review button,
-    .tidehunter-public-bridge > button
+    .tv-controls select, .tv-subtab:not(.on), .tv-retry, .public-handoff-review button,
+    .tidehunter-public-bridge > button,
+    .floww-account-menu > summary, .floww-account-menu-content button,
+    .triad-empty-desk-action, .triad-scope-notice button,
+    .context-mini button:not([aria-pressed="true"]),
+    .triad-band-controls select, .shortcut-row kbd,
+    .range-workspace button:not([aria-pressed="true"]),
+    .range-workspace input, .range-workspace select,
+    .review-inspector .exact-contract-review input:not([type="checkbox"]):not([type="range"]),
+    .review-inspector .exact-contract-review select
   ) {
     background: var(--floww-control);
     border-color: var(--floww-line);
@@ -77,11 +96,134 @@
     .recorded-chart-surface, .assistant-panel .assistant-composer textarea,
     .assistant-history-date input, .assistant-settings-dialog .lodestar-model-settings select,
     .public-handoff-review input, .public-handoff-review select, .public-handoff-review textarea,
-    .saved-stock-details pre
+    .saved-stock-details pre,
+    .skylit-heatmap-container, .skylit-compare-pane, .skylit-sidebar-area,
+    .skylit-bottom-bar, .triad-pane, .heatmap-view-controls
   ) {
     background: var(--floww-surface);
     border-color: var(--floww-line);
   }
+  /* Inner chart/map chrome predates the shared theme. Target neutral controls
+     explicitly so signed cells, plotted series and state accents retain meaning. */
+  html:not([data-theme="light"]) :is(
+    .heatmap-view-controls button, .heatmap-landmarks-zones > summary,
+    .pane-layout-picker button, .pane-focus-btn, .workspace-layouts > summary,
+    .workspace-layouts-row button, .touch-replay, .shortcut-row button,
+    .workspace-controls [data-testid="atlas-toggle"],
+    .indicators-panel button, .indicators-panel select,
+    .indicators-panel input:not([type="checkbox"]):not([type="range"]),
+    .price-history-summary, .stock-inspector-tab, .triad-pane-header button
+  ) { background: var(--floww-control); }
+  html:not([data-theme="light"]) :is(
+    .heatmap-view-controls button, .heatmap-landmarks-zones:not([open]) > summary,
+    .pane-layout-picker button:not([aria-pressed="true"]),
+    .pane-focus-btn:not([aria-pressed="true"]), .workspace-layouts > summary,
+    .workspace-layouts-row button:not([aria-pressed="true"]),
+    .touch-replay:not([aria-pressed="true"]), .shortcut-row button:not([aria-pressed="true"]),
+    .workspace-controls [data-testid="atlas-toggle"]:not([aria-pressed="true"]),
+    .indicators-panel button:not([aria-pressed="true"]), .indicators-panel select,
+    .indicators-panel input:not([type="checkbox"]):not([type="range"]),
+    .price-history-summary, .stock-inspector-tab:not([aria-selected="true"]),
+    .triad-pane-header button:not([aria-expanded="true"])
+  ) { border-color: var(--floww-line); color: var(--text-primary); }
+  html:not([data-theme="light"]) :is(
+    .heatmap-landmarks, .heatmap-landmarks summary,
+    .skylit-col-bar, .skylit-drawer, .triad-pane-header
+  ) { color: var(--text-primary); }
+  html:not([data-theme="light"]) :is(
+    .heatmap-landmarks-heading > span, .heatmap-landmarks-levels dt,
+    .heatmap-landmarks p, .chart-map-level-note,
+    .replay-readout span, .profiles-panel span, .pane-layout-note,
+    .chart-watermark, .workspace-shortcuts
+  ) { color: var(--text-secondary); }
+  html:not([data-theme="light"]) :is(.tv-subtab:not(.on), .indicators-panel .ind-chip) {
+    color: var(--text-secondary);
+  }
+  html:not([data-theme="light"]) :is(
+    .tv-root, .tv-title, .tv-cell-h, .tv-renderer-title, .tv-error-title, .tv-retry,
+    .wall-desk
+  ) { color: var(--text-primary); }
+  html:not([data-theme="light"]) :is(
+    .tv-sub, .tv-controls, .tv-cell-h small, .tv-legend,
+    .tv-cell-h-notes, .tv-status, .tv-renderer-msg, .tv-error-msg, .tv-error-note,
+    .tv-source-details > summary,
+    .wall-desk details, .wall-desk .chart-caption, .wall-desk-clocks, .wall-desk .contract-table th
+  ) { color: var(--text-secondary); }
+  html:not([data-theme="light"]) .tv-source-details > summary::before,
+  html:not([data-theme="light"]) .trinity-layout .triad-context-disclosure::before {
+    color: var(--text-secondary);
+  }
+  html:not([data-theme="light"]) .recorded-price-chart {
+    --chart-border: var(--floww-line);
+  }
+  html:not([data-theme="light"]) .skylit-grid-container {
+    background: var(--floww-surface) !important;
+  }
+  html:not([data-theme="light"]) :is(
+    .skylit-control-bar .skylit-mode-btn, .skylit-control-bar .skylit-trade-mode-btn,
+    .skylit-control-bar .skylit-action-btn, .skylit-control-bar .skylit-nav-arrow
+  ):not(.active):not(.primary):not([aria-pressed="true"]):not(:disabled) {
+    background: var(--floww-control);
+    border-color: var(--floww-line);
+    color: var(--text-primary);
+  }
+  html:not([data-theme="light"]) :is(
+    .skylit-tf-select, .skylit-control-overflow > summary,
+    .skylit-replay-strip select, .skylit-replay-strip input[type="date"],
+    .triad-band-controls select, .floww-account-menu > summary,
+    .floww-account-menu-content button, .triad-empty-desk-action,
+    .triad-scope-notice button, .context-mini button:not([aria-pressed="true"])
+  ) { color: var(--text-primary); border-color: var(--floww-line); }
+  html:not([data-theme="light"]) .triad-pane-units:not([open]) > summary {
+    border-color: var(--floww-line);
+    color: var(--text-primary);
+  }
+  html:not([data-theme="light"]) :is(
+    .recorded-price-chart, .review-inspector, .review-inspector summary,
+    .wall-current-heading, .wall-focused-value, .wall-focused-amounts dd,
+    .skylit-canvas-title, .solstice-symbol-pane header,
+    .range-workspace, .floww-account-menu-content strong, .floww-account-menu-content dd,
+    .related-ticker-panel, .related-body h3
+  ) { color: var(--text-primary); }
+  html:not([data-theme="light"]) :is(
+    .skylit-selection-strip, .skylit-info-btn, .solstice-symbol-heading,
+    .solstice-symbol-pane header small, .solstice-symbol-inspector,
+    .trin-legend-scale, .trin-legend-basis, .panelhead small, .panelhead .chart-legend,
+    .chart-caption, .triad-scope-notice p, .context-mini small, .triad-readiness small,
+    .triad-board-status, .triad-context-method, .triad-loaded-dates,
+    .triad-empty-desk-identity, .lodestar-ask-note,
+    .recorded-chart-readout strong span, .recorded-chart-footer,
+    .price-history-coverage, .price-history-details, .workspace-layouts-import,
+    .ind-count, .ind-note, .ind-row.ind-unavailable .ind-name, .ind-editors label,
+    .review-selection-summary span, .review-selection-summary details,
+    .review-inspector-panel .skylit-metric-label, .skylit-compare-basis,
+    .wall-identity-line, .wall-focused-meta, .wall-focused-heading,
+    .wall-focused-amounts dt, .contract-scroll-hint,
+    .review-inspector-context dt, .exact-contract-review dl dt, .range-note,
+    .saved-stock-activity, .saved-stock-activity details dt,
+    .floww-account-menu-content dt, .floww-account-menu-content small,
+    .related-header small, .related-controls label, .related-body p,
+    .related-note, .related-product-list li small, .related-legend,
+    .related-comparison-list small, .related-comparison-list .unknown
+  ) { color: var(--text-secondary); }
+  html:not([data-theme="light"]) .review-inspector-tabs [role="tab"]:not([aria-selected="true"]) {
+    color: var(--text-secondary);
+  }
+  html:not([data-theme="light"]) :is(
+    .review-inspector-tabs, .review-selection-summary, .wall-focused-chip,
+    .wall-exposure-details, .wall-details-section, .review-inspector-context,
+    .exact-contract-review dl, .review-inspector .exact-contract-review fieldset,
+    .skylit-drawer-header, .table-wrap, .solstice-expiry-coverage th,
+    .solstice-expiry-coverage td, .saved-stock-activity td,
+    .saved-stock-table-wrap, .saved-stock-empty, .related-comparison-list li
+  ) { border-color: var(--border); }
+  html:not([data-theme="light"]) .pane-slot { border-color: var(--floww-line); }
+  html:not([data-theme="light"]) .related-heat-strip .unknown {
+    background: var(--floww-control);
+    color: var(--text-secondary);
+    border-color: var(--floww-line);
+  }
+  html:not([data-theme="light"]) .tv-retry:hover { background: #303030; }
   html:not([data-theme="light"]) :is(.lodestar-ask-item:hover, .assistant-panel .assistant-starters button:hover,
     .saved-stock-activity button:hover:enabled, .saved-stock-activity tbody tr:hover) {
     background: #303030;
@@ -104,4 +246,35 @@
     border-color: var(--floww-line) !important;
   }
   html:not([data-theme="light"]) ::-webkit-scrollbar-thumb:hover { background: #666666; }
+  /* The shared App health chip is a control, not stray text over the page:
+     it gets the same restrained gray/black surface as the other controls. */
+  html:not([data-theme="light"]) aside[aria-label="App health"] > button {
+    background: var(--floww-raised);
+    border: 1px solid var(--floww-line);
+    color: var(--text-primary);
+    border-radius: 4px;
+    padding: 4px 8px;
+    min-height: 28px;
+    cursor: pointer;
+  }
+  html:not([data-theme="light"]) aside[aria-label="App health"] section {
+    background: var(--floww-raised) !important;
+    border-color: var(--floww-line) !important;
+    color: var(--text-primary) !important;
+  }
+}
+
+/* S02: the bottom-right corner is a reserved lane for the shared floating
+   controls (App health, Ask Flow). The Stock Filters/Analytics strip used to
+   end underneath the Ask Flow opener, so its open-range control could not be
+   pressed; on narrow screens the App health chip sat under the same opener.
+   Geometry only: no layout direction, chart size or control ownership change.
+   The Market inspector's own clearance belongs to the inspector owner. */
+@media screen and (min-width: 1024px) {
+  body:has(.heatseeker-layout) .mobile-toggle-bar { padding-right: 140px; }
+  body:has(.heatseeker-layout) .floww-page-footer { padding-right: 140px; }
+}
+@media screen and (max-width: 768px) {
+  /* The chip's position is an inline style, so the rule needs !important. */
+  aside[aria-label="App health"] { bottom: calc(116px + env(safe-area-inset-bottom)) !important; }
 }

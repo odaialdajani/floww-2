@@ -25,6 +25,13 @@ from datetime import UTC, datetime
 from typing import Any
 
 from services.execution_engine import ExecutionEngine, ExecutionResult, MarketState, Order
+from services.paper_mark_provenance import (
+    MARK_OK,
+    REASON_NO_MARK_SUPPLIED,
+    build_mark_envelope,
+    mark_record,
+    normalize_marks,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -337,13 +344,20 @@ class PaperTradingEngine:
 
         return {"approved": True, "reason": ""}
 
-    def get_portfolio_summary(self, current_prices: dict[str, float] | None = None) -> dict[str, Any]:
+    def get_portfolio_summary(self, current_prices: dict[str, float] | None = None,
+                              *, marks: dict[str, Any] | None = None) -> dict[str, Any]:
         """Get current portfolio summary.
 
         Positions are stored per ``symbol_side``; here we NET the buy and sell
         legs per symbol so a closed round-trip shows flat (0 open positions, ~0
         P&L) instead of double-counting both legs as open longs.
+
+        ``marks`` accepts typed mark records with their provenance (see
+        ``services.paper_mark_provenance``). The legacy ``current_prices`` map
+        still works; its marks carry no source, so their provenance is
+        explicitly undeclared.
         """
+        mark_map = normalize_marks(current_prices, marks)
         # Aggregate buy/sell legs into a net position per symbol.
         by_symbol: dict[str, dict[str, float]] = {}
         for pos in self.positions.values():
@@ -366,7 +380,6 @@ class PaperTradingEngine:
                     agg["sell_basis_known"] = False
 
         lots = _replay_open_lots(self.trade_history)
-        prices = current_prices or {}
         total_value = self.cash
         marked_value = 0.0
         unrealized_subtotal = 0.0
@@ -386,8 +399,10 @@ class PaperTradingEngine:
                 avg_cost = agg["sell_cost"] / agg["sell_qty"]
             else:
                 avg_cost = None  # incomplete journal cannot establish the remaining lot
-            mark = prices.get(symbol)
-            mark = float(mark) if _valid_paper_value(mark) else None
+            mark_record_for_symbol = mark_map.get(symbol)
+            mark = (mark_record_for_symbol["price"]
+                    if mark_record_for_symbol
+                    and mark_record_for_symbol.get("status") == MARK_OK else None)
             if mark is None:
                 missing_marks += 1
             else:
@@ -397,14 +412,19 @@ class PaperTradingEngine:
                 missing_basis += 1
             elif mark is not None:
                 unrealized_subtotal += (mark - avg_cost) * net_qty
+            mark_provenance = mark_record_for_symbol or mark_record(
+                symbol, None, reason=REASON_NO_MARK_SUPPLIED)
             positions_summary.append({
                 "symbol": symbol,
                 "side": "long" if net_qty > 0 else "short",
                 "quantity": net_qty,
                 "avg_cost": round(avg_cost, 4) if avg_cost is not None else None,
                 "mark_price": mark,
-                "mark_source": None,
-                "mark_time": None,
+                "mark_source": mark_provenance.get("source")
+                or mark_provenance.get("provider"),
+                "mark_time": mark_provenance.get("event_time")
+                or mark_provenance.get("fetched_at"),
+                "mark": mark_provenance,
                 "unrealized": round((mark - avg_cost) * net_qty, 2)
                 if mark is not None and avg_cost is not None else None,
             })
@@ -428,6 +448,7 @@ class PaperTradingEngine:
             "known_marked_subtotal": round(unrealized_subtotal, 2),
             "marks_coverage": {"known": len(positions_summary) - missing_marks, "missing": missing_marks},
             "basis_coverage": {"known": len(positions_summary) - missing_basis, "missing": missing_basis},
+            "marks": build_mark_envelope(mark_map),
             "open_positions": len(positions_summary),
             "positions": positions_summary,
             "total_trades": len(self.trade_history),
@@ -437,17 +458,19 @@ class PaperTradingEngine:
         return self.trade_history[-limit:]
 
     def get_pnl_attribution(
-        self, current_prices: dict[str, float] | None = None
+        self, current_prices: dict[str, float] | None = None,
+        *, marks: dict[str, Any] | None = None
     ) -> dict[str, Any]:
         """P&L attribution by ticker (Phase 6.5 remainder, 2026-09-05).
 
         Replays trade_history in order using the current open lot's average
         cost. Commissions are reported separately, not allocated to lots.
-        Unrealized P&L needs live marks: pass current_prices
-        {symbol: price} or it reports null (honest unknown, never
-        mark-to-model).
+        Unrealized P&L needs live marks: pass typed ``marks`` records (see
+        ``services.paper_mark_provenance``) or the legacy ``current_prices``
+        map {symbol: price}. Without a mark it reports null (honest unknown,
+        never mark-to-model).
         """
-        prices = current_prices or {}
+        mark_map = normalize_marks(current_prices, marks)
         by_symbol = _replay_open_lots(self.trade_history)
 
         symbols = []
@@ -461,11 +484,16 @@ class PaperTradingEngine:
                 symbols.append({"symbol": sym, "trades": a["trades"], "net_qty": None,
                                 "realized_pnl": None, "unrealized_pnl": None,
                                 "commissions": round(a["commissions"], 2)
-                                if a["fees_complete"] else None})
+                                if a["fees_complete"] else None,
+                                "mark": mark_map.get(sym) or mark_record(
+                                    sym, None, reason=REASON_NO_MARK_SUPPLIED)})
                 continue
             net = a["quantity"]
-            mark = prices.get(sym)
-            if _valid_paper_value(mark) and net != 0:
+            mark_provenance = mark_map.get(sym) or mark_record(
+                sym, None, reason=REASON_NO_MARK_SUPPLIED)
+            mark = (mark_provenance["price"]
+                    if mark_provenance.get("status") == MARK_OK else None)
+            if mark is not None and net != 0:
                 unrealized = (mark - a["avg_cost"]) * net
             else:
                 unrealized = None  # no live mark: unknown, never mark-to-model
@@ -481,6 +509,7 @@ class PaperTradingEngine:
                 "realized_pnl": round(a["realized_pnl"], 2),
                 "unrealized_pnl": round(unrealized, 2) if unrealized is not None else None,
                 "commissions": round(a["commissions"], 2),
+                "mark": mark_provenance,
             })
         # Root correction (2026-10-27): a full-book aggregate may not silently
         # sum only the marked subset. With ANY held symbol unmarked, the
@@ -494,6 +523,7 @@ class PaperTradingEngine:
             "known_marked_subtotal": round(total_unrealized, 2),
             "unmarked_symbols": unmarked_symbols,
             "incomplete_history_symbols": incomplete_history_symbols,
+            "marks": build_mark_envelope(mark_map),
             "data_source": "paper_trading",
         }
 

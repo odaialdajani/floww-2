@@ -5,11 +5,18 @@ import { useHeatseeker } from "../../hooks/useHeatseeker";
 /**
  * Beach Ball pattern indicator — shows when spot is stretched past king node.
  * Compact card with脉冲 animation when active.
+ *
+ * The reading is the measured DISTANCE from the king node, in points and in
+ * percent. The legacy probability-like "confidence" label is retired: a
+ * distance ratio is not a calibrated outcome probability, and no time
+ * series exists here to support one. Overshoot, unwind and squeeze stay
+ * unverified hypotheses, so the card shows distance and nothing more.
  */
 export default function BeachBallIndicator({ ticker = "SPY" }) {
   const { data, loading, error } = useHeatseeker("beach-ball", { ticker });
   const active = !!data?.active;
-  const conf = Math.max(0, Math.min(1, Number(data?.confidence) || 0));
+  const pts = data?.spot_distance_points;
+  const pct = data?.spot_distance_pct;
   const dirSign = data?.direction === "above" ? 1 : data?.direction === "below" ? -1 : 0;
 
   return (
@@ -35,21 +42,14 @@ export default function BeachBallIndicator({ ticker = "SPY" }) {
           <div className="flex justify-between items-center">
             <span className="text-slate-400">Distance</span>
             <span className={`mono font-bold ${dirSign > 0 ? "text-emerald-400" : dirSign < 0 ? "text-rose-400" : "text-slate-300"}`}>
-              {data.spot_distance_pct != null ? `${(data.spot_distance_pct * 100).toFixed(2)}%` : "—"}
+              {pts != null && pct != null
+                ? `${pts >= 0 ? "+" : "−"}$${fmt(Math.abs(pts), 2)} pts · ${(pct * 100).toFixed(2)}%`
+                : "—"}
             </span>
           </div>
           <div className="flex justify-between items-center">
             <span className="text-slate-400">Direction</span>
             <span className="mono text-slate-300 capitalize">{data.direction || "—"}</span>
-          </div>
-          <div>
-            <div className="flex justify-between text-[10px] mb-1">
-              <span className="text-slate-400">Confidence</span>
-              <span className="mono text-slate-300">{Math.round(conf * 100)}%</span>
-            </div>
-            <div className="relative h-2 bg-slate-800/60 rounded-full overflow-hidden">
-              <div className="absolute inset-y-0 left-0 bg-gradient-to-r from-amber-500 to-amber-400 rounded-full transition-all" style={{ width: `${conf * 100}%` }} />
-            </div>
           </div>
         </div>
       )}

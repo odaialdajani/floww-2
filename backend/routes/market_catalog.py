@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, Query
 
-from services.market_catalog import get_catalog
+from services.market_catalog import get_catalog_page
 
 router = APIRouter(prefix="/api/market", tags=["market-directory"])
 
@@ -16,15 +16,7 @@ router = APIRouter(prefix="/api/market", tags=["market-directory"])
 async def catalog_page(page: int = Query(1, ge=1), limit: int = Query(100, ge=1, le=5000),
                        q: str = Query("", max_length=40), options_only: bool = False,
                        sector: str = Query("", max_length=100)):
-    catalog = await get_catalog()
-    query = q.strip().upper().lstrip("$")
-    records = [row for row in catalog["instruments"]
-               if (not query or query in row["symbol"]) and (not options_only or row["options"])
-               and (not sector.strip() or row.get("sector") == sector.strip())]
-    start = (page - 1) * limit
-    return {**{k: v for k, v in catalog.items() if k != "instruments"},
-            "instruments": records[start:start + limit], "matches": len(records),
-            "page": page, "limit": limit, "has_more": start + limit < len(records)}
+    return await get_catalog_page(page=page, limit=limit, q=q, options_only=options_only, sector=sector)
 
 
 def _count(value):

@@ -114,7 +114,7 @@
 .assistant-resize-handle[aria-disabled="true"]{cursor:default;}
 .floww-workspace[data-chat-layout="stacked"]>.assistant-docked{position:relative;height:min(680px,100dvh);border-width:1px 0 0;}
 .floww-workspace[data-chat-layout="side"] .assistant-open.lodestar-open{right:calc(var(--assistant-pane-width) + 20px);}
-.floww-workspace[data-chat-layout="side"]>[aria-label="App health"]{right:calc(var(--assistant-pane-width) + 20px)!important;max-width:calc(100vw - var(--assistant-pane-width) - 84px);}
+.floww-workspace[data-chat-layout="side"] .workspace-utilities>[aria-label="App health"]{right:calc(var(--assistant-pane-width) + 20px)!important;max-width:calc(100vw - var(--assistant-pane-width) - 84px);}
 @media(prefers-reduced-motion:reduce){.floww-workspace{scroll-behavior:auto;}}
 
 .assistant-docked .assistant-composer-actions{flex-wrap:wrap;}
@@ -122,11 +122,11 @@
 
 /* Keep the chat composer clear of fixed mobile controls and its own launcher. */
 .floww-workspace[data-chat-layout="stacked"]>.assistant-docked{margin-bottom:calc(88px + env(safe-area-inset-bottom));scroll-margin-block-end:calc(88px + env(safe-area-inset-bottom));}
-.floww-workspace[data-chat-layout="side"]>.assistant-open.lodestar-open,.floww-workspace[data-chat-layout="stacked"]>.assistant-open.lodestar-open{display:none;}
+.floww-workspace[data-chat-layout="side"] .workspace-utilities>.assistant-open.lodestar-open,.floww-workspace[data-chat-layout="stacked"] .workspace-utilities>.assistant-open.lodestar-open{display:none;}
 
 .floww-workspace[data-chat-layout="stacked"]>.assistant-docked>.assistant-header{position:sticky;top:0;z-index:3;background:#171e27;}
 
-.floww-workspace[data-chat-layout="stacked"]>[aria-label="App health"]{position:static!important;inset:auto!important;justify-self:end;margin:0 12px 12px;max-width:calc(100% - 24px);}
+.floww-workspace[data-chat-layout="stacked"] .workspace-utilities>[aria-label="App health"]{position:static!important;inset:auto!important;justify-self:end;margin:0 12px 12px;max-width:calc(100% - 24px);}
 
 /* Saved pages stay bounded; these controls wrap inside the dock and phone. */
 .assistant-history-controls{flex-shrink:0;padding:9px 18px;border-bottom:1px solid #34404d;min-width:0;}
@@ -143,3 +143,17 @@
 .assistant-panel .assistant-history-date button{margin:0;flex:0 0 auto;font-size:11px;padding:7px 9px;white-space:normal;}
 .assistant-history-date>small{display:block;margin:7px 0;color:#a5b5c4;}
 @media(max-width:768px){.assistant-history-controls{padding:8px 14px;}.assistant-history-date-actions{gap:6px;}.assistant-panel .assistant-history-date button{padding:7px 8px;}}
+
+/* The stable group leaves the existing wide desktop floating controls intact.
+   Stock focus and narrow desktop reserve actual flex space above the chart. */
+.workspace-utilities { display:contents; }
+.floww-workspace-main:has(.heatseeker-layout):has(.price-node-focused) > .workspace-utilities { display:flex; flex:0 0 auto; flex-direction:row; flex-wrap:wrap; justify-content:flex-end; align-items:flex-start; gap:8px; padding:4px 10px; border-bottom:1px solid #34404d; }
+.floww-workspace-main:has(.heatseeker-layout):has(.price-node-focused) > .workspace-utilities > .assistant-open { position:static; inset:auto; box-shadow:none; min-height:32px; }
+.floww-workspace-main:has(.heatseeker-layout):has(.price-node-focused) > .workspace-utilities > [aria-label="App health"] { position:static!important; inset:auto!important; margin:0; max-width:100%!important; }
+.floww-workspace-main:has(.heatseeker-layout):has(.price-node-focused) > .workspace-utilities > [aria-label="App health"] section { max-width:100%!important; max-height:30dvh!important; box-sizing:border-box; }
+@media (max-width:960px) {
+ .floww-workspace-main:has(.heatseeker-layout) > .workspace-utilities { display:flex; flex:0 0 auto; flex-direction:row; flex-wrap:wrap; justify-content:flex-end; align-items:flex-start; gap:8px; padding:4px 10px; border-bottom:1px solid #34404d; }
+ .floww-workspace-main:has(.heatseeker-layout) > .workspace-utilities > .assistant-open { position:static; inset:auto; box-shadow:none; min-height:32px; }
+ .floww-workspace-main:has(.heatseeker-layout) > .workspace-utilities > [aria-label="App health"] { position:static!important; inset:auto!important; margin:0; max-width:100%!important; }
+ .floww-workspace-main:has(.heatseeker-layout) > .workspace-utilities > [aria-label="App health"] section { max-width:100%!important; max-height:30dvh!important; box-sizing:border-box; }
+}

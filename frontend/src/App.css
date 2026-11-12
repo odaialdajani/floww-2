@@ -141,8 +141,8 @@
   min-height: 0;
 }
 /* The page wrapper between main and the layout joins the flex chain. */
-.min-h-screen > main:has(.heatseeker-layout) > div,
-.floww-workspace-main:has(.heatseeker-layout) > div {
+.min-h-screen > main:has(.heatseeker-layout) > div:not(.workspace-utilities),
+.floww-workspace-main:has(.heatseeker-layout) > div:not(.workspace-utilities) {
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
@@ -4940,3 +4940,15 @@ input[class*="bg-slate-800"], select[class*="bg-slate-800"], textarea[class*="bg
     max-height: min(70vh, calc(100vh - 96px)); }
   .stock-inspector-tabs { width: 100%; }
 }
+
+/* Stock narrow desktop/high zoom: keep search and each action within the
+   available header; truthful counts remain in the existing disclosure. */
+@media (max-width:960px) {
+ .floww-workspace-main:has(.heatseeker-layout) .ap-header-inner { flex-wrap:wrap; gap:6px 10px; padding:6px 10px; }
+ .floww-workspace-main:has(.heatseeker-layout) .ap-header-actions { flex:1 1 340px; flex-wrap:wrap; max-width:100%; min-width:0; }
+ .floww-workspace-main:has(.heatseeker-layout) .floww-header-symbol-picker { flex:1 1 240px; min-width:0; }
+ .floww-workspace-main:has(.heatseeker-layout) .ticker-picker-control input { min-width:0; }
+ .floww-workspace-main:has(.heatseeker-layout) .ticker-picker-feed-counts span { white-space:normal; overflow-wrap:anywhere; }
+}
+/* Focus keeps title/search/actions rather than a second fixed header layer. */
+.floww-workspace-main:has(.heatseeker-layout):has(.price-node-focused) .ap-header-inner { padding-block:4px; min-height:40px; }

@@ -12,6 +12,7 @@ All /api/analytics/* endpoints now:
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import UTC, datetime
 
@@ -65,7 +66,8 @@ async def implied_pdf(
         from server import _sanitize
         raw = await _cache.get_chain(ticker, expiries, max_age_seconds, _coordinator)
         _check_chain(raw, ticker)
-        return _sanitize(calc_implied_pdf(raw["spot"], raw["contracts"]))
+        result = await asyncio.to_thread(calc_implied_pdf, raw["spot"], raw["contracts"])
+        return await asyncio.to_thread(_sanitize, result)
     except HTTPException:
         raise
     except Exception as e:
@@ -84,7 +86,8 @@ async def regime(
         from server import _sanitize
         raw = await _cache.get_chain(ticker, expiries, max_age_seconds, _coordinator)
         _check_chain(raw, ticker)
-        return _sanitize(calc_market_regime(raw["spot"], raw["contracts"]))
+        result = await asyncio.to_thread(calc_market_regime, raw["spot"], raw["contracts"])
+        return await asyncio.to_thread(_sanitize, result)
     except HTTPException:
         raise
     except Exception as e:
@@ -103,7 +106,9 @@ async def hedge_impulse(
         from server import _sanitize
         raw = await _cache.get_chain(ticker, expiries, max_age_seconds, _coordinator)
         _check_chain(raw, ticker)
-        return _sanitize(calc_hedge_impulse_curve(raw["spot"], raw["contracts"], ticker.strip().upper()))
+        result = await asyncio.to_thread(calc_hedge_impulse_curve, raw["spot"],
+                                         raw["contracts"], ticker.strip().upper())
+        return await asyncio.to_thread(_sanitize, result)
     except HTTPException:
         raise
     except Exception as e:
@@ -122,7 +127,9 @@ async def pressure_cloud(
         from server import _sanitize
         raw = await _cache.get_chain(ticker, expiries, max_age_seconds, _coordinator)
         _check_chain(raw, ticker)
-        return _sanitize(calc_pressure_cloud(raw["spot"], raw["contracts"], ticker.strip().upper()))
+        result = await asyncio.to_thread(calc_pressure_cloud, raw["spot"],
+                                         raw["contracts"], ticker.strip().upper())
+        return await asyncio.to_thread(_sanitize, result)
     except HTTPException:
         raise
     except Exception as e:
@@ -141,7 +148,9 @@ async def charm_integral_endpoint(
         from server import _sanitize
         raw = await _cache.get_chain(ticker, expiries, max_age_seconds, _coordinator)
         _check_chain(raw, ticker)
-        return _sanitize(calc_charm_integral(raw["spot"], raw["contracts"], ticker.strip().upper()))
+        result = await asyncio.to_thread(calc_charm_integral, raw["spot"],
+                                         raw["contracts"], ticker.strip().upper())
+        return await asyncio.to_thread(_sanitize, result)
     except HTTPException:
         raise
     except Exception as e:
@@ -248,14 +257,20 @@ async def advanced_analytics(
         contracts = raw["contracts"]
         t = ticker.strip().upper()
 
-        return _sanitize({
+        def _advanced_surfaces():
+            return {
+                "implied_pdf": calc_implied_pdf(spot, contracts),
+                "regime": calc_market_regime(spot, contracts),
+                "hedge_impulse": calc_hedge_impulse_curve(spot, contracts, t),
+                "pressure_cloud": calc_pressure_cloud(spot, contracts, t),
+                "charm_integral": calc_charm_integral(spot, contracts, t),
+            }
+
+        surfaces = await asyncio.to_thread(_advanced_surfaces)
+        return await asyncio.to_thread(_sanitize, {
             "ticker": t,
             "spot": spot,
-            "implied_pdf": calc_implied_pdf(spot, contracts),
-            "regime": calc_market_regime(spot, contracts),
-            "hedge_impulse": calc_hedge_impulse_curve(spot, contracts, t),
-            "pressure_cloud": calc_pressure_cloud(spot, contracts, t),
-            "charm_integral": calc_charm_integral(spot, contracts, t),
+            **surfaces,
             "asof": datetime.now(UTC).isoformat(),
         })
     except HTTPException:
@@ -278,7 +293,9 @@ async def gamma_flip(
         spot = raw.get("spot")
         if not spot or spot != spot or not raw.get("contracts"):
             raise HTTPException(404, f"No options data for {ticker}")
-        return _sanitize(calc_gamma_flip_levels(spot, raw["contracts"], ticker.strip().upper()))
+        result = await asyncio.to_thread(calc_gamma_flip_levels, spot, raw["contracts"],
+                                         ticker.strip().upper())
+        return await asyncio.to_thread(_sanitize, result)
     except HTTPException:
         raise
     except Exception as e:
@@ -302,25 +319,31 @@ async def daily_checklist(
         if isinstance(spot, bool) or not isinstance(spot, (int, float)) or not math.isfinite(spot) or spot <= 0 or not raw.get("contracts"):
             raise HTTPException(404, f"No options data for {ticker}")
 
-        gf = calc_gamma_flip_levels(spot, raw["contracts"], ticker.strip().upper())
+        gf = await asyncio.to_thread(calc_gamma_flip_levels, spot, raw["contracts"],
+                                     ticker.strip().upper())
         # Do not let the legacy calculator replace absent IV with its 20% default.
         iv_contracts = [c for c in raw["contracts"] if c.get("type") in ("call", "put") and all(
             not isinstance(c.get(k), bool) and isinstance(c.get(k), (int, float))
             and math.isfinite(c[k]) and c[k] > 0 for k in ("strike", "iv")
         )]
-        regime_data = calc_market_regime(spot, iv_contracts) if iv_contracts else {}
-        skew_value = None
-        skew_expiry = None
-        for expiry in sorted({c.get("expiry") for c in iv_contracts if isinstance(c.get("expiry"), str)}):
-            calls = [c for c in iv_contracts if c.get("expiry") == expiry and c["type"] == "call" and c["strike"] > spot]
-            puts = [c for c in iv_contracts if c.get("expiry") == expiry and c["type"] == "put" and c["strike"] < spot]
-            if calls and puts:
-                skew_value = min(calls, key=lambda c: c["strike"])["iv"] - max(puts, key=lambda c: c["strike"])["iv"]
-                skew_expiry = expiry
-                break
+
+        def _regime_and_skew():
+            regime_data = calc_market_regime(spot, iv_contracts) if iv_contracts else {}
+            skew_value = None
+            skew_expiry = None
+            for expiry in sorted({c.get("expiry") for c in iv_contracts if isinstance(c.get("expiry"), str)}):
+                calls = [c for c in iv_contracts if c.get("expiry") == expiry and c["type"] == "call" and c["strike"] > spot]
+                puts = [c for c in iv_contracts if c.get("expiry") == expiry and c["type"] == "put" and c["strike"] < spot]
+                if calls and puts:
+                    skew_value = min(calls, key=lambda c: c["strike"])["iv"] - max(puts, key=lambda c: c["strike"])["iv"]
+                    skew_expiry = expiry
+                    break
+            return regime_data, skew_value, skew_expiry
+
+        regime_data, skew_value, skew_expiry = await asyncio.to_thread(_regime_and_skew)
         move_fraction = regime_data.get("expected_daily_spot_move")
         observed_at = raw.get("event_time")
-        return _sanitize({
+        return await asyncio.to_thread(_sanitize, {
             "ticker": ticker.strip().upper(), "spot": spot,
             "asof": datetime.now(UTC).isoformat(), "observed_at": observed_at,
             "data_source": raw.get("data_source"),

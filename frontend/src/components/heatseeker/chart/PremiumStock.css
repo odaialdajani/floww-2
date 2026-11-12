@@ -1,0 +1,275 @@
+/* Stock-only finish. Reuse the existing neutral/gold tokens; data colors,
+   saved state, study settings and provenance remain owned by their components. */
+.heatseeker-layout .skylit-full-dashboard {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-2, #454545) transparent;
+  scroll-padding-top: 48px;
+}
+.heatseeker-layout .skylit-full-dashboard > .skylit-study-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 45;
+  min-height: 42px;
+  gap: 4px;
+  padding: 4px 16px;
+  background: var(--floww-surface, var(--panel, #111111));
+  border-bottom: 1px solid var(--border, #282828);
+  font-size: 12px;
+  color: var(--text-dim, #a0a0a0);
+}
+.heatseeker-layout .skylit-full-dashboard .skylit-study-toolbar > button.skylit-trade-mode-btn,
+.heatseeker-layout .skylit-full-dashboard .skylit-study-toolbar > details > summary,
+.heatseeker-layout .skylit-full-dashboard .skylit-study-toolbar > [data-testid="saved-chart-readings"] > button {
+  min-height: 30px;
+  padding: 5px 10px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-dim, #a0a0a0);
+  font: 500 12px/1.4 var(--font-sans, Inter, sans-serif);
+  letter-spacing: 0;
+  box-shadow: none;
+}
+.heatseeker-layout .skylit-full-dashboard .skylit-study-toolbar > button.skylit-trade-mode-btn:hover,
+.heatseeker-layout .skylit-full-dashboard .skylit-study-toolbar > details > summary:hover,
+.heatseeker-layout .skylit-full-dashboard .skylit-study-toolbar > [data-testid="saved-chart-readings"] > button:hover {
+  background: var(--floww-raised, var(--panel-2, #191919));
+  color: var(--text, #e5e5e5);
+}
+.heatseeker-layout .skylit-full-dashboard .skylit-study-toolbar > button.skylit-trade-mode-btn[aria-pressed="true"] {
+  color: var(--gold, #e3c16a);
+  background: var(--floww-raised, var(--panel-2, #191919));
+}
+.heatseeker-layout .skylit-price-study {
+  padding: 0 16px 18px;
+}
+.heatseeker-layout .skylit-price-study > .price-node-history {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+.heatseeker-layout .skylit-full-dashboard .skylit-price-study .recorded-price-chart .recorded-chart-tools.recorded-chart-tools {
+  min-height: 42px;
+  gap: 7px;
+  padding: 4px 0 8px;
+  margin-bottom: 0;
+  border-bottom: 0;
+  font-family: var(--font-sans, Inter, sans-serif);
+}
+.heatseeker-layout .skylit-full-dashboard .skylit-price-study .recorded-price-chart .recorded-chart-tools.recorded-chart-tools button,
+.heatseeker-layout .skylit-full-dashboard .skylit-price-study .recorded-price-chart .recorded-chart-tools.recorded-chart-tools summary,
+.heatseeker-layout .skylit-full-dashboard .skylit-price-study .recorded-price-chart .recorded-chart-tools.recorded-chart-tools select,
+.heatseeker-layout .skylit-full-dashboard .skylit-price-study .recorded-price-chart .recorded-chart-tools .price-history-replay button {
+  min-height: 30px;
+  padding: 5px 8px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-dim, #a0a0a0);
+  font: 500 12px/1.35 var(--font-sans, Inter, sans-serif);
+  box-shadow: none;
+}
+.heatseeker-layout .skylit-full-dashboard .skylit-price-study .recorded-price-chart .recorded-chart-tools.recorded-chart-tools select,
+.heatseeker-layout .skylit-full-dashboard .skylit-price-study .recorded-price-chart .recorded-chart-tools .price-history-view-popover > summary {
+  background: var(--floww-raised, var(--panel-2, #191919));
+  border-color: var(--border, #282828);
+  color: var(--text, #e5e5e5);
+}
+.heatseeker-layout .skylit-full-dashboard .skylit-price-study .recorded-price-chart .recorded-chart-tools.recorded-chart-tools button:hover,
+.heatseeker-layout .skylit-full-dashboard .skylit-price-study .recorded-price-chart .recorded-chart-tools.recorded-chart-tools summary:hover {
+  background: var(--floww-control, var(--surface-3, #222222));
+  color: var(--text, #e5e5e5);
+}
+.heatseeker-layout .skylit-full-dashboard .skylit-price-study .recorded-price-chart .recorded-chart-tools .price-chart-symbol {
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: .02em;
+  margin-right: 2px;
+}
+.heatseeker-layout .skylit-full-dashboard .skylit-price-study .recorded-price-chart .recorded-chart-tools .stock-dock-actions {
+  gap: 1px;
+  padding: 0 7px;
+  margin-left: 4px;
+  border-inline: 1px solid var(--border, #282828);
+}
+.heatseeker-layout .skylit-full-dashboard .skylit-price-study .recorded-price-chart .recorded-chart-tools .recorded-chart-scale {
+  gap: 0;
+  padding-left: 5px;
+  border-left: 1px solid var(--border, #282828);
+}
+.heatseeker-layout .skylit-full-dashboard .skylit-price-study .recorded-price-chart .recorded-chart-tools .price-history-replay span,
+.heatseeker-layout .skylit-full-dashboard .skylit-price-study .recorded-price-chart .recorded-chart-tools .price-history-summary {
+  font-size: 12px;
+}
+.heatseeker-layout .skylit-full-dashboard .skylit-price-study .recorded-price-chart .recorded-chart-tools .price-history-replay input[type="range"] {
+  min-width: 60px;
+  width: 76px;
+}
+.heatseeker-layout .skylit-price-study .recorded-chart-surface {
+  height: clamp(360px, calc(100dvh - 470px), 680px);
+  min-height: 360px;
+  background: var(--floww-surface, var(--panel, #111111));
+  border: 1px solid var(--border, #282828);
+  border-radius: 5px;
+}
+.heatseeker-layout .skylit-full-dashboard .skylit-price-study .recorded-price-chart .recorded-chart-readout-overlay {
+  inset: 0 0 auto;
+  max-width: none;
+  min-height: 42px;
+  padding: 7px 12px;
+  gap: 5px 18px;
+  border: 0;
+  border-bottom: 1px solid var(--border, #282828);
+  border-radius: 0;
+  background: var(--floww-surface, var(--panel, #111111));
+  color: var(--text-dim, #a0a0a0);
+  font: 400 12px/1.4 var(--font-sans, Inter, sans-serif);
+  font-variant-numeric: tabular-nums;
+}
+.heatseeker-layout .skylit-full-dashboard .skylit-price-study .recorded-price-chart .recorded-chart-readout-overlay strong {
+  color: var(--text-dim, #a0a0a0);
+  font-size: 12px;
+  font-weight: 500;
+}
+.heatseeker-layout .recorded-chart-ohlc {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+.heatseeker-layout .recorded-chart-ohlc b {
+  color: var(--text, #e5e5e5);
+  font-weight: 550;
+  margin-left: 3px;
+}
+.heatseeker-layout .skylit-full-dashboard .skylit-price-study .recorded-price-chart .recorded-chart-readout-overlay .recorded-chart-data {
+  margin-left: auto;
+  min-width: 0;
+}
+.heatseeker-layout .skylit-full-dashboard .skylit-price-study .recorded-price-chart .recorded-chart-readout-overlay .recorded-chart-data > summary {
+  display: block;
+  max-width: none;
+  min-height: 26px;
+  padding: 3px 0;
+  white-space: normal;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 12px;
+  color: var(--text-dim, #a0a0a0);
+}
+.heatseeker-layout .skylit-full-dashboard .skylit-price-study .recorded-price-chart .recorded-chart-readout-overlay .recorded-chart-popover-content {
+  left: auto;
+  right: 0;
+}
+.heatseeker-layout .recorded-volume-pane {
+  display: block;
+  margin: 5px 0 0;
+}
+.heatseeker-layout .recorded-cvd-pane {
+  padding-top: 4px;
+  border-top: 1px solid var(--border, #282828);
+}
+.heatseeker-layout .pane-study-settings.pane-study-settings {
+  margin: 0;
+  padding: 5px 10px;
+  gap: 6px 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 12px;
+}
+.heatseeker-layout .pane-study-settings label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text-dim, #a0a0a0);
+}
+.heatseeker-layout .pane-study-settings select,
+.heatseeker-layout .pane-study-settings input,
+.heatseeker-layout .pane-study-settings .pane-study-approx,
+.heatseeker-layout .recorded-cvd-summary,
+.heatseeker-layout .recorded-momentum-label,
+.heatseeker-layout .profiles-panel-flow > span {
+  font-size: 12px;
+}
+.heatseeker-layout .recorded-chart-below {
+  padding-block: 6px;
+  border-top: 1px solid var(--border, #282828);
+  color: var(--text-dim, #a0a0a0);
+}
+.heatseeker-layout .price-future-whitespace {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  padding: 7px 0;
+  font-size: 12px;
+  color: var(--text-dim, #a0a0a0);
+}
+.heatseeker-layout .stock-inspector {
+  max-height: max(320px, calc(100dvh - 230px));
+  border-color: var(--border, #282828);
+  border-radius: 5px;
+  box-shadow: none;
+}
+.heatseeker-layout .stock-inspector-title,
+.heatseeker-layout .stock-inspector-tab,
+.heatseeker-layout .stock-inspector-body,
+.heatseeker-layout .stock-inspector-body label {
+  font-size: 12px;
+}
+.heatseeker-layout .stock-inspector-tab {
+  padding: 6px 9px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+}
+.heatseeker-layout .stock-inspector-tab[aria-selected="true"] {
+  color: var(--gold, #e3c16a);
+  border-bottom-color: var(--gold, #e3c16a);
+}
+.heatseeker-layout .price-node-focused .recorded-chart-surface {
+  height: clamp(300px, calc(100dvh - 370px), 820px);
+}
+@container (max-width: 1050px) {
+  .heatseeker-layout .skylit-full-dashboard .skylit-price-study .recorded-price-chart .recorded-chart-tools.recorded-chart-tools {
+    flex-wrap: wrap;
+    white-space: normal;
+    gap: 4px 6px;
+  }
+  .heatseeker-layout .skylit-full-dashboard .skylit-price-study .recorded-price-chart .recorded-chart-readout-overlay {
+    gap: 3px 12px;
+    padding: 5px 9px;
+  }
+  .heatseeker-layout .skylit-full-dashboard .skylit-price-study .recorded-price-chart .recorded-chart-readout-overlay .recorded-chart-data > summary {
+    max-width: none;
+  }
+}
+
+/* Saved readings has an incumbent inline border. This local presentation
+   override keeps its existing button and disclosure behavior intact. */
+.heatseeker-layout .skylit-full-dashboard .skylit-study-toolbar > [data-testid="saved-chart-readings"] > button {
+  border-color: transparent !important;
+  background: transparent !important;
+}
+.heatseeker-layout .recorded-price-label,
+.heatseeker-layout .recorded-time-label { fill: var(--text-dim, #a0a0a0); }
+.heatseeker-layout [data-testid="tpo-session-facts"],
+.heatseeker-layout [data-testid="profile-facts"] text { font-size: 12px; }
+
+.heatseeker-layout .skylit-full-dashboard .skylit-study-toolbar > [data-testid="saved-chart-readings"] {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+/* The history disclosure stays one line when the toolbar wraps. */
+.heatseeker-layout .skylit-full-dashboard .skylit-price-study .recorded-price-chart .recorded-chart-tools .price-history-summary {
+  max-width: 110px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

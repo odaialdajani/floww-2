@@ -298,9 +298,18 @@ async def _resolve_spot_observation(pb, symbol: str, account_id: str,
     substitution (P2 contract); (0.0, reason) when there is honestly no
     price so downstream fails over to the next provider.
     """
+    from services.public_api import resolve_public_instrument_type
+
+    # Public.com serves equities and indices from different books. The
+    # quote request has to name the book it wants: an index asked for as an
+    # equity is not answered, so the spot fell through to a fallback instead
+    # of the quote that was requested. The symbol is normalised here too, so
+    # the request always carries the provider's own symbol form.
+    symbol = _normalize_symbol(symbol)
+    quote_type = resolve_public_instrument_type(symbol, "quote")
     rejected_quote = False
     try:
-        quotes = await pb.get_quotes([symbol], account_id)
+        quotes = await pb.get_quotes([symbol], account_id, instrument_type=quote_type)
         q = _matching_quote(quotes, symbol)
         if q is not None:
             price, reason = _public_quote_spot(q, now=now)
@@ -326,7 +335,8 @@ async def _resolve_spot_observation(pb, symbol: str, account_id: str,
     closing = await completed_public_close(pb, symbol, now) if rejected_quote else None
     if closing is not None:
         return closing
-    if os.getenv("FLOWW_MARKET_DATA_PROVIDER") == "public":
+    from data_providers import market_data_policy
+    if market_data_policy()["public_only"]:
         return {"price": None, "source": "public-unavailable", "event_time": None,
                 "fetched_at": datetime.now(UTC).isoformat()}
     try:
@@ -617,7 +627,11 @@ async def _assemble_chain(
     via skip_log. Returns the floww-shaped chain dict (contracts may be
     empty — the caller decides the refusal).
     """
-    from services.solstice_time import resolve_series, time_to_expiry_years
+    from services.solstice_time import (
+        expiry_clock_lineage,
+        resolve_series,
+        time_to_expiry_years,
+    )
 
     # 3. Fetch chain for each expiry (up to max_expiries ACCEPTED). Only
     # expiries that actually return data are reported (requested vs returned
@@ -638,7 +652,7 @@ async def _assemble_chain(
     contracts: list[dict[str, Any]] = []
     exp_dates = []
     now_utc = datetime.now(UTC)
-    received_at = now_utc.isoformat()
+    received_at = None
     n_expired_dropped = 0
 
     max_attempts = min(len(expiry_walk), max_expiries + MAX_EXPIRY_SKIPS)
@@ -676,6 +690,9 @@ async def _assemble_chain(
             if skip_log is not None:
                 skip_log.append({"expiry": str(exp), "reason": "CHAIN_FETCH_FAILED"})
             continue
+        # Each serial response owns its receipt clock, including after a
+        # compatible-signature retry. Vendor quote clocks stay unchanged.
+        received_at = datetime.now(UTC).isoformat()
         for side in ("calls", "puts"):
             for oc in parsed.get(side, []):
                 # R7-06: series metadata reaches the clock (SPX monthly AM vs
@@ -688,12 +705,12 @@ async def _assemble_chain(
                 # A monthly SPX request can return PM-settled SPXW contracts.
                 # The actual option root owns its clock, not the display ticker.
                 import re
-                root_match = re.fullmatch(r"(SPXW|SPX)\s*\d{6}[CP]\d{8}", str(oc.symbol).upper())
+                root_match = re.fullmatch(r"(SPXW|SPX|SPY|QQQ)\s*\d{6}[CP]\d{8}", str(oc.symbol).upper())
                 clock_ticker = root_match.group(1) if root_match else ticker
                 oc_series = resolve_series(clock_ticker, exp_d.isoformat())
                 T, floored, t_reason = time_to_expiry_years(
                     oc.expiration or exp, now=now_utc, series=oc_series,
-                    ticker=ticker)
+                    ticker=ticker, option_root=root_match.group(1) if root_match else None)
                 if T is None:
                     if t_reason == "EXPIRED":
                         n_expired_dropped += 1
@@ -708,7 +725,7 @@ async def _assemble_chain(
                 # MagicMock/test doubles without explicit attrs must stay None.
                 def _ts(v: Any) -> str | None:
                     return v if isinstance(v, str) and v else None
-                contracts.append({
+                contract_row = {
                     "osi": oc.symbol,
                     "expiry": oc.expiration,
                     "series": oc_series,
@@ -734,8 +751,8 @@ async def _assemble_chain(
                     "ask_timestamp": _ts(getattr(oc, "ask_timestamp", None)),
                     "last_timestamp": _ts(getattr(oc, "last_timestamp", None)),
                     "received_at": received_at,
-                    "bid_size": _finite(oc.bid_size),
-                    "ask_size": _finite(oc.ask_size),
+                    "bid_size": oc.bid_size if type(oc.bid_size) is int else None,
+                    "ask_size": oc.ask_size if type(oc.ask_size) is int else None,
                     "volume": _finite(oc.volume),
                     "oi_source": "public_api",
                     "last_event_time": _timestamp_text(getattr(oc, "last_timestamp", None)),
@@ -743,7 +760,17 @@ async def _assemble_chain(
                     "ask_event_time": _timestamp_text(getattr(oc, "ask_timestamp", None)),
                     "exposure_basis": "OI" if oi_raw is not None else "OI_UNKNOWN",
                     "chain_instrument_type": chain_type,
-                })
+                }
+                clock_lineage = expiry_clock_lineage(
+                    oc.expiration or exp, series=oc_series, ticker=ticker,
+                    option_root=root_match.group(1) if root_match else None)
+                if clock_lineage is not None:
+                    contract_row.update({
+                        "clock_version": clock_lineage["version"],
+                        "clock_deadline_utc": clock_lineage["deadline_utc"],
+                        "clock_authority": clock_lineage["authority"],
+                    })
+                contracts.append(contract_row)
                 # Available coverage describes accepted contracts, not a
                 # successful empty request or contracts rejected above.
                 accepted_expiry = exp_d.isoformat()
@@ -1481,18 +1508,35 @@ async def fetch_quotes_from_public_api(
         log.warning("No trading account for Public API")
         return None
 
-    try:
-        quotes = await pb.get_quotes(symbols, trading.account_id)
-    except _TRANSPORT_ERRORS as e:
-        # Transport-level failure — this one really is the provider being down.
-        log.warning("Public API quotes transport failure for %s: %s", ",".join(symbols), e)
-        _record_call(False)
-        return None
-    except Exception as e:
-        # Unknown symbol / rejected request is a data condition, not an outage.
-        # Recording it would let an unauthenticated request trip the
-        # provider-down alerts the primary options-chain path depends on.
-        log.warning("Public API quotes fail for %s: %s", ",".join(symbols), e)
+    from services.public_api import resolve_public_instrument_type
+
+    # An index and an equity are different books: one request cannot ask for
+    # both. The batch stays one round-trip per instrument type, so a batch of
+    # one type is still exactly one call.
+    groups: dict[str, list[str]] = {}
+    for symbol in symbols:
+        groups.setdefault(resolve_public_instrument_type(symbol, "quote"), []).append(symbol)
+
+    quotes: list = []
+    transport_failed = False
+    for instrument_type, group in groups.items():
+        try:
+            quotes.extend(await pb.get_quotes(group, trading.account_id,
+                                              instrument_type=instrument_type))
+        except _TRANSPORT_ERRORS as e:
+            # Transport-level failure — this one really is the provider being down.
+            log.warning("Public API quotes transport failure for %s: %s",
+                        ",".join(group), e)
+            _record_call(False)
+            transport_failed = True
+            break
+        except Exception as e:
+            # Unknown symbol / rejected request is a data condition, not an outage.
+            # Recording it would let an unauthenticated request trip the
+            # provider-down alerts the primary options-chain path depends on.
+            # One refused book must not discard the answers of the other.
+            log.warning("Public API quotes fail for %s: %s", ",".join(group), e)
+    if transport_failed:
         return None
 
     out: dict[str, dict[str, Any]] = {}

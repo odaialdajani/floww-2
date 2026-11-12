@@ -146,8 +146,9 @@ if echo "$COMMIT_MSG" | grep -qiE "mongo|load.*dataset|backfill"; then
     for p in scripts backend/scripts backend/services backend/routes backend/tests; do
         [ -d "$p" ] && MONGO_PATHS+=("$p")
     done
+    # One quiet grep avoids SIGPIPE from an early-exiting consumer under pipefail.
     if [ ${#MONGO_PATHS[@]} -gt 0 ] && \
-        grep -rn "motor\|pymongo\|MongoClient" "${MONGO_PATHS[@]}" --include="*.py" 2>/dev/null | grep -q .; then
+        grep -rq --include="*.py" "motor\|pymongo\|MongoClient" "${MONGO_PATHS[@]}" 2>/dev/null; then
         check "MongoDB commit: motor/pymongo imports found" "pass"
     else
         check "MongoDB commit: motor/pymongo imports NOT found" "fail"

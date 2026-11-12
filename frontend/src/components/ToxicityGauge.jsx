@@ -7,6 +7,10 @@ const HORIZONS = [
   { key: "p_toxic_60min", label: "60m", seconds: 3600 },
 ];
 
+const probability = (value) => typeof value === "number" && Number.isFinite(value) &&
+  value >= 0 && value <= 1 ? value : null;
+const scoreLabel = (value) => typeof value === "number" && Number.isFinite(value) ? value.toFixed(4) : "—";
+
 function probColor(p) {
   if (p === null || p === undefined || isNaN(p)) return "#64748b";
   if (p >= 0.7) return "#ef4444";
@@ -62,10 +66,10 @@ export default function ToxicityGauge({ ensemble, onRefresh }) {
   const components = ensemble?.component_scores || {};
   const status = ensemble?.status || "inactive";
   const ticker = ensemble?.ticker || "";
-  const hasData = ensemble != null && Object.keys(probs).length > 0;
+  const hasData = HORIZONS.some(h => probability(probs[h.key]) !== null);
 
   const maxProb = hasData
-    ? Math.max(...HORIZONS.map(h => (probs[h.key] != null ? probs[h.key] : 0)))
+    ? Math.max(...HORIZONS.map(h => probability(probs[h.key])).filter(p => p !== null))
     : 0;
   const overallColor = probColor(hasData ? maxProb : null);
 
@@ -85,7 +89,7 @@ export default function ToxicityGauge({ ensemble, onRefresh }) {
           style={{ background: status === "active" ? "#34d399" : "#64748b" }}
         />
         <span className="text-[10px] uppercase tracking-widest text-slate-500">
-          {status === "active" ? "LIVE" : status.toUpperCase()}
+          {status === "active" ? "MODEL RESULT" : status === "uninitialized" ? "NO OBSERVATIONS" : status.toUpperCase()}
         </span>
         {maxProb >= 0.7 && (
           <span className="tag danger ml-auto text-[10px]">HIGH TOXICITY</span>
@@ -99,7 +103,7 @@ export default function ToxicityGauge({ ensemble, onRefresh }) {
       <div className="grid grid-cols-4 gap-2 mb-3">
         {HORIZONS.map(h => (
           <div key={h.key} className="flex flex-col items-center">
-            <GaugeArc prob={probs[h.key] ?? 0} />
+            <GaugeArc prob={probability(probs[h.key])} />
             <div className="text-[10px] text-slate-500 mt-1">{h.label}</div>
           </div>
         ))}
@@ -112,19 +116,19 @@ export default function ToxicityGauge({ ensemble, onRefresh }) {
           <div>
             <div className="label">CNN-AE</div>
             <div className="mono text-slate-300">
-              {components.cnn_ae !== undefined ? components.cnn_ae.toFixed(4) : "—"}
+              {scoreLabel(components.cnn_ae)}
             </div>
           </div>
           <div>
             <div className="label">Statistical</div>
             <div className="mono text-slate-300">
-              {components.statistical !== undefined ? components.statistical.toFixed(4) : "—"}
+              {scoreLabel(components.statistical)}
             </div>
           </div>
           <div>
             <div className="label">Forecast</div>
             <div className="mono text-slate-300">
-              {components.forecast_residual !== undefined ? components.forecast_residual.toFixed(4) : "—"}
+              {scoreLabel(components.forecast_residual)}
             </div>
           </div>
         </div>
@@ -133,7 +137,7 @@ export default function ToxicityGauge({ ensemble, onRefresh }) {
       {/* Anomaly flags */}
       <div className="flex gap-2 mt-2">
         {!hasData && (
-          <span className="text-[10px] text-slate-600">No toxicity data — feed VPIN + QI to activate</span>
+          <span className="text-[10px] text-slate-600">No prediction observations are available.</span>
         )}
         {hasData && ensemble?.cnn_anomaly && (
           <span className="tag danger text-[10px]">CNN ANOMALY</span>
@@ -141,7 +145,7 @@ export default function ToxicityGauge({ ensemble, onRefresh }) {
         {hasData && ensemble?.statistical_anomaly && (
           <span className="tag warning text-[10px]">STATISTICAL ANOMALY</span>
         )}
-        {hasData && !ensemble?.cnn_anomaly && !ensemble?.statistical_anomaly && (
+        {hasData && ensemble?.cnn_anomaly === false && ensemble?.statistical_anomaly === false && (
           <span className="text-[10px] text-slate-600">No anomalies detected</span>
         )}
       </div>

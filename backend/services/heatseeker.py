@@ -22,13 +22,26 @@ degenerate input.
 from __future__ import annotations
 
 import math
-from datetime import datetime
+from datetime import UTC, datetime
 from statistics import median
 from typing import Any
 
 # ---------------------------------------------------------------------------
 # Shared helpers
 # ---------------------------------------------------------------------------
+
+def _finite(value: Any) -> float | None:
+    """Coerce a value to a finite float, or None when it is missing/invalid."""
+    if isinstance(value, bool):
+        return None
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return None
+    if math.isnan(v) or math.isinf(v):
+        return None
+    return v
+
 
 def _is_call(c: dict[str, Any]) -> bool:
     """True if contract is a call. Accepts 'C', 'CALL', 'call' (any case)."""
@@ -89,6 +102,93 @@ def _gex_per_strike(spot: float, contracts: list[dict[str, Any]]) -> dict[float,
         sign = 1.0 if _is_call(c) else -1.0
         out[strike] = out.get(strike, 0.0) + sign * gex_unit
     return out
+
+
+def _gross_per_strike(spot: float, contracts: list[dict[str, Any]]) -> dict[float, float | None]:
+    """
+    GROSS (unsigned) exposure per OBSERVED strike: ``|call| + |put|``.
+
+    Net signed GEX cancels to zero at a strike that carries large offsetting
+    call and put exposure. Thin-area detection must therefore measure gross
+    exposure: a zero net sum is not a thin strike.
+
+    Measured zero OI/gamma stays zero. Missing or invalid inputs leave the
+    entire strike unknown, including when another leg has usable exposure:
+    a partial sum cannot establish that the strike is thin.
+    """
+    out: dict[float, float | None] = {}
+    if not contracts or not spot or spot <= 0:
+        return out
+    for c in contracts:
+        strike = _finite(c.get("strike"))
+        if strike is None or strike <= 0:
+            continue
+        out.setdefault(strike, 0.0)
+        oi = _finite(c.get("open_interest") if c.get("open_interest") is not None else c.get("oi"))
+        gamma = _finite(c.get("gamma"))
+        if oi is None or gamma is None or oi < 0 or gamma < 0:
+            out[strike] = None
+            continue
+        if out[strike] is not None:
+            exposure = gamma * oi * 100.0 * spot * spot * 0.01
+            out[strike] = out[strike] + exposure if math.isfinite(exposure) else None
+    return out
+
+
+def _adjacent_gaps(strikes: list[float]) -> list[float]:
+    """Positive gaps between adjacent strikes in an ascending ladder."""
+    return [b - a for a, b in zip(strikes, strikes[1:], strict=False) if b > a]
+
+
+# A gap wider than 1.5x the expected strike spacing hides at least one listed
+# strike between two observed strikes: continuity is broken there.
+_SPACING_TOLERANCE = 0.5
+
+
+def _expected_strike_step(
+    strikes: list[float],
+    *,
+    expected_step: float | None = None,
+    expected_strikes: list[float] | None = None,
+) -> float | None:
+    """
+    Expected spacing between listed strikes, carried from the SAME loaded
+    observation — never a hardcoded constant.
+
+    Preference order:
+      1. an explicit ``expected_step`` supplied by the caller,
+      2. the listed ladder in ``expected_strikes`` when the observation
+         declares one,
+      3. the median adjacent gap of the observed strike ladder.
+
+    Returns ``None`` when no spacing can be derived. The caller must then
+    leave continuity UNVERIFIED instead of assuming it, because an assumed
+    ladder would bridge strikes that were never loaded.
+    """
+    supplied = _finite(expected_step)
+    if supplied is not None and supplied > 0:
+        return supplied
+    declared = sorted({
+        s for s in (_finite(k) for k in (expected_strikes or []))
+        if s is not None and s > 0
+    })
+    if len(declared) >= 2:
+        gaps = _adjacent_gaps(declared)
+        if gaps:
+            return float(median(gaps))
+    observed = sorted(s for s in strikes if s > 0)
+    if len(observed) >= 2:
+        gaps = _adjacent_gaps(observed)
+        if gaps:
+            return float(median(gaps))
+    return None
+
+
+def _omitted_steps(gap: float, step: float) -> int:
+    """How many listed strikes are missing inside one ladder gap."""
+    if step <= 0:
+        return 0
+    return max(0, int(round(gap / step)) - 1)
 
 
 # ---------------------------------------------------------------------------
@@ -174,23 +274,117 @@ def calc_flip_zones(
 # Function 2: Node lifecycle
 # ---------------------------------------------------------------------------
 
+def _history_samples(
+    history: list[dict[str, Any]],
+) -> tuple[list[tuple[datetime, float]], int, int]:
+    """
+    Reduce timestamped spot history to ordered, DISTINCT samples.
+
+    Repeated identical timestamps are ONE sample: a replayed, re-sent or
+    de-duplicated row is not a second observation, so it can never add a tap.
+    Rows without a usable timestamp (or with a missing/invalid spot) are
+    dropped and counted, never guessed. Samples come back in time order so a
+    sustained visit can be told apart from the visit that follows it.
+    """
+    seen: dict[str, tuple[datetime, float]] = {}
+    duplicates = 0
+    unusable = 0
+    for h in history or []:
+        if not isinstance(h, dict):
+            unusable += 1
+            continue
+        spot = _finite(h.get("spot"))
+        ts = _parse_ts(h.get("timestamp"))
+        if spot is None or ts is None:
+            unusable += 1
+            continue
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=UTC)
+        key = ts.astimezone(UTC).isoformat()
+        if key in seen:
+            duplicates += 1
+            continue
+        seen[key] = (ts, spot)
+    ordered = sorted(seen)
+    return [seen[k] for k in ordered], duplicates, unusable
+
+
+def _visit_episodes(
+    samples: list[tuple[datetime, float]],
+    strike: float,
+    band_pct: float,
+) -> tuple[int, int]:
+    """
+    Count visit episodes at ``strike`` over time-ordered samples.
+
+    An episode is a maximal run of consecutive samples inside the tap band.
+    Spot resting on the strike for many samples is ONE sustained visit; only
+    leaving the band and returning starts another episode.
+    """
+    episodes = 0
+    visit_samples = 0
+    inside = False
+    for _ts, spot in samples:
+        if abs(spot - strike) / strike <= band_pct:
+            visit_samples += 1
+            if not inside:
+                episodes += 1
+                inside = True
+        else:
+            inside = False
+    return episodes, visit_samples
+
+
 def calc_node_lifecycle(
     spot: float,
     contracts: list[dict[str, Any]],
     history: list[dict[str, Any]],
+    *,
+    tap_band_pct: float = 0.001,
+    min_history_samples: int = 2,
 ) -> dict[str, Any]:
     """
     Classify the top 10 strikes by |GEX| as Fresh / Tested / Delivered /
-    Decaying based on how many times spot has come within 0.1% of them in the
-    supplied ``history`` (typically last 24h of spot snapshots).
+    Decaying from VISIT EPISODES in the supplied timestamped history.
 
-    F08/F09/F10: unknown history MUST stay unknown. Empty/missing history →
-    state 'unknown', taps=None, tap_probability=None with reason codes — never
-    'fresh'/80% or 'calm'. Tap counts are observed touches; outcome
-    probabilities require held-out calibration (not hardcoded 80/66/33/10).
-    The legacy schedule is retained ONLY as `legacy_tap_schedule` for compat,
-    explicitly uncalibrated.
+    F08/F09/F10: unknown history MUST stay unknown. Missing history, rows
+    without a usable timestamp, and fewer than ``min_history_samples``
+    DISTINCT samples all resolve to state 'unknown' — an untouched label
+    needs adequate same-scope price history, and one sample cannot support
+    it. ``tap_probability`` stays None with reason 'UNCALIBRATED' (outcome
+    probabilities are not hardcoded here), and the legacy schedule is kept
+    only as ``legacy_tap_schedule`` for compatibility, explicitly
+    uncalibrated.
+
+    Duplicate timestamps are one sample, so a replayed row, a repeated poll
+    or a sustained dwell on the strike can never inflate the tap count.
+
+    ``min_history_samples`` guards the UNTOUCHED label only: with fewer
+    distinct samples the history cannot support "fresh", so such a node is
+    reported as 'unknown' with reason HISTORY_INSUFFICIENT while its measured
+    zero-visit count stays visible. Observed visits need no such guard.
     """
+    def _unknown_nodes(reason: str, **extra: Any) -> dict[str, Any]:
+        return {
+            "nodes": [
+                {
+                    "strike": round(strike, 4),
+                    "net_gex": round(net_gex, 4),
+                    "taps": None,
+                    "visit_episodes": None,
+                    "state": "unknown",
+                    "tap_probability": None,
+                    "tap_probability_reason": "UNCALIBRATED",
+                    "reason": reason,
+                    "legacy_tap_schedule": None,
+                }
+                for strike, net_gex in ranked if strike > 0
+            ],
+            "history_status": "unknown",
+            "reason": reason,
+            **extra,
+        }
+
     if not spot or spot <= 0:
         return {"nodes": [], "history_status": "unknown", "reason": "INVALID_SPOT"}
 
@@ -201,141 +395,209 @@ def calc_node_lifecycle(
     # Top 10 strikes by absolute net GEX.
     ranked = sorted(gex.items(), key=lambda kv: abs(kv[1]), reverse=True)[:10]
 
-    history = history or []
-    history_spots: list[float] = []
-    for h in history:
-        try:
-            history_spots.append(float(h.get("spot")))
-        except (TypeError, ValueError):
-            continue
+    samples, duplicates, unusable = _history_samples(history)
+    n_samples = len(samples)
+    ledger = {
+        "history_samples": n_samples,
+        "duplicate_timestamps_dropped": duplicates,
+        "unusable_rows": unusable,
+    }
 
-    if not history_spots:
-        nodes = [
-            {
-                "strike": round(strike, 4),
-                "net_gex": round(net_gex, 4),
-                "taps": None,
-                "state": "unknown",
-                "tap_probability": None,
-                "reason": "HISTORY_UNKNOWN",
-                "legacy_tap_schedule": None,
-            }
-            for strike, net_gex in ranked if strike > 0
-        ]
-        return {"nodes": nodes, "history_status": "unknown", "reason": "HISTORY_UNKNOWN"}
+    if n_samples == 0:
+        return _unknown_nodes("HISTORY_UNKNOWN", **ledger)
+
+    # The untouched ("fresh") label needs adequate same-scope history; an
+    # observed visit does not.
+    adequate = n_samples >= min_history_samples
 
     nodes: list[dict[str, Any]] = []
     for strike, net_gex in ranked:
         if strike <= 0:
             continue
-        taps = sum(
-            1 for s in history_spots
-            if abs(s - strike) / strike <= 0.001
-        )
-        if taps == 0:
+        episodes, visit_samples = _visit_episodes(samples, strike, tap_band_pct)
+        if episodes == 0 and not adequate:
+            nodes.append({
+                "strike": round(strike, 4),
+                "net_gex": round(net_gex, 4),
+                "taps": 0,
+                "visit_episodes": 0,
+                "visit_samples": 0,
+                "state": "unknown",
+                "tap_probability": None,
+                "tap_probability_reason": "UNCALIBRATED",
+                "reason": "HISTORY_INSUFFICIENT",
+                "legacy_tap_schedule": None,
+            })
+            continue
+        if episodes == 0:
             state = "fresh"
-        elif taps == 1:
+        elif episodes == 1:
             state = "tested"
-        elif taps == 2:
+        elif episodes == 2:
             state = "delivered"
         else:
             state = "decaying"
-        legacy = {0: 80, 1: 66, 2: 33}.get(min(taps, 3), 10)
+        legacy = {0: 80, 1: 66, 2: 33}.get(min(episodes, 3), 10)
         nodes.append({
             "strike": round(strike, 4),
             "net_gex": round(net_gex, 4),
-            "taps": taps,
+            "taps": episodes,
+            "visit_episodes": episodes,
+            "visit_samples": visit_samples,
             "state": state,
             "tap_probability": None,
             "tap_probability_reason": "UNCALIBRATED",
             "legacy_tap_schedule": legacy,
         })
 
-    return {"nodes": nodes, "history_status": "ok"}
+    return {
+        "nodes": nodes,
+        "history_status": "ok",
+        "min_history_samples": min_history_samples,
+        **ledger,
+    }
 
 
 # ---------------------------------------------------------------------------
 # Function 3: Air pockets
 # ---------------------------------------------------------------------------
 
+def _air_pockets_empty(reason: str) -> dict[str, Any]:
+    """Degenerate air-pocket answer with the coverage fields still explicit."""
+    return {
+        "air_pockets": [],
+        "basis": "gross_exposure",
+        "coverage_status": "unknown",
+        "reason": reason,
+        "strikes_observed": 0,
+        "strikes_unknown_exposure": 0,
+        "expected_step": None,
+        "n_omitted_strikes": 0,
+    }
+
+
 def calc_air_pockets(
     spot: float,
     contracts: list[dict[str, Any]],
     *,
     min_gap_pct: float = 0.005,
+    expected_step: float | None = None,
+    expected_strikes: list[float] | None = None,
+    spacing_tolerance: float = _SPACING_TOLERANCE,
 ) -> dict[str, Any]:
     """
-    Contiguous ranges of strikes where ``|GEX|`` is below 20% of the local
-    median (median of ``|GEX|`` for strikes within ±5% of spot) AND the range
-    spans at least ``spot * min_gap_pct`` in price.
+    Contiguous ranges of strikes where GROSS exposure is below 20% of the
+    local median (median of gross exposure for strikes within ±5% of spot)
+    AND the range spans at least ``spot * min_gap_pct`` in price.
 
-    These zones tend to see fast price moves because dealer hedging is thin.
+    Two semantics the legacy ``|net GEX|`` version got wrong:
+
+    1. **Gross, not net.** Large offsetting call and put exposure at one
+       strike nets to zero. Net magnitude would read that strike as thin;
+       gross exposure keeps it dense, so a cancellation is never mistaken
+       for an air pocket.
+    2. **Measured continuity.** The expected strike spacing is carried from
+       the SAME loaded observation (an explicit step, the declared ladder,
+       or the median adjacent gap of the observed strikes). A gap wider than
+       that spacing hides at least one listed strike, so a thin run BREAKS
+       there instead of bridging strikes that were never loaded. When no
+       spacing can be derived, ``coverage_status`` is 'unknown' and
+       continuity is left unverified — never assumed.
 
     Returns
     -------
-    dict with key ``air_pockets`` — list of ``{low, high, span_pct,
-    max_abs_gex_in_run}`` dicts. Empty list on degenerate input.
+    dict with keys ``air_pockets`` (list of ``{low, high, span_pct,
+    max_abs_gex_in_run, max_gross_gex_in_run}``), plus the coverage
+    disclosure: ``basis``, ``coverage_status``, ``strikes_observed``,
+    ``expected_step``, ``n_omitted_strikes``. Empty list on degenerate input.
     """
     if not spot or spot <= 0:
-        return {"air_pockets": []}
+        return _air_pockets_empty("INVALID_SPOT")
 
-    gex = _gex_per_strike(spot, contracts)
-    if not gex:
-        return {"air_pockets": []}
+    gross = _gross_per_strike(spot, contracts)
+    if not gross:
+        return _air_pockets_empty("NO_OBSERVED_STRIKES")
 
-    strikes = sorted(gex.keys())
-    abs_gex: dict[float, float] = {k: abs(gex[k]) for k in strikes}
+    strikes = sorted(gross.keys())
+    step = _expected_strike_step(
+        strikes, expected_step=expected_step, expected_strikes=expected_strikes,
+    )
+    spacing_known = step is not None and step > 0
+    unknown_exposure = sum(value is None for value in gross.values())
+    coverage_ok = spacing_known and unknown_exposure == 0
+    # Continuity is only enforceable when the ladder spacing is known.
+    max_step = step * (1.0 + spacing_tolerance) if spacing_known else None
 
-    # Local median of |GEX| using strikes within ±5% of spot.
+    # Local median of gross exposure using strikes within ±5% of spot.
     near_window_low = spot * 0.95
     near_window_high = spot * 1.05
-    near_vals = [abs_gex[k] for k in strikes if near_window_low <= k <= near_window_high]
+    near_vals = [gross[k] for k in strikes if near_window_low <= k <= near_window_high and gross[k] is not None]
     if not near_vals:
-        return {"air_pockets": []}
+        empty = _air_pockets_empty("NO_STRIKES_NEAR_SPOT")
+        empty["strikes_observed"] = len(strikes)
+        empty["strikes_unknown_exposure"] = unknown_exposure
+        empty["expected_step"] = round(step, 6) if step else None
+        return empty
     local_median = median(near_vals)
     if local_median <= 0:
-        # Degenerate: everything is zero in the local window. No pockets to
-        # report (a flat-zero band is technically a giant pocket but isn't
-        # actionable signal).
-        return {"air_pockets": []}
+        # Degenerate: everything is zero in the local window. An observed
+        # flat-zero band is not actionable signal, so no pocket is reported.
+        empty = _air_pockets_empty("FLAT_ZERO_LOCAL_EXPOSURE")
+        empty["strikes_observed"] = len(strikes)
+        empty["strikes_unknown_exposure"] = unknown_exposure
+        empty["expected_step"] = round(step, 6) if step else None
+        return empty
 
     threshold = 0.2 * local_median
     min_span = spot * min_gap_pct
 
     pockets: list[dict[str, Any]] = []
-    run_start_idx: int | None = None
-    run_max: float = 0.0
+    run_idx: list[int] = []
+    omitted = 0
 
-    def _flush(run_start_idx: int, run_end_idx: int, run_max_val: float) -> None:
-        low_k = strikes[run_start_idx]
-        high_k = strikes[run_end_idx]
+    def _flush() -> None:
+        if not run_idx:
+            return
+        low_k = strikes[run_idx[0]]
+        high_k = strikes[run_idx[-1]]
         span = high_k - low_k
         if span < min_span:
+            run_idx.clear()
             return
+        run_max = max(gross[strikes[i]] for i in run_idx)
         pockets.append({
             "low": round(low_k, 4),
             "high": round(high_k, 4),
             "span_pct": round(span / spot, 6),
-            "max_abs_gex_in_run": round(run_max_val, 4),
+            "max_abs_gex_in_run": round(run_max, 4),
+            "max_gross_gex_in_run": round(run_max, 4),
         })
+        run_idx.clear()
 
     for i, k in enumerate(strikes):
-        if abs_gex[k] < threshold:
-            if run_start_idx is None:
-                run_start_idx = i
-                run_max = abs_gex[k]
-            else:
-                run_max = max(run_max, abs_gex[k])
+        if i and max_step is not None:
+            gap = k - strikes[i - 1]
+            if gap > max_step:
+                # An unobserved (or anomalously spaced) listed strike sits
+                # between two observed strikes: a thin run cannot bridge it.
+                omitted += _omitted_steps(gap, step)
+                _flush()
+        if gross[k] is not None and gross[k] < threshold:
+            run_idx.append(i)
         else:
-            if run_start_idx is not None:
-                _flush(run_start_idx, i - 1, run_max)
-                run_start_idx = None
-                run_max = 0.0
+            _flush()
     # Trailing run.
-    if run_start_idx is not None:
-        _flush(run_start_idx, len(strikes) - 1, run_max)
+    _flush()
 
-    return {"air_pockets": pockets}
+    return {
+        "air_pockets": pockets,
+        "basis": "gross_exposure",
+        "coverage_status": "ok" if coverage_ok else "unknown",
+        "strikes_observed": len(strikes),
+        "strikes_unknown_exposure": unknown_exposure,
+        "expected_step": round(step, 6) if step else None,
+        "n_omitted_strikes": omitted,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -360,15 +622,21 @@ def detect_beach_ball(
     Overshoot/reversion setup.
 
     Active when ``abs(spot - king_node) / king_node > 0.005`` (50bps).
-    Confidence = ``min(1.0, distance_pct / 0.02)`` — capped at 2% stretch.
+
+    The ONLY supported reading is the measured distance — in points
+    (``spot_distance_points``, signed) and in percent
+    (``spot_distance_pct``). The legacy probability-like ``confidence``
+    (``min(1.0, distance_pct / 0.02)``) is retired: a distance ratio is not
+    a calibrated outcome probability, and no time series exists here to
+    support one. Overshoot, unwind and squeeze stay unverified hypotheses.
     """
     inactive: dict[str, Any] = {
         "pattern": "beach_ball",
         "active": False,
         "king_node": None,
-        "spot_distance_pct": 0.0,
+        "spot_distance_points": None,
+        "spot_distance_pct": None,
         "direction": "at",
-        "confidence": 0.0,
     }
 
     if not spot or spot <= 0:
@@ -390,15 +658,14 @@ def detect_beach_ball(
         direction = "at"
 
     active = distance_pct > 0.005
-    confidence = min(1.0, distance_pct / 0.02)
 
     return {
         "pattern": "beach_ball",
         "active": active,
         "king_node": round(float(king_node), 4),
+        "spot_distance_points": round(spot - float(king_node), 4),
         "spot_distance_pct": round(distance_pct, 6),
         "direction": direction,
-        "confidence": round(confidence, 4),
     }
 
 
@@ -547,9 +814,18 @@ def _parse_ts(value: Any) -> datetime | None:
         return None
 
 
+def _node_exposure(row: dict[str, Any]) -> float | None:
+    """Stored exposure of the king node, when the owning history carries it."""
+    for key in ("king_node_gex", "king_gex", "king_node_exposure"):
+        val = _finite(row.get(key))
+        if val is not None:
+            return val
+    return None
+
+
 def calc_velocity_mode(history: list[dict[str, Any]]) -> dict[str, Any]:
     """
-    Dealer urgency: rate at which the King Node is moving across the recent
+    Dealer urgency: rate at which the King Node is migrating across the recent
     snapshots in ``history``. Caller passes the last ~30 minutes of data.
 
     Each entry: ``{"timestamp": iso8601, "king_node_strike": float, "spot": float}``.
@@ -561,6 +837,14 @@ def calc_velocity_mode(history: list[dict[str, Any]]) -> dict[str, Any]:
         |v| < 0.5     → "calm"
         |v| < 2.0     → "active"
         |v| ≥ 2.0     → "urgent"
+
+    The measured quantity is named: ``quantity`` is strike MIGRATION in
+    points per minute. Same-node exposure change (dollars per minute) is a
+    DIFFERENT quantity — a node can stay at one strike while its exposure
+    grows or shrinks. It is reported separately in ``exposure_change`` and is
+    never folded into, or inferred from, the migration rate. When the owning
+    history does not carry node exposure, exposure change is 'unknown' with
+    reason EXPOSURE_HISTORY_NOT_SUPPLIED rather than a fabricated zero.
     """
     history = history or []
     n = len(history)
@@ -569,6 +853,8 @@ def calc_velocity_mode(history: list[dict[str, Any]]) -> dict[str, Any]:
             "velocity_strikes_per_min": None,
             "mode": "unknown",
             "n_snapshots": n,
+            "quantity": "strike_migration",
+            "unit": "points_per_min",
             "reason": "INSUFFICIENT_HISTORY",
         }
 
@@ -582,6 +868,8 @@ def calc_velocity_mode(history: list[dict[str, Any]]) -> dict[str, Any]:
             "velocity_strikes_per_min": None,
             "mode": "unknown",
             "n_snapshots": n,
+            "quantity": "strike_migration",
+            "unit": "points_per_min",
             "reason": "INVALID_KING_NODE",
         }
 
@@ -592,6 +880,8 @@ def calc_velocity_mode(history: list[dict[str, Any]]) -> dict[str, Any]:
             "velocity_strikes_per_min": None,
             "mode": "unknown",
             "n_snapshots": n,
+            "quantity": "strike_migration",
+            "unit": "points_per_min",
             "reason": "TIMESTAMP_UNKNOWN",
         }
     minutes = (t1 - t0).total_seconds() / 60.0
@@ -600,6 +890,8 @@ def calc_velocity_mode(history: list[dict[str, Any]]) -> dict[str, Any]:
             "velocity_strikes_per_min": None,
             "mode": "unknown",
             "n_snapshots": n,
+            "quantity": "strike_migration",
+            "unit": "points_per_min",
             "reason": "NONPOSITIVE_WINDOW",
         }
 
@@ -612,10 +904,28 @@ def calc_velocity_mode(history: list[dict[str, Any]]) -> dict[str, Any]:
     else:
         mode = "urgent"
 
+    exposure_change: dict[str, Any] = {
+        "measured": False,
+        "reason": "EXPOSURE_HISTORY_NOT_SUPPLIED",
+    }
+    e0 = _node_exposure(first)
+    e1 = _node_exposure(last)
+    if e0 is not None and e1 is not None and kn0 != kn1:
+        exposure_change = {"measured": False, "reason": "NODE_CHANGED"}
+    elif e0 is not None and e1 is not None:
+        exposure_change = {
+            "measured": True,
+            "unit": "dollars_per_min",
+            "value": round((e1 - e0) / minutes, 4),
+        }
+
     return {
         "velocity_strikes_per_min": round(velocity, 6),
         "mode": mode,
         "n_snapshots": n,
+        "quantity": "strike_migration",
+        "unit": "points_per_min",
+        "exposure_change": exposure_change,
     }
 
 
@@ -995,6 +1305,136 @@ def detect_stacked_nodes(
             })
 
     return {"stacked_nodes": stacked, "count": len(stacked)}
+
+
+# ---------------------------------------------------------------------------
+# Wave 3 — Function 12: Tug-of-war zones
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Replay session manifest — scope-aware grouping
+# ---------------------------------------------------------------------------
+
+def _session_gaps(asofs: list[str], expected_cadence_s: float | None) -> list[dict[str, Any]]:
+    """
+    Declared gaps inside ONE scope's ordered snapshots.
+
+    Same rule the owning store manifest uses: an interval beyond 1.5x the
+    expected cadence is an explicit gap (never silently interpolated).
+    Gaps are only measurable when a cadence was supplied.
+    """
+    if not expected_cadence_s or expected_cadence_s <= 0 or len(asofs) < 2:
+        return []
+    gaps: list[dict[str, Any]] = []
+    for a, b in zip(asofs, asofs[1:], strict=False):
+        ta, tb = _parse_ts(a), _parse_ts(b)
+        if ta is None or tb is None:
+            continue
+        gap_s = (tb - ta).total_seconds()
+        if gap_s <= expected_cadence_s * 1.5:
+            continue
+        gaps.append({
+            "from": a,
+            "to": b,
+            "gap_s": round(gap_s, 1),
+            "missing_beats": max(0, round(gap_s / expected_cadence_s) - 1),
+        })
+    return gaps
+
+
+def group_replay_sessions(
+    rows: list[dict[str, Any]] | None,
+    *,
+    expected_cadence_s: float | None = None,
+    day: str = "",
+    ticker: str = "",
+) -> dict[str, Any]:
+    """
+    Group one UTC day's stored replay rows by QUERY SCOPE, and refuse to
+    certify one session across scopes.
+
+    A ticker/day row list is not one market session when the rows were
+    produced by different query scopes (different expiry sets, expiries
+    counts, or query keys): the snapshots describe different observations,
+    and gap or heartbeat arithmetic across them would silently mix them.
+    So the rows are grouped per scope, each scope keeps its own snapshot
+    list and its own gap accounting, and the day-level certification is
+    explicitly refused with ``MIXED_QUERY_SCOPES``.
+
+    A single-scope day still certifies one session. A day with no usable
+    rows is an empty state. A day whose rows carry no scope lands in a
+    disclosed 'unknown' scope bucket rather than being dropped. Rows without
+    a usable ``asof`` timestamp are excluded and counted — never dated.
+
+    Day attribution is the caller's stored-timestamp prefix (the same key
+    the owning manifest matches with ``LIKE day%``); ``day`` is echoed for
+    disclosure, not re-derived here.
+    """
+    groups: dict[str, dict[str, Any]] = {}
+    n_snapshots = 0
+    rows_without_timestamp = 0
+    for row in rows or []:
+        if not isinstance(row, dict):
+            rows_without_timestamp += 1
+            continue
+        asof = row.get("asof") or row.get("asof_ts") or row.get("as_of")
+        observed_at = _parse_ts(asof) if isinstance(asof, str) else None
+        if observed_at is None or observed_at.tzinfo is None or observed_at.utcoffset() is None:
+            rows_without_timestamp += 1
+            continue
+        n_snapshots += 1
+        scope = (
+            row.get("scope")
+            or row.get("query_key")
+            or row.get("scope_id")
+            or ""
+        )
+        scope = str(scope).strip() or "unknown"
+        bucket = groups.setdefault(scope, {
+            "scope": scope,
+            "n_snapshots": 0,
+            "snapshots": [],
+            "gaps": [],
+        })
+        bucket["snapshots"].append({
+            "snapshot_id": row.get("snapshot_id") or row.get("id"),
+            "asof": asof.strip(),
+            "n_contracts": row.get("n_contracts"),
+        })
+        bucket["n_snapshots"] += 1
+
+    for bucket in groups.values():
+        bucket["snapshots"].sort(key=lambda s: _parse_ts(s["asof"]).astimezone(UTC))
+        bucket["gaps"] = _session_gaps(
+            [s["asof"] for s in bucket["snapshots"]], expected_cadence_s,
+        )
+
+    sessions = [groups[k] for k in sorted(groups)]
+    out: dict[str, Any] = {
+        "ticker": (ticker or "").upper() or None,
+        "day": day or None,
+        "n_scopes": len(sessions),
+        "n_snapshots": n_snapshots,
+        "rows_without_timestamp": rows_without_timestamp,
+        "gap_coverage": "ok" if expected_cadence_s and expected_cadence_s > 0 and sessions and not rows_without_timestamp else "unknown",
+        "sessions": sessions,
+    }
+
+    if not sessions:
+        out["status"] = "unavailable" if rows_without_timestamp else "empty"
+        out["reason"] = "INVALID_TIMESTAMPS" if rows_without_timestamp else "NO_STORED_ROWS"
+    elif len(sessions) == 1:
+        out["status"] = "partial" if rows_without_timestamp else "ok"
+        if rows_without_timestamp:
+            out["reason"] = "INVALID_TIMESTAMPS"
+    else:
+        out["status"] = "refused"
+        out["reason"] = "MIXED_QUERY_SCOPES"
+        out["note"] = (
+            "A UTC-day list of rows across query scopes cannot certify one "
+            "market session; each scope keeps its own rows and gap accounting."
+        )
+    return out
 
 
 # ---------------------------------------------------------------------------

@@ -44,6 +44,7 @@ from advanced_analytics import (
 from databento_provider import fetch_oi_for_ticker, init_cache
 from portfolio import Portfolio, Position, calc_position_size
 from routes.diagnostics import router as diagnostics_router
+from services.cpu_execution import run_cpu
 from services.duckdb_engine import db as duckdb_engine
 
 # Rust-backed implementations (decoder_core delegation with pure-Python fallback,
@@ -60,6 +61,7 @@ from services.gex_core import (
 )
 from services.logging_config import CorrelationIdMiddleware, setup_logging
 from services.problem_journal import install_problem_logging, record_problem
+from services.store_executor import STORE_BUSY_MESSAGE, StoreBusy, run_store
 from services.websocket_streamer import manager as ws_manager
 from vol_analytics import (
     calc_iv_rank_percentile,
@@ -291,11 +293,37 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
         content={"error": jsonable_encoder(exc.detail) if typed_reason else str(exc.detail),
                  "status_code": exc.status_code, "path": request.url.path},
         headers={
+            **(exc.headers or {}),
             "Access-Control-Allow-Origin": _get_cors_origin_for_handlers(),
             "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
             "Access-Control-Allow-Headers": "Content-Type, Authorization, X-API-Key",
         },
     )
+
+@app.exception_handler(StoreBusy)
+async def store_busy_exception_handler(request: Request, exc: StoreBusy):
+    """The bounded store pool refused the call: answer 503, never a bare 500.
+
+    The store pool is deliberately bounded, so a saturated pool refuses the
+    call instead of queueing it forever. That refusal is explicit
+    backpressure, not a server fault: the caller gets a retryable 503 with a
+    stable message instead of an opaque 500 whose body says nothing.
+
+    The message is a fixed constant: no path, no exception text, no internal
+    detail reaches the wire, in any environment.
+    """
+    log.warning(f"Store busy {request.url.path}: {type(exc).__name__}")
+    return JSONResponse(
+        status_code=503,
+        content={"error": STORE_BUSY_MESSAGE,
+                 "status_code": 503, "path": request.url.path},
+        headers={
+            "Access-Control-Allow-Origin": _get_cors_origin_for_handlers(),
+            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization, X-API-Key",
+        },
+    )
+
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
@@ -482,7 +510,13 @@ def _eastern_now() -> datetime:
 
 
 def _in_window_now_et() -> bool:
-    """Check if current time is within configured live window (US/Eastern)."""
+    """Check if current time is within configured live window (US/Eastern).
+
+    The stop instant is EXCLUSIVE: the window covers [start, stop). The trade
+    route that gates /api/flow uses the same bound (`hhmm < start or
+    hhmm >= stop` refuses), and this helper exists so the admin window
+    readout and that route can never disagree about the same minute.
+    """
     try:
         et = _eastern_now()
     except Exception:
@@ -491,7 +525,7 @@ def _in_window_now_et() -> bool:
         # rather than guessing at Eastern time.
         return False
     hhmm = et.strftime("%H:%M")
-    return LIVE_WINDOW["start_hhmm"] <= hhmm <= LIVE_WINDOW["stop_hhmm"]
+    return LIVE_WINDOW["start_hhmm"] <= hhmm < LIVE_WINDOW["stop_hhmm"]
 
 
 # ===== RESTORED (7ec433f over-deletion): cache + gex/pdf/opportunity helpers =====
@@ -680,13 +714,17 @@ async def fetch_spot_and_chains_merged(ticker: str, max_expiries: int = 4) -> di
       2. cvserver (CVForge) — 32 expiries, 171 strikes, all greeks included
       3. yfinance + Databento OI overlay (legacy path)
     """
+    from data_providers import market_data_policy
+
     # ── 0. Try Public API first (with timeout) ──
     PUBLIC_API_KEY = os.environ.get("PUBLIC_API_KEY", "")
     if PUBLIC_API_KEY:
+        from services.public_budget import BudgetExhausted
+
         try:
             from services.public_api_adapter import fetch_chain_from_public_api
             pub_data = await asyncio.wait_for(
-                fetch_chain_from_public_api(ticker, max_expiries=max_expiries),
+                fetch_chain_from_public_api(ticker, max_expiries=max_expiries, raise_budget_exhausted=True),
                 timeout=30.0
             )
             if pub_data and pub_data.get("contracts") and pub_data.get("spot", 0) > 0:
@@ -699,6 +737,13 @@ async def fetch_spot_and_chains_merged(ticker: str, max_expiries: int = 4) -> di
                     # payload we have already fetched successfully.
                     pass
                 return pub_data
+        except BudgetExhausted as exc:
+            if market_data_policy()["public_only"]:
+                from services.fetch_coordinator import degraded_response
+
+                detail = degraded_response("budget_exhausted", str(exc), retry_after=exc.retry_after)
+                detail["budget_reason"] = exc.reason
+                raise HTTPException(503, detail, headers={"Retry-After": str(exc.retry_after)}) from exc
         except TimeoutError:
             log.info(f"Public API timeout for {ticker}, falling back to cvserver")
             try:
@@ -720,7 +765,7 @@ async def fetch_spot_and_chains_merged(ticker: str, max_expiries: int = 4) -> di
                 # must not abort the cvserver fallback below.
                 pass
 
-    if os.getenv("FLOWW_MARKET_DATA_PROVIDER") == "public":
+    if market_data_policy()["public_only"]:
         raise HTTPException(503, "Public market data is unavailable; alternate sources are disabled")
 
     # ── 1. Try cvserver first (with timeout) ──
@@ -871,9 +916,14 @@ async def fetch_spot_and_chains_merged(ticker: str, max_expiries: int = 4) -> di
 
 
 async def tap_counts(ticker: str, strikes: list[float], days: int = 5) -> dict[float, int]:
-    """Count how many days price crossed each strike in last N trading days using Polygon aggs."""
-    if not POLYGON_API_KEY or not strikes:
-        return {s: 0 for s in strikes}
+    """Count observed daily range crossings; absent history stays unknown."""
+    # Public daily evidence currently retains closes with unverified adjustment
+    # basis. It cannot establish high/low crossings; never substitute a legacy
+    # provider or manufacture zero touches from that missing evidence.
+    if os.getenv("FLOWW_MARKET_DATA_PROVIDER") == "public":
+        return {}
+    if not POLYGON_API_KEY or not strikes or days < 1:
+        return {}
     end = datetime.now(UTC).date()
     start = end - timedelta(days=days * 2)
     pg_ticker = ticker.replace("^SPX", "I:SPX") if ticker.startswith("^") else ticker
@@ -883,17 +933,26 @@ async def tap_counts(ticker: str, strikes: list[float], days: int = 5) -> dict[f
         async with httpx.AsyncClient(timeout=10) as cli:
             r = await cli.get(url, params={"apiKey": POLYGON_API_KEY, "limit": days * 2})
             data = r.json()
-        if not data.get("results"):
-            return out
-        results = data["results"][-days:]
+        results = data.get("results") if isinstance(data, dict) else None
+        if not isinstance(results, list) or len(results) < days:
+            return {}
+        results = results[-days:]
+        import math
         for bar in results:
-            lo = bar.get("l", 0)
-            hi = bar.get("h", 0)
+            if not isinstance(bar, dict):
+                return {}
+            lo, hi = bar.get("l"), bar.get("h")
+            if any(isinstance(v, bool) or not isinstance(v, (int, float)) or
+                   not math.isfinite(v) or v <= 0 for v in (lo, hi)) or lo > hi:
+                return {}
+        for bar in results:
+            lo, hi = bar["l"], bar["h"]
             for s in strikes:
                 if lo <= s <= hi:
                     out[s] += 1
     except Exception as e:
         log.warning(f"tap_counts fail {ticker}: {e}")
+        return {}
     return out
 
 
@@ -1080,7 +1139,7 @@ async def build_heatmap(ticker: str, max_expiries: int = 4, with_taps: bool = Tr
     if cached is not None and age is not None:
         if age < _BUILD_HEATMAP_CACHE_TTL:
             # Contract: frontend StaleDataBadge reads data.stale_age_s (App.js).
-            return cached_market_copy(cached["data"], age)
+            return await asyncio.to_thread(cached_market_copy, cached["data"], age)
         if (
             age < _BUILD_HEATMAP_STALE_TTL
             and isinstance(cached.get("data"), dict)
@@ -1095,7 +1154,7 @@ async def build_heatmap(ticker: str, max_expiries: int = 4, with_taps: bool = Tr
                 own(asyncio.create_task(_revalidate_heatmap(
                     cache_key, ticker, max_expiries, with_taps, mode, dte, scalp, max_strikes, **scope_kwargs,
                 )))
-            return cached_market_copy(cached["data"], age, revalidating=True)
+            return await asyncio.to_thread(cached_market_copy, cached["data"], age, revalidating=True)
     try:
         import copy
 
@@ -1106,7 +1165,8 @@ async def build_heatmap(ticker: str, max_expiries: int = 4, with_taps: bool = Tr
             )))
         # A browser cancel cannot cancel another reader's build. Shutdown
         # still owns the tracked task, and each caller receives its own copy.
-        return copy.deepcopy(await asyncio.shield(pending))
+        payload = await asyncio.shield(pending)
+        return await asyncio.to_thread(copy.deepcopy, payload)
     except HTTPException:
         raise
     except Exception as e:
@@ -1400,7 +1460,7 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                 log.debug(f"build_heatmap: cvserver enrichment failed for {ticker}: {e}")
     # Work on our copy: scope selection must not mutate the provider cache.
     import copy
-    raw = copy.deepcopy(raw)
+    raw = await asyncio.to_thread(copy.deepcopy, raw)
     scope_selection = None
     if expiry_scope == "next":
         scope_selection = next_listed_selection(raw.get("contracts", []), scope_session)
@@ -1481,8 +1541,8 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
     # mixed into raw structure, walls or replay.
     # F07: every supported mode produces a real 2D matrix. Scalp is a
     # horizon/display/weighting combination — not an empty grid.
-    exposure_basis, model_basis, strikes, grid = _display_surfaces(
-        spot, raw["contracts"], ticker, scalp)
+    exposure_basis, model_basis, strikes, grid = await asyncio.to_thread(
+        _display_surfaces, spot, raw["contracts"], ticker, scalp)
 
     # Band: scalp=±2%, day=±15%, swing=±25%
     # Dynamic band based on price level: wider bands for low-priced stocks
@@ -1568,10 +1628,10 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
     # Per-strike traded volume for the Profile view's volume column. Engine-agnostic
     # rollup from the raw contracts (Public/cvserver/yfinance all carry volume),
     # independent of which GEX engine produced `strikes`. None-safe: raw can be None.
-    _attach_strike_volumes(strikes, (raw or {}).get("contracts", []))
+    await asyncio.to_thread(_attach_strike_volumes, strikes, (raw or {}).get("contracts", []))
 
-    nodes = classify_nodes(strikes, spot)
-    patterns = detect_patterns(strikes, nodes, spot)
+    nodes = await asyncio.to_thread(classify_nodes, strikes, spot)
+    patterns = await asyncio.to_thread(detect_patterns, strikes, nodes, spot)
 
     # T04: distinct raw/delta/activity surfaces from the SAME normalized
     # contracts (no extra upstream calls). Default strikes/grid stay compat;
@@ -1591,18 +1651,23 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         )
         from services.solstice_metric_contract import window_grid_section as _window_grid_section
         from services.wall_structure import discover_walls, nearest_by_side, nearest_walls
-        raw_m = compute_raw_oi(raw["contracts"], spot)
-        dw_m = compute_delta_weighted_oi(raw["contracts"], spot)
-        vol_m = compute_volume_gamma(raw["contracts"], spot)
+        raw_m = await asyncio.to_thread(compute_raw_oi, raw["contracts"], spot)
+        dw_m = await asyncio.to_thread(compute_delta_weighted_oi, raw["contracts"], spot)
+        vol_m = await asyncio.to_thread(compute_volume_gamma, raw["contracts"], spot)
         # S2: DISTINCT fourth activity surface (R10-01 repair). session_dvol
         # is Σ c·u·V·|δ|; the legacy volume_gamma keys stay Σ c·u·V,
         # backward compatible. No silent field replacement.
-        sess_dvol_m = _compute_sess_dvol(raw["contracts"], spot)
-        vendor_rows = compute_gex_by_strike_vendor(spot, raw["contracts"])
-        vendor_grid = compute_gex_grid_vendor(spot, raw["contracts"])
-        delta_grid = compute_gex_grid_delta_weighted(spot, raw["contracts"])
-        activity_grid = compute_gex_grid_volume_vendor(spot, raw["contracts"])
-        sess_dvol_grid = compute_gex_grid_session_delta_volume(spot, raw["contracts"])
+        sess_dvol_m = await asyncio.to_thread(_compute_sess_dvol, raw["contracts"], spot)
+        vendor_rows = await asyncio.to_thread(
+            compute_gex_by_strike_vendor, spot, raw["contracts"])
+        vendor_grid = await asyncio.to_thread(
+            compute_gex_grid_vendor, spot, raw["contracts"])
+        delta_grid = await asyncio.to_thread(
+            compute_gex_grid_delta_weighted, spot, raw["contracts"])
+        activity_grid = await asyncio.to_thread(
+            compute_gex_grid_volume_vendor, spot, raw["contracts"])
+        sess_dvol_grid = await asyncio.to_thread(
+            compute_gex_grid_session_delta_volume, spot, raw["contracts"])
         metrics.update({
             "gex_gross_v1": raw_m.gross, "gex_net_v1": raw_m.net,
             "gex_call": raw_m.call, "gex_put": raw_m.put,
@@ -1658,24 +1723,26 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
             "formula_version": "gex.v2",
         })
         sol_scope = {"symbol": ticker, "formula": "gex.v2"}
-        sol_walls = discover_walls(strikes if exposure_basis == "OI" else vendor_rows, spot,
-                                   scope=sol_scope)
+        sol_walls = await asyncio.to_thread(
+            discover_walls, strikes if exposure_basis == "OI" else vendor_rows, spot,
+            scope=sol_scope)
         metrics["walls"] = sol_walls
-        metrics["nearest_walls"] = nearest_walls(sol_walls, spot)
-        metrics["nearest_by_side"] = nearest_by_side(sol_walls, spot)
+        metrics["nearest_walls"] = await asyncio.to_thread(nearest_walls, sol_walls, spot)
+        metrics["nearest_by_side"] = await asyncio.to_thread(nearest_by_side, sol_walls, spot)
         # R6-2: per-wall delta-weighted + session-volume breakdown over the
         # same declared scope (wall-local comparison data for the inspector).
         try:
             from domain.exposure_metrics import wall_metric_breakdown
-            metrics["wall_metrics"] = wall_metric_breakdown(
-                sol_walls, raw["contracts"], spot)
+            metrics["wall_metrics"] = await asyncio.to_thread(
+                wall_metric_breakdown, sol_walls, raw["contracts"], spot)
         except Exception as wme:
             log.debug("wall metric breakdown failed: %s", wme)
             metrics["wall_metrics"] = {}
         # F23: off-screen landmarks from the FULL universe (pre-band vendor
         # rows), so major walls outside the visible window stay navigable.
         try:
-            universe_walls = discover_walls(vendor_rows, spot, scope=sol_scope)
+            universe_walls = await asyncio.to_thread(
+                discover_walls, vendor_rows, spot, scope=sol_scope)
             kept = {w["wall_id"] for w in sol_walls}
             metrics["offscreen_landmarks"] = [
                 {**w, "offscreen": True} for w in universe_walls
@@ -1686,7 +1753,7 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         # One bounded stored baseline. Source clocks, NY session and the FULL
         # request identity govern comparison; build time is only availability.
         from services.solstice_window import recorded_window_activity
-        _w = recorded_window_activity(None, {}, spot)
+        _w = await asyncio.to_thread(recorded_window_activity, None, {}, spot)
         try:
             from services.connection_guard import query_rows
             from services.duckdb_engine import db as _ddb_win
@@ -1701,20 +1768,22 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                 _legacy_scope_key = f"{ticker}:{mode}:{dte}:{scalp}"
                 _prev_rows = []
                 for _scope_key in ([cache_key] if cache_key == _legacy_scope_key else [cache_key, _legacy_scope_key]):
-                    _prev_rows = query_rows(_wconn,
+                    _prev_rows = await run_store(query_rows, _wconn,
                         "SELECT snapshot_id FROM heatmap_snapshots_v2 "
                         "WHERE ticker = '" + str(ticker).replace("'", "''") + "' AND query_key = '"
                         + _scope_key.replace("'", "''") + "' ORDER BY asof_ts DESC LIMIT 1")
                     if _prev_rows:
                         break
                 if _prev_rows:
-                    _w = recorded_window_activity(replay_snapshot(_wconn, _prev_rows[0][0]), {
-                        "ticker": ticker, "data_source": raw.get("data_source"),
-                        "formula_version": "gex.v2", "map_query": requested_map_query,
-                        "event_time": raw.get("event_time") or raw.get("observed_at"),
-                        "fetched_at": raw.get("fetched_at"), "asof": datetime.now(UTC).isoformat(),
-                        "contracts": raw["contracts"],
-                    }, spot)
+                    def _window_from_store():
+                        return recorded_window_activity(replay_snapshot(_wconn, _prev_rows[0][0]), {
+                            "ticker": ticker, "data_source": raw.get("data_source"),
+                            "formula_version": "gex.v2", "map_query": requested_map_query,
+                            "event_time": raw.get("event_time") or raw.get("observed_at"),
+                            "fetched_at": raw.get("fetched_at"), "asof": datetime.now(UTC).isoformat(),
+                            "contracts": raw["contracts"],
+                        }, spot)
+                    _w = await run_store(_window_from_store)
         except Exception as we:
             log.warning("window baseline read failed: %s", we)
             _w["reason"] = "BASELINE_READ_FAILED"
@@ -1733,20 +1802,21 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         metrics["window_interval"] = _w.get("interval")
         metrics["window_provenance_note"] = _w["provenance_note"]
         from services.solstice_enrichment import aggregate_window_by_wall
-        metrics["wall_window"] = aggregate_window_by_wall(sol_walls, _wrows) if _wr is None else {}
+        metrics["wall_window"] = await asyncio.to_thread(
+            aggregate_window_by_wall, sol_walls, _wrows) if _wr is None else {}
     except Exception as me:
         log.debug("solstice metrics surfaces failed (non-fatal): %s", me)
         metrics["error"] = "METRICS_UNAVAILABLE"
 
     # --- New analytics (from EzOptions + GEX-Dashboard) ---
-    implied_move = calc_implied_move(spot, raw["contracts"])
-    prob_distribution = calc_probability_distribution(spot, raw["contracts"])
-    aggregate_curve = calc_aggregate_gex_curve(spot, raw["contracts"], ticker)
-    opportunities = detect_opportunities(strikes, nodes, spot, raw["contracts"])
+    implied_move = await asyncio.to_thread(calc_implied_move, spot, raw["contracts"])
+    prob_distribution = await asyncio.to_thread(calc_probability_distribution, spot, raw["contracts"])
+    aggregate_curve = await run_cpu(calc_aggregate_gex_curve, spot, raw["contracts"], ticker)
+    opportunities = await asyncio.to_thread(detect_opportunities, strikes, nodes, spot, raw["contracts"])
 
     # --- Institutional vol analytics ---
-    iv_surface = calc_iv_surface_data(spot, raw["contracts"])
-    skew = calc_skew_metrics(spot, raw["contracts"])
+    iv_surface = await asyncio.to_thread(calc_iv_surface_data, spot, raw["contracts"])
+    skew = await asyncio.to_thread(calc_skew_metrics, spot, raw["contracts"])
     # Warm verified Public daily closes for copy-only research while normal
     # desktop analytics are built. It reuses a completed-session cache and
     # never starts a provider request from an Ask FLOWW read.
@@ -1773,12 +1843,12 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         iv_rank["rv_close"] = rv.get("rv_close")
 
     # --- Advanced analytics (regime + implied PDF + gamma flip levels) ---
-    market_regime = calc_market_regime(spot, raw["contracts"])
-    implied_pdf = calc_implied_pdf(spot, raw["contracts"])
-    gamma_flip_data = calc_gamma_flip_levels(spot, raw["contracts"], ticker)
-    hedge_impulse = calc_hedge_impulse_curve(spot, raw["contracts"])
-    pressure_cloud = calc_pressure_cloud(spot, raw["contracts"], ticker)
-    charm_integral = calc_charm_integral(spot, raw["contracts"], ticker)
+    market_regime = await asyncio.to_thread(calc_market_regime, spot, raw["contracts"])
+    implied_pdf = await asyncio.to_thread(calc_implied_pdf, spot, raw["contracts"])
+    gamma_flip_data = await asyncio.to_thread(calc_gamma_flip_levels, spot, raw["contracts"], ticker)
+    hedge_impulse = await asyncio.to_thread(calc_hedge_impulse_curve, spot, raw["contracts"])
+    pressure_cloud = await asyncio.to_thread(calc_pressure_cloud, spot, raw["contracts"], ticker)
+    charm_integral = await asyncio.to_thread(calc_charm_integral, spot, raw["contracts"], ticker)
 
     # Velocity & rolling
     velocity = await velocity_and_rolling(ticker, {"strikes_compact": [{"strike": s["strike"], "gex": s["gex"]} for s in strikes]})
@@ -1871,7 +1941,7 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
     # enrichment — each best-effort, never breaking the core payload.
     try:
         from services.solstice_session import playbook_for, session_state
-        payload["session"] = session_state(quality=payload.get("quality"))
+        payload["session"] = await asyncio.to_thread(session_state, quality=payload.get("quality"))
         top_wall = (metrics.get("nearest_walls") or [None])[0]
         payload["playbook"] = playbook_for(top_wall, spot, payload.get("quality"))
     except Exception as se:
@@ -1927,11 +1997,13 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                 )
                 _hconn = getattr(_ddb_hist, "_conn", getattr(_ddb_hist, "conn", None))
                 if _hconn is not None and wid:
-                    db_last = latest_wall_state(_hconn, wid, ticker, scope_id)
+                    def _wall_history(_hconn=_hconn, wid=wid):
+                        return (latest_wall_state(_hconn, wid, ticker, scope_id),
+                                latest_wall_last_state(_hconn, ticker, scope_id, wid))
+                    db_last, db_full = await run_store(_wall_history)
                     # Maximization #1: full dwell state (inside_since/beyond)
                     # outlives restarts via wall_last_state_v1; the event log
                     # alone cannot restore dwell continuity.
-                    db_full = latest_wall_last_state(_hconn, ticker, scope_id, wid)
                     if db_full and is_newer_state(db_full, mem_last):
                         last = db_full
                     if db_last and is_newer_state(db_last, last):
@@ -1939,8 +2011,9 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                     # Durable only on a real file-backed recorder, never on
                     # :memory: fallback.
                     import os as _os
-                    if last is not None and recorder_status(
-                            _hconn, _os.environ.get("DUCKDB_PATH", ":memory:"))["durable"]:
+                    if last is not None and (await asyncio.to_thread(
+                            recorder_status, _hconn,
+                            _os.environ.get("DUCKDB_PATH", ":memory:")))["durable"]:
                         durable = True
             except Exception:
                 pass  # silent by design: history is best-effort; heatmap builds without it (durable=False)
@@ -1978,24 +2051,26 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                     from services.heatmap_history import record_wall_last_state
                     _hconn_last = getattr(_ddb_last, "conn", None)
                     if _hconn_last is not None and wid:
-                        record_wall_last_state(_hconn_last, ticker, scope_id, wid,
-                                               _wall_last_state)
+                        await run_store(record_wall_last_state, _hconn_last,
+                                       ticker, scope_id, wid,
+                                       _wall_last_state)
             with _ctxlib.suppress(Exception):
                 from services.duckdb_engine import db as _ddb_rec
                 from services.heatmap_history import latest_wall_last_state, record_wall_event
                 _hconn2 = getattr(_ddb_rec, "_conn", getattr(_ddb_rec, "conn", None))
                 if _hconn2 is not None and wid and tr.get("event"):
-                    record_wall_event(_hconn2, wid, ticker, tr.get("event"),
-                                      payload.get("snapshotId", ""),
-                                      {"state": tr.get("state"), "at": tr.get("at", now_iso),
-                                       "approach_side": tr.get("approach_side"),
-                                       "inside_since": tr.get("inside_since"),
-                                       "beyond_since": tr.get("beyond_since"),
-                                       "beyond_side": tr.get("beyond_side"),
-                                       "adverse_side": tr.get("adverse_side"),
-                                       "reclaim_state": tr.get("reclaim_state"),
-                                       "wall_position": wpos},
-                                      scope_id)
+                    await run_store(record_wall_event, _hconn2, wid, ticker,
+                                   tr.get("event"),
+                                   payload.get("snapshotId", ""),
+                                   {"state": tr.get("state"), "at": tr.get("at", now_iso),
+                                    "approach_side": tr.get("approach_side"),
+                                    "inside_since": tr.get("inside_since"),
+                                    "beyond_since": tr.get("beyond_since"),
+                                    "beyond_side": tr.get("beyond_side"),
+                                    "adverse_side": tr.get("adverse_side"),
+                                    "reclaim_state": tr.get("reclaim_state"),
+                                    "wall_position": wpos},
+                                   scope_id)
             scenarios.extend(scenario_for(w, spot, wall_position=wpos,
                                           wall_id=wid, scope=scope_id))
         payload["interactions"] = interactions
@@ -2004,7 +2079,7 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         log.debug("solstice interaction attach failed: %s", ie)
     try:
         from services.solstice_regime import regime_at_spot
-        payload["gamma_regime_v1"] = regime_at_spot(spot, raw["contracts"], ticker)
+        payload["gamma_regime_v1"] = await run_cpu(regime_at_spot, spot, raw["contracts"], ticker)
     except Exception as re:
         log.debug("solstice regime attach failed: %s", re)
     try:
@@ -2109,7 +2184,7 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
                                             "bid_ts": None, "ask_ts": None, "delta": None,
                                             "spread_ticks": None, "rejected": True,
                                             "reject_reason": _r.get("reason")})
-                        record_decision(_dconn, {
+                        await run_store(record_decision, _dconn, {
                             "ticker": ticker, "snapshot_id": payload.get("snapshotId", ""),
                             "scenario": _side, "side": _side,
                             "eligible": _res.get("n_eligible", 0) > 0,
@@ -2147,7 +2222,7 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
             _kept = _all[:2000]
             _cov = {"requested": len(_all), "returned": len(_kept),
                     "truncated": len(_all) > len(_kept)}
-            _write = snapshot_writes.submit(
+            _write = await snapshot_writes.submit_async(
                 _conn, {"ticker": ticker,
                                          "expiries_used": payload.get("expiries_used"),
                                          "spot": spot,
@@ -2212,7 +2287,7 @@ async def _build_heatmap_impl(ticker: str, max_expiries: int = 4, with_taps: boo
         payload["recording_receipt"] = {"status": "failed", "reason": "queue_failed",
                                          "snapshot_id": payload.get("snapshotId")}
         log.debug("heatmap_history record skipped: %s", type(rh).__name__)
-    sanitized = _sanitize(payload)
+    sanitized = await asyncio.to_thread(_sanitize, payload)
     from services.solstice_scope import attach_scope_echo
     attach_scope_echo(sanitized, cache_key, history_query_key=history_query_key, formula_version="gex.v2")
     _BUILD_HEATMAP_CACHE[cache_key] = {"ts": time.time(), "data": sanitized,
@@ -2421,43 +2496,198 @@ async def get_trading_summary(ticker: str) -> str:
 
 # ============ Portfolio Helpers ============
 
-async def calc_portfolio_summary(portfolio: dict, spot: float, iv: float) -> dict:
-    """Return portfolio summary with aggregated Greeks and P&L."""
+DEFAULT_CONTRACT_MULTIPLIER = 100
+DEFAULT_MULTIPLIER_SOURCE = "assumed_equity_contract_100"
+
+
+def _portfolio_position_inputs(p: Any, default_iv: float, default_spot: float) -> dict[str, Any]:
+    """Normalise one stored position, or raise ValueError with a typed reason.
+
+    Every rejection reason is explicit so the summary can disclose which
+    stored position could not be priced instead of dropping it silently.
+    """
+    if not isinstance(p, dict):
+        raise ValueError("INVALID_POSITION_DATA")
+    symbol = str(p.get("symbol", "") or "")
+    raw_iv = p.get("entry_iv")
+    raw_underlying = p.get("underlying_price")
+    try:
+        strike = float(p.get("strike", 0))
+        quantity = int(p.get("quantity", 1))
+        entry_price = float(p.get("entry_price", 0))
+        entry_iv = float(default_iv if raw_iv is None else raw_iv)
+        underlying = float(default_spot if raw_underlying is None else raw_underlying)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("INVALID_POSITION_NUMBERS") from exc
+    expiry = str(p.get("expiry", "") or "")
+    try:
+        datetime.strptime(expiry, "%Y-%m-%d")
+    except (TypeError, ValueError) as exc:
+        raise ValueError("INVALID_EXPIRY") from exc
+    if strike <= 0 or not math.isfinite(strike):
+        raise ValueError("INVALID_STRIKE")
+    if quantity == 0:
+        raise ValueError("ZERO_QUANTITY")
+    if entry_price < 0 or not math.isfinite(entry_price):
+        raise ValueError("INVALID_ENTRY_PRICE")
+    if entry_iv <= 0 or not math.isfinite(entry_iv):
+        raise ValueError("INVALID_ENTRY_IV")
+    if underlying <= 0 or not math.isfinite(underlying):
+        raise ValueError("INVALID_UNDERLYING_PRICE")
+    option_type = str(p.get("option_type", "call") or "call").lower()
+    if option_type not in ("call", "put"):
+        raise ValueError("INVALID_OPTION_TYPE")
+    return {
+        "symbol": symbol,
+        "option_type": option_type,
+        "strike": strike,
+        "expiry": expiry,
+        "quantity": quantity,
+        "entry_price": entry_price,
+        "entry_iv": entry_iv,
+        "underlying_price": underlying,
+        "is_long": bool(p.get("is_long", True)),
+    }
+
+
+def _portfolio_multiplier(p: dict[str, Any]) -> tuple[float, str]:
+    """Contract multiplier with its provenance. Never an undeclared 100."""
+    raw = p.get("multiplier")
+    if raw is None:
+        return DEFAULT_CONTRACT_MULTIPLIER, DEFAULT_MULTIPLIER_SOURCE
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return DEFAULT_CONTRACT_MULTIPLIER, DEFAULT_MULTIPLIER_SOURCE
+    if value <= 0 or not math.isfinite(value):
+        return DEFAULT_CONTRACT_MULTIPLIER, DEFAULT_MULTIPLIER_SOURCE
+    return value, "position_record"
+
+
+def _price_portfolio_positions(positions_data: list[Any], spot: float, iv: float
+                               ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Split stored positions into priced rows and disclosed skips.
+
+    A position that cannot be priced is never valued at zero and never
+    dropped without a reason. Money math happens in the caller with Decimal.
+    """
     from portfolio import Position
-    positions_data = portfolio.get("positions", [])
-    pos_list = []
-    for p in positions_data:
+
+    priced: list[dict[str, Any]] = []
+    skipped: list[dict[str, Any]] = []
+    for index, raw in enumerate(positions_data or []):
         try:
-            pos = Position(
-                symbol=p.get("symbol", ""),
-                option_type=p.get("option_type", "call"),
-                strike=float(p.get("strike", 0)),
-                expiry=p.get("expiry", "2026-06-15"),
-                quantity=int(p.get("quantity", 1)),
-                entry_price=float(p.get("entry_price", 0)),
-                entry_iv=float(p.get("entry_iv", iv)),
-                underlying_price=float(p.get("underlying_price", spot)),
-                is_long=p.get("is_long", True),
-            )
-            pos_list.append(pos)
-        except Exception:
+            fields = _portfolio_position_inputs(raw, iv, spot)
+        except ValueError as exc:
+            reason = str(exc)
+            skipped.append({"index": index, "reason": reason,
+                            "symbol": (raw.get("symbol") if isinstance(raw, dict) else None)})
             continue
+        if spot <= 0 or not math.isfinite(spot):
+            skipped.append({"index": index, "reason": "INVALID_SPOT", "symbol": fields["symbol"]})
+            continue
+        if iv <= 0 or not math.isfinite(iv):
+            skipped.append({"index": index, "reason": "INVALID_IV", "symbol": fields["symbol"]})
+            continue
+        try:
+            pos = Position(**fields)
+            greeks = pos.current_greeks(spot, iv)
+        except Exception:
+            skipped.append({"index": index, "reason": "MODEL_PRICE_UNAVAILABLE",
+                            "symbol": fields["symbol"]})
+            continue
+        price = greeks.get("price") if isinstance(greeks, dict) else None
+        if not isinstance(price, (int, float)) or isinstance(price, bool) or not math.isfinite(price):
+            skipped.append({"index": index, "reason": "MODEL_PRICE_UNAVAILABLE",
+                            "symbol": fields["symbol"]})
+            continue
+        multiplier, multiplier_source = _portfolio_multiplier(raw if isinstance(raw, dict) else {})
+        priced.append({"index": index, "position": pos, "greeks": greeks, "price": float(price),
+                       "multiplier": multiplier, "multiplier_source": multiplier_source,
+                       "symbol": fields["symbol"]})
+    return priced, skipped
+
+
+async def calc_portfolio_summary(portfolio: dict, spot: float, iv: float) -> dict:
+    """Return portfolio summary with aggregated Greeks and a typed P&L object.
+
+    Money uses Decimal (same rule as ``Position.pnl``). The P&L object carries
+    the fields the Portfolio panel consumes (``total_pnl``, ``pct_pnl``,
+    ``total_entry_value``, ``total_current_value``) plus its own status,
+    reason, currency and multiplier provenance. Positions that cannot be
+    priced are disclosed in ``skipped`` and excluded from the totals; an
+    empty priced population is *unavailable*, never a measured zero.
+    """
+    from decimal import Decimal
+
+    positions_data = portfolio.get("positions", []) or []
+    priced, skipped = _price_portfolio_positions(positions_data, spot, iv)
 
     totals = {"delta": 0, "gamma": 0, "vega": 0, "theta": 0}
-    total_pnl = 0.0
-    for pos in pos_list:
-        g = pos.current_greeks(spot, iv)
-        for k in totals:
-            totals[k] += g.get(k, 0)
-        current_price = g.get("price", 0)
+    total_entry = Decimal("0")
+    total_current = Decimal("0")
+    total_pnl = Decimal("0")
+    for row in priced:
+        pos = row["position"]
+        greeks = row["greeks"]
+        for key in totals:
+            totals[key] += greeks.get(key, 0)
         sign = 1 if pos.is_long else -1
-        total_pnl += (current_price - pos.entry_price) * sign * abs(pos.quantity) * 100
+        qty = Decimal(abs(int(pos.quantity)))
+        multiplier = Decimal(str(row["multiplier"]))
+        entry = Decimal(str(pos.entry_price))
+        current = Decimal(str(row["price"]))
+        total_entry += entry * qty * multiplier
+        total_current += current * qty * multiplier
+        total_pnl += (current - entry) * sign * qty * multiplier
+
+    coverage = {"stored": len(positions_data), "priced": len(priced), "skipped": len(skipped)}
+    multipliers = [{"index": row["index"], "value": row["multiplier"],
+                    "source": row["multiplier_source"]} for row in priced]
+    if priced:
+        entry_value = float(round(total_entry, 2))
+        current_value = float(round(total_current, 2))
+        pnl_value = float(round(total_pnl, 2))
+        pct_pnl = (float(round(total_pnl / total_entry * 100, 4))
+                   if total_entry > 0 else None)
+        pnl_reason = None
+        pnl_pct_reason = None if pct_pnl is not None else "NO_ENTRY_VALUE"
+        pnl_status = "ok"
+    else:
+        entry_value = current_value = pnl_value = pct_pnl = None
+        pnl_reason = "NO_PRICED_POSITIONS"
+        pnl_pct_reason = None
+        pnl_status = "unavailable"
+
+    pnl = {
+        "status": pnl_status,
+        "reason": pnl_reason,
+        "total_pnl": pnl_value,
+        "pct_pnl": pct_pnl,
+        "pct_reason": pnl_pct_reason,
+        "total_entry_value": entry_value,
+        "total_current_value": current_value,
+        "currency": "USD",
+        "unit": "USD",
+        "multiplier": {"value": DEFAULT_CONTRACT_MULTIPLIER,
+                       "source": DEFAULT_MULTIPLIER_SOURCE,
+                       "per_position": multipliers},
+        "coverage": coverage,
+    }
 
     return {
         "name": portfolio.get("name", ""),
         "positions": len(positions_data),
+        "positions_priced": len(priced),
+        "positions_skipped": len(skipped),
+        "skipped": skipped,
         "greeks": {k: round(v, 4) for k, v in totals.items()},
-        "pnl": round(total_pnl, 2),
+        "pnl": pnl,
+        "total_pnl": pnl_value,
+        "valuation_basis": "local_bs_model_at_spot_iv",
+        "spot": spot,
+        "iv": iv,
+        "note": "Model-priced from the supplied spot/IV — a research estimate, not a broker mark.",
     }
 
 
@@ -2742,15 +2972,15 @@ async def _snapshot_chains():
         except Exception as e:
             log.warning(f"snapshot: no duckdb conn: {e}")
             return
-    create_snapshot_table(conn)
+    await run_store(create_snapshot_table, conn)
     for t in ("SPY", "QQQ", "IWM"):
         try:
             raw = await fetch_spot_and_chains_merged(t, 4)
             if not raw or raw.get("spot") != raw.get("spot"):
                 log.warning(f"chain snapshot {t}: no data")
                 continue
-            batch = contracts_to_recordbatch(raw)
-            n = bulk_insert(conn, batch)
+            batch = await asyncio.to_thread(contracts_to_recordbatch, raw)
+            n = await run_store(bulk_insert, conn, batch)
             log.info(f"chain snapshot {t}: {n} rows")
             # Exposure alerts (VEX walls / charm pins vs last grid snapshot).
             # Ported pattern from floww-2 gsd/010 (their repo untouched):
@@ -2761,19 +2991,25 @@ async def _snapshot_chains():
                 from services import flow_alerts as _fa
                 from services.duckdb_engine import db as _duckdb
 
-                grid = compute_gex_grid(raw.get("spot") or 0,
-                                        raw.get("contracts") or [], t)
-                _fa.init_flow_alert_tables(_duckdb)
+                grid = await asyncio.to_thread(compute_gex_grid,
+                                               raw.get("spot") or 0,
+                                               raw.get("contracts") or [], t)
+                # The alert-table DDL takes the shared connection lock several
+                # times. It must never run on the event loop: the recorder
+                # holds that same lock for a whole write transaction, so a
+                # loop-side call would freeze every request for its duration.
+                await run_store(_fa.init_flow_alert_tables, _duckdb)
                 try:
                     from routes.vpin import snapshot_vpin_state
-                    _vpin_state = snapshot_vpin_state(t)
+                    _vpin_state = await asyncio.to_thread(snapshot_vpin_state, t)
                 except Exception:
                     _vpin_state = None
                 try:
                     from advanced_analytics import calc_gamma_flip_levels
-                    _flip = calc_gamma_flip_levels(
+                    _flip = (await asyncio.to_thread(
+                        calc_gamma_flip_levels,
                         float(raw.get("spot") or 0),
-                        raw.get("contracts") or [], t).get("gamma_flip")
+                        raw.get("contracts") or [], t)).get("gamma_flip")
                 except Exception:
                     _flip = None
                 try:
@@ -2798,9 +3034,12 @@ async def _snapshot_chains():
                     vpin_state=_vpin_state, flip_level=_flip,
                     liquidity_state=_liq_state)
                 if events:
-                    kept = _fa.dedup_filter(_duckdb, events)
+                    # The dedup read and the alert write both take the shared
+                    # connection lock: they run on the store pool, never on
+                    # the event loop.
+                    kept = await run_store(_fa.dedup_filter, _duckdb, events)
                     if kept:
-                        _fa.persist_alerts(_duckdb, kept)
+                        await run_store(_fa.persist_alerts, _duckdb, kept)
                         log.info(f"exposure alerts {t}: {len(kept)} events")
             except Exception as e:
                 log.warning(f"exposure alert eval {t}: {e}")
@@ -3558,6 +3797,16 @@ _VPIN_AUTOFETCH_TICKERS = ["SPY", "QQQ", "IWM"]  # Re-enabled with 3 tickers
 _VPIN_AUTOFETCH_INTERVAL = 300
 
 
+def _build_toxicity_ensemble():
+    """Build the toxicity ensemble off the request thread.
+
+    The first construction imports torch and builds a model — seconds of work
+    that must never run on the event loop.
+    """
+    from services.ml_ensemble import ToxicityEnsemble
+    return ToxicityEnsemble()
+
+
 async def _vpin_autofeed_loop():
     """Background loop: fetch recent trades from yfinance, compute VPIN,
     and feed to the ToxicityEnsemble for each tracked ticker."""
@@ -3609,8 +3858,7 @@ async def _vpin_autofeed_loop():
                     qi_val = engine._qi_tracker.qi
                     if vpin_val > 0:
                         if t not in _ensembles:
-                            from services.ml_ensemble import ToxicityEnsemble
-                            _ensembles[t] = ToxicityEnsemble()
+                            _ensembles[t] = await asyncio.to_thread(_build_toxicity_ensemble)
                         _ensembles[t].update(vpin_val, qi_val)
 
                 except Exception as e:
@@ -3659,10 +3907,11 @@ async def _public_sweep_loop():
         import subprocess
 
         _root = str(pathlib.Path(__file__).resolve().parent.parent)
-        _sha = subprocess.run(
+        _sha = (await asyncio.to_thread(
+            subprocess.run,
             ["git", "-C", _root, "rev-parse", "--short", "HEAD"],
             capture_output=True, text=True, timeout=5,
-            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0).stdout.strip() or "unknown"
+            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)).stdout.strip() or "unknown"
     except Exception:
         _sha = "unknown"
     log.info("public sweep identity: pid=%d tree=%s", os.getpid(), _sha)
@@ -3749,6 +3998,14 @@ async def on_stop():
         await _shutdown_join(_scheduler_task, "scheduler")
 
     await _stop_tracked_background_tasks()
+
+    from services.cpu_execution import close_cpu
+    await _shutdown_join(close_cpu(), "calculation processes")
+
+    # The bounded store pool holds its own threads: drain and stop them so no
+    # store worker outlives the app.
+    from services.store_executor import close_store
+    await _shutdown_join(close_store(), "store workers")
 
     # Research cancellation persists terminal state. It must finish while
     # Mongo is still open; its later registered callback is idempotent.

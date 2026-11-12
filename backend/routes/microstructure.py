@@ -10,10 +10,13 @@ so the frontend never crashes.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
 from fastapi import APIRouter, Query
+
+from services.store_executor import STORE_BUSY_MESSAGE, StoreBusy, run_store
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +31,9 @@ _liquidity_metrics: dict[str, Any] = {}
 _anomaly_detectors: dict[str, Any] = {}
 _trinity_index = None
 _node_trackers: dict[str, Any] = {}
+# Hydrations still in flight, keyed by ticker. Concurrent cold requests share
+# one hydration task, so every caller receives the same tracker object.
+_node_tracker_pending: dict[str, asyncio.Task] = {}
 _fragility_index = None
 
 
@@ -86,33 +92,74 @@ def _get_trinity_index():
     return _trinity_index
 
 
-def _get_node_tracker(ticker: str):
-    if ticker not in _node_trackers:
-        from services.node_lifecycle import NodeLifecycleTracker
-        tracker = NodeLifecycleTracker()
-        # Restart recovery (maximization #1): hydrate tap history from the
-        # durable store. Best-effort — any failure keeps a fresh tracker.
-        try:
-            from services.duckdb_engine import db as _duckdb
-            from services.heatmap_history import latest_node_lifecycle
-            stored = latest_node_lifecycle(_duckdb._conn, ticker, "microstructure")
-            if stored:
-                tracker = NodeLifecycleTracker.from_dict(stored)
-        except Exception as e:
-            logger.debug("node tracker hydrate failed for %s: %s", ticker, e)
-        _node_trackers[ticker] = tracker
-    return _node_trackers[ticker]
+def _hydrate_node_tracker(ticker: str):
+    """Build a tracker and hydrate it from the durable store.
 
-
-def _persist_node_tracker(ticker: str) -> None:
-    """Best-effort durable write of a tracker's state (never raises)."""
+    Runs on a store worker so the DuckDB read never blocks the event loop.
+    """
+    from services.node_lifecycle import NodeLifecycleTracker
+    tracker = NodeLifecycleTracker()
+    # Restart recovery (maximization #1): hydrate tap history from the
+    # durable store. Best-effort — any failure keeps a fresh tracker.
     try:
-        tracker = _node_trackers.get(ticker)
-        if tracker is None:
-            return
+        from services.duckdb_engine import db as _duckdb
+        from services.heatmap_history import latest_node_lifecycle
+        stored = latest_node_lifecycle(_duckdb._conn, ticker, "microstructure")
+        if stored:
+            tracker = NodeLifecycleTracker.from_dict(stored)
+    except Exception as e:
+        logger.debug("node tracker hydrate failed for %s: %s", ticker, e)
+    return tracker
+
+
+async def _get_node_tracker(ticker: str):
+    tracker = _node_trackers.get(ticker)
+    if tracker is not None:
+        return tracker
+    task = _node_tracker_pending.get(ticker)
+    if task is None:
+        # The hydration runs on a store worker, so the DuckDB read never
+        # blocks the event loop.
+        task = asyncio.create_task(run_store(_hydrate_node_tracker, ticker))
+        _node_tracker_pending[ticker] = task
+
+        def _finished(done):
+            _node_tracker_pending.pop(ticker, None)
+            if not done.cancelled() and done.exception() is None:
+                _node_trackers[ticker] = done.result()
+
+        task.add_done_callback(_finished)
+    # Shielded: one cancelled caller must not cancel the shared hydration.
+    return await asyncio.shield(task)
+
+
+async def _persist_node_tracker(ticker: str) -> None:
+    """Best-effort durable write of a tracker's state.
+
+    A write error is tolerated: the tracker stays correct in memory. A
+    refusal from the bounded store pool is not a write error - it means the
+    durable state was not stored, so it propagates to the route's degraded
+    body instead of being answered as a successful persist.
+    """
+    tracker = _node_trackers.get(ticker)
+    if tracker is None:
+        return
+
+    # The snapshot is taken on the request thread: to_dict() walks the
+    # tracker's nodes, and update() mutates that same mapping on this thread.
+    snapshot = tracker.to_dict()
+
+    def _write() -> None:
         from services.duckdb_engine import db as _duckdb
         from services.heatmap_history import record_node_lifecycle
-        record_node_lifecycle(_duckdb._conn, ticker, "microstructure", tracker.to_dict())
+        record_node_lifecycle(_duckdb._conn, ticker, "microstructure", snapshot)
+
+    try:
+        await run_store(_write)
+    except StoreBusy:
+        # Backpressure: the durable write did not happen. Let the route
+        # report it instead of claiming the tracker was persisted.
+        raise
     except Exception as e:
         logger.debug("node tracker persist failed for %s: %s", ticker, e)
 
@@ -316,12 +363,18 @@ async def nodes_endpoint(ticker: str, expiries: int = Query(5, ge=1, le=20)):
             if gex_1d[i] > gex_1d[i - 1] and gex_1d[i] > gex_1d[i + 1] and gex_1d[i] > 0:
                 king_nodes.append((strikes[i], gex_1d[i]))
 
-        tracker = _get_node_tracker(ticker.upper())
+        tracker = await _get_node_tracker(ticker.upper())
         result = tracker.update(spot, king_nodes)
         result["ticker"] = ticker.upper()
         result["status"] = "ok"
-        _persist_node_tracker(ticker.upper())
+        await _persist_node_tracker(ticker.upper())
         return result
+    except StoreBusy:
+        # The bounded store pool refused the read: answer with the same fixed
+        # body the global 503 handler uses, never the pool's own text.
+        logger.error("Nodes store busy for %s", ticker)
+        return {"ticker": ticker.upper(), "status": "error",
+                "error": STORE_BUSY_MESSAGE}
     except Exception as e:
         logger.error(f"Nodes error for {ticker}: {e}")
         return {"ticker": ticker.upper(), "status": "error", "error": str(e)}

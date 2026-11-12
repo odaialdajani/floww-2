@@ -209,3 +209,51 @@
 .tv-cell-h { min-height:46px; }
 .tv-controls select { font-size:12px; min-height:30px; }
 .tv-loading,.tv-error,.tv-error-panel,.tv-renderer-panel { opacity:1; }
+
+/* Market's three page tabs share a quiet baseline instead of competing cards.
+   These classes are used only by the Market page; explicit light follows the
+   existing theme variables just as the comparison does. The background-only
+   priority overrides the shared theme's high-specificity :is() control list. */
+html .legacy-theme button.tv-subtab.tv-subtab {
+  min-height: 36px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent !important;
+  color: var(--text-dim);
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  box-shadow: none;
+}
+html .legacy-theme button.tv-subtab.tv-subtab:hover {
+  color: var(--text);
+  background: var(--floww-raised, var(--panel-2, #191919)) !important;
+}
+html .legacy-theme button.tv-subtab.tv-subtab.on {
+  background: transparent !important;
+  color: var(--gold-bright, #e3c16a);
+  border-bottom-color: var(--gold, #e3c16a);
+  box-shadow: none;
+}
+.tv-root .tv-header,
+.tv-root .tv-cell,
+.tv-root .tv-error-panel,
+.tv-root .tv-renderer-panel {
+  border-color: var(--border, #282828);
+  border-radius: 7px;
+  box-shadow: none;
+}
+.tv-root .tv-header { padding: 10px 12px; }
+.tv-root .tv-title { font-size: 14px; font-weight: 600; }
+.tv-root .tv-cell-h { padding: 10px 12px; font-size: 13px; font-weight: 600; }
+.tv-root .tv-legend,
+.tv-root .tv-cell-h-notes,
+.tv-root .tv-status { padding: 8px 12px; }
+.tv-root .tv-controls select {
+  border-color: var(--border, #282828);
+  border-radius: 5px;
+  min-height: 30px;
+}
+
+.tv-root .tv-retry:disabled { opacity: 0.55; cursor: default; }

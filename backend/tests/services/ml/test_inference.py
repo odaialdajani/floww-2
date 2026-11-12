@@ -28,6 +28,32 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 # ── Fixtures ────────────────────────────────────────────────────────────
 
 @pytest.fixture
+def offline_yahoo_prices(monkeypatch):
+    """Synthetic contract inputs, never market evidence or model-quality proof.
+
+    Keep feature calculations and temporary training real; isolate only the
+    vendor download so these schema/range/serialization tests are repeatable.
+    """
+    import yfinance as yf
+
+    from services.ml import inference
+
+    step = np.arange(260, dtype=float)
+    close = 100 + 0.03 * step + 3 * np.sin(step / 5) + 0.5 * np.sin(step * 1.7)
+    opened = close - 0.2 * np.cos(step / 3)
+    prices = pd.DataFrame({
+        "Open": opened,
+        "High": np.maximum(opened, close) + 0.75,
+        "Low": np.minimum(opened, close) - 0.65,
+        "Close": close,
+        "Volume": 1_000_000 + 1000 * (step % 17),
+    }, index=pd.date_range("2024-01-02", periods=len(step), freq="B"))
+    monkeypatch.setattr(yf, "download", lambda *args, **kwargs: prices.copy(deep=True))
+    monkeypatch.setattr(inference, "_yfinance_raw_cache", {})
+    return prices
+
+
+@pytest.fixture
 def sample_features_df():
     """Create a sample features DataFrame matching the expected schema."""
     n = 100
@@ -162,6 +188,7 @@ def trained_model_dir(tmp_path):
 
 # ── Feature Engineering Tests ──────────────────────────────────────────
 
+@pytest.mark.usefixtures("offline_yahoo_prices")
 class TestComputeLiveFeatures:
     """Tests for compute_live_features function."""
 
@@ -229,6 +256,16 @@ class TestComputeLiveFeatures:
                 assert len(df) > 0
             except Exception:
                 pass  # Mock data may not be perfect
+
+    def test_missing_vendor_history_is_refused(self, monkeypatch):
+        import yfinance as yf
+
+        from services.ml import DegenerateModelError
+        from services.ml.inference import compute_live_features
+
+        monkeypatch.setattr(yf, "download", lambda *args, **kwargs: pd.DataFrame())
+        with pytest.raises(DegenerateModelError, match="No data returned"):
+            compute_live_features("SPY", period="3mo")
 
 
 # ── Inference Engine Tests ─────────────────────────────────────────────
@@ -394,6 +431,7 @@ class TestMlBriefingIntegrator:
 
 # ── ML Training Script Tests ──────────────────────────────────────────
 
+@pytest.mark.usefixtures("offline_yahoo_prices")
 class TestTrainRealMl:
     """Tests for the training script."""
 

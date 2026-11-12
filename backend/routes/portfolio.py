@@ -5,11 +5,24 @@ Portfolio management routes.
 """
 from __future__ import annotations
 
+import hashlib
+import json
 from datetime import UTC
 
 from fastapi import APIRouter, HTTPException, Path, Query
 
 router = APIRouter()
+
+
+def _book_revision(name: str, positions: list) -> str:
+    """Concurrency identity for the stored rows; never an authorization token."""
+    if not isinstance(positions, list):
+        raise HTTPException(503, "The stored portfolio has no valid positions list")
+    try:
+        content = json.dumps([name, positions], sort_keys=True, separators=(",", ":"), allow_nan=False)
+    except (TypeError, ValueError) as error:
+        raise HTTPException(503, "The stored portfolio cannot be read safely") from error
+    return hashlib.sha256(content.encode()).hexdigest()
 
 
 @router.get("/portfolio/{name}")
@@ -18,10 +31,11 @@ async def get_portfolio(name: str, spot: float = Query(0), iv: float = Query(0.1
     portfolio = await db.portfolios.find_one({"name": name}, {"_id": 0})
     if not portfolio:
         raise HTTPException(404, f"Portfolio '{name}' not found")
+    revision = _book_revision(name, portfolio.get("positions"))
     if spot > 0:
         summary = await calc_portfolio_summary(portfolio, spot, iv)
-        return summary
-    return portfolio
+        return {**summary, "book_revision": revision}
+    return {**portfolio, "book_revision": revision}
 
 
 @router.post("/portfolio/{name}/position")
@@ -41,17 +55,29 @@ async def add_position(name: str, position: dict):
 
 
 @router.delete("/portfolio/{name}/position/{index}")
-async def remove_position(name: str, index: int = Path(..., ge=0)):
+async def remove_position(
+    name: str,
+    index: int = Path(..., ge=0),
+    expected_revision: str | None = Query(None, min_length=64, max_length=64, pattern="^[a-f0-9]{64}$"),
+):
     from server import db
+    if expected_revision is None:
+        raise HTTPException(428, "Refresh the stored book before removing a position")
     portfolio = await db.portfolios.find_one({"name": name})
     if not portfolio:
         raise HTTPException(404, f"Portfolio '{name}' not found")
-    positions = portfolio.get("positions", [])
+    positions = portfolio.get("positions")
+    if _book_revision(name, positions) != expected_revision:
+        raise HTTPException(409, "The stored book changed; refresh and review the position again")
     if index >= len(positions):
         raise HTTPException(400, f"Invalid position index {index}")
-    positions.pop(index)
-    await db.portfolios.update_one({"name": name}, {"$set": {"positions": positions}})
-    return {"status": "removed", "positions": len(positions)}
+    remaining = positions[:index] + positions[index + 1:]
+    result = await db.portfolios.update_one(
+        {"name": name, "positions": positions}, {"$set": {"positions": remaining}},
+    )
+    if result.matched_count != 1:
+        raise HTTPException(409, "The stored book changed; refresh and review the position again")
+    return {"status": "removed", "positions": len(remaining)}
 
 
 @router.get("/portfolio/{name}/scenario")

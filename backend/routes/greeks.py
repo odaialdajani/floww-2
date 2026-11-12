@@ -21,6 +21,8 @@ import duckdb
 import numpy as np
 from fastapi import APIRouter, HTTPException
 
+from services.store_executor import run_store
+
 log = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -40,12 +42,8 @@ def _get_db_path() -> Path:
     return Path(__file__).resolve().parent.parent / "data" / "gflows.duckdb"
 
 
-def _query_greeks(db_path: Path, ticker: str) -> list[dict[str, Any]]:
-    """Query aggregated Greeks by strike for a given ticker.
-
-    Joins gflows_greeks data, aggregates by strike across expiries.
-    Returns list of dicts with strike, delta_absolute, gamma_total, vanna, charm.
-    """
+def _require_db(db_path: Path) -> None:
+    """The store must exist before a read-only connection can be opened."""
     if not db_path.exists():
         log.error("Gflows DuckDB not found: %s", db_path)
         raise HTTPException(
@@ -53,7 +51,19 @@ def _query_greeks(db_path: Path, ticker: str) -> list[dict[str, Any]]:
             detail="Greeks data not available — run setup_gflows_data.py first",
         )
 
-    conn = duckdb.connect(str(db_path), read_only=True)
+
+def _query_greeks(db_path: Path, ticker: str,
+                  conn: duckdb.DuckDBPyConnection | None = None) -> list[dict[str, Any]]:
+    """Query aggregated Greeks by strike for a given ticker.
+
+    Joins gflows_greeks data, aggregates by strike across expiries.
+    Returns list of dicts with strike, delta_absolute, gamma_total, vanna, charm.
+    """
+    _require_db(db_path)
+
+    owned = conn is None
+    if owned:
+        conn = duckdb.connect(str(db_path), read_only=True)
     try:
         # Aggregate by strike across all expiries
         # delta_absolute: sum of |delta| * OI proxy (use count as weight)
@@ -106,14 +116,18 @@ def _query_greeks(db_path: Path, ticker: str) -> list[dict[str, Any]]:
 
         return result
     finally:
-        conn.close()
+        if owned:
+            conn.close()
 
 
-def _get_expiries(db_path: Path, ticker: str) -> list[str]:
+def _get_expiries(db_path: Path, ticker: str,
+                  conn: duckdb.DuckDBPyConnection | None = None) -> list[str]:
     """Get distinct expiry dates for a ticker."""
     if not db_path.exists():
         return []
-    conn = duckdb.connect(str(db_path), read_only=True)
+    owned = conn is None
+    if owned:
+        conn = duckdb.connect(str(db_path), read_only=True)
     try:
         rows = conn.execute(f"""
             SELECT DISTINCT expiry
@@ -122,6 +136,29 @@ def _get_expiries(db_path: Path, ticker: str) -> list[str]:
             ORDER BY expiry ASC
         """, [ticker]).fetchall()
         return [row[0] for row in rows]
+    finally:
+        if owned:
+            conn.close()
+
+
+def _read_greeks_profile(db_path: Path, ticker: str) -> tuple[list[dict[str, Any]], list[str]]:
+    """Read the whole profile over one read-only handle.
+
+    The handle is opened and closed inside this call: DuckDB refuses a
+    read-write open of the same file while a read-only handle is held, and a
+    cancelled request must never leak one.
+
+    The store is checked before the handle is opened, inside the worker. The
+    route checks it too, but the file can disappear between that check and
+    this one; without the second check the open would raise a bare DuckDB
+    error and answer 500 instead of the documented 503.
+    """
+    _require_db(db_path)
+    conn = duckdb.connect(str(db_path), read_only=True)
+    try:
+        rows = _query_greeks(db_path, ticker, conn)
+        expiries = _get_expiries(db_path, ticker, conn) if rows else []
+        return rows, expiries
     finally:
         conn.close()
 
@@ -148,7 +185,12 @@ async def get_greeks_profile(ticker: str):
     upper_ticker = ticker.upper().strip()
 
     db_path = _get_db_path()
-    rows = _query_greeks(db_path, upper_ticker)
+    _require_db(db_path)
+    # One read-only connection for the whole read, opened, used and closed
+    # off the request thread. It is closed there: DuckDB refuses a read-write
+    # open of the same file while a read-only handle is held, and the
+    # documented setup script must keep working against a live backend.
+    rows, expiries = await run_store(_read_greeks_profile, db_path, upper_ticker)
 
     if not rows:
         raise HTTPException(
@@ -162,9 +204,6 @@ async def get_greeks_profile(ticker: str):
     gamma_total = [r["gamma_total"] for r in rows]
     vanna = [r["vanna"] for r in rows]
     charm = [r["charm"] for r in rows]
-
-    # Get expiries for this ticker
-    expiries = _get_expiries(db_path, upper_ticker)
 
     return {
         "ticker": upper_ticker,

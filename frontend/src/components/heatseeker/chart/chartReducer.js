@@ -1,14 +1,41 @@
+import { LAYOUT_PRESETS } from './paneLayoutPresets';
+export { LAYOUT_PRESETS } from './paneLayoutPresets';
 // B11 pane reducer: focus owns symbol, 5 link dims, no echo, price off for unlike
 // symbols, allowlist-only sync, atomic invalidation, reject late generations.
 // B11 extension: layout presets, atomic evidence invalidation on layout change,
 // per-instrument sync resolution and a top-level panesReducer for the mounted
 // pane manager. All B06-era helper semantics are preserved verbatim.
 export const LINK_DIMS = ['interval', 'crosshair', 'time', 'price', 'session'];
-export const LAYOUT_PRESETS = [
-  { id: 'single', panes: 1 },
-  { id: 'split', panes: 2 },
-  { id: 'three', panes: 3 },
-];
+// Visibility is separate from data/scope links. Unknown keys and non-booleans
+// refuse the whole transaction, so a settings event cannot carry market facts.
+export const DEFAULT_PANE_SETTINGS = Object.freeze({ vwap: true, bands: false, profile: true, cvd: true, volume: true });
+export function cleanPaneSettings(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const keys = Object.keys(value);
+  if (!keys.length || keys.some(key => !Object.prototype.hasOwnProperty.call(DEFAULT_PANE_SETTINGS, key)
+    || typeof value[key] !== 'boolean')) return null;
+  return Object.fromEntries(keys.map(key => [key, value[key]]));
+}
+
+export function applyPaneSettings(panes, states, binding, epoch, value, linked) {
+  const origin = binding && panes.find(pane => pane.id === binding.id);
+  if (!origin || binding.epoch !== epoch || origin.symbol !== binding.symbol
+    || origin.generation !== binding.generation || origin.focused !== binding.focused) return states;
+  // React setters also accept functional updates (the Indicators hide/show
+  // controls use them). Resolve only after ownership checks and against the
+  // latest state, not the value captured by an earlier pane render.
+  const currentSettings = { ...DEFAULT_PANE_SETTINGS, ...cleanPaneSettings(states[origin.id]?.settings) };
+  const settings = cleanPaneSettings(typeof value === 'function' ? value(currentSettings) : value);
+  if (!settings) return states;
+  const next = { ...states };
+  for (const pane of panes) {
+    if (pane.id !== origin.id && !linked) continue;
+    const current = states[pane.id] || {};
+    next[pane.id] = { ...current, settings: { ...DEFAULT_PANE_SETTINGS, ...cleanPaneSettings(current.settings), ...settings } };
+  }
+  return next;
+}
+
 export function createPanes(count = 1, symbol = 'SPY') {
   return Array.from({ length: count }, (_, i) => ({ id: `pane-${i}`, symbol, focused: i === 0, generation: 0 }));
 }
@@ -46,9 +73,10 @@ export function invalidateAll(panes) {
 // previous composition's evidence atomically). Pane 0 holds focus when the
 // previous focused pane was removed by the shrink.
 export function resizePanes(panes, count, symbol) {
-  const base = invalidateAll(panes.slice(0, count));
+  const generation = Math.max(0, ...panes.map(p => p.generation)) + 1;
+  const base = panes.slice(0, count).map(p => ({ ...p, generation }));
   const next = [...base];
-  while (next.length < count) next.push({ id: `pane-${next.length}`, symbol, focused: false, generation: 1 });
+  while (next.length < count) next.push({ id: `pane-${next.length}`, symbol, focused: false, generation });
   const hadFocused = next.some((p) => p.focused);
   return next.map((p, i) => ({ ...p, focused: hadFocused ? p.focused : i === 0 }));
 }
@@ -82,8 +110,23 @@ export function panesReducer(panes, action) {
       return panes.map((p) => (p.id === action.id ? applyResult(p, action.result) : p)).filter(Boolean);
     // B12 persistence restore: set pane symbols in order without touching focus
     // or generations — durable layout identity, not a new composition.
-    case 'symbols':
-      return panes.map((p, i) => (action.symbols && typeof action.symbols[i] === 'string' && action.symbols[i] ? { ...p, symbol: action.symbols[i] } : p));
+    //
+    // The supplied array IS the composition: it must fully determine every
+    // pane it addresses. A pane beyond the array previously kept its OLD
+    // symbol, so importing a short array into a wider arrangement silently
+    // blended the imported composition with the previous layout's symbols
+    // (and the blend was autosaved, so it survived reload). Surplus panes are
+    // therefore cleared to the host symbol instead of inheriting a stale one:
+    // the result is always exactly what the array describes.
+    case 'symbols': {
+      const supplied = Array.isArray(action.symbols) ? action.symbols : [];
+      const fallback = action.symbol || (panes[0] && panes[0].symbol) || 'SPY';
+      return panes.map((p, i) => {
+        const next = supplied[i];
+        const symbol = (typeof next === 'string' && next) ? next : fallback;
+        return symbol === p.symbol ? p : { ...p, symbol };
+      });
+    }
     default:
       return panes;
   }

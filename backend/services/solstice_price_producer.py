@@ -155,9 +155,11 @@ def _drive_maybe_async(fn: Callable, *args: Any) -> Any:
         asyncio.get_running_loop()
     except RuntimeError:
         return asyncio.run(result)
-    # Already inside a loop: do not block; treat as a missed observation.
-    log.debug("price producer async seam called from running loop — gap")
-    return None
+    # An undriven coroutine is not a successful budget acquisition. Refuse
+    # before dispatch, and close the coroutine we created without running it.
+    if inspect.iscoroutine(result):
+        result.close()
+    raise RuntimeError("price producer async seam requires a synchronous worker")
 
 
 class PricePathProducer:
@@ -200,28 +202,31 @@ class PricePathProducer:
         self.last_tick_at: float | None = None
         self.last_latency_ms: float | None = None
 
-    def _budget_allowed(self) -> bool:
-        if self.budget is None:
-            return True
+    def _budget_allowed(self) -> tuple[bool, Callable | None]:
+        budget = self.budget
+        if budget is None:
+            return True, None
         try:
-            acquire = getattr(self.budget, "acquire_n", None) or getattr(self.budget, "acquire", None)
+            acquire = getattr(budget, "acquire_n", None) or getattr(budget, "acquire", None)
             if acquire is None:
-                return True
+                return True, None
+            release = getattr(budget, "release", None)
             try:
                 _drive_maybe_async(acquire, 1, self.budget_host)
             except TypeError:
                 _drive_maybe_async(acquire, self.budget_host)
-            return True
+            # Bind cleanup to this successful acquisition's budget object.
+            return True, release if callable(release) else None
         except Exception as exc:
             name = type(exc).__name__
             if name == "BudgetExhausted" or "budget" in str(exc).lower() or "exhaust" in str(exc).lower():
                 with self._lock:
                     self.budget_refusals += 1
-                return False
+                return False, None
             log.debug("price producer budget error: %s", exc)
             with self._lock:
                 self.errors += 1
-            return False
+            return False, None
 
     def tick(self, now_epoch: float | None = None) -> dict[str, Any]:
         """One capture cycle over all symbols. Never raises; returns a receipt."""
@@ -258,7 +263,8 @@ class PricePathProducer:
                 with self._lock:
                     self.closed_skips += 1
                 continue
-            if not self._budget_allowed():
+            allowed, release_budget = self._budget_allowed()
+            if not allowed:
                 out["budget_refusals"] += 1
                 continue
             try:
@@ -269,6 +275,17 @@ class PricePathProducer:
                 with self._lock:
                     self.gaps += 1
                 continue
+            finally:
+                # The slot bounds provider work, not parsing/storage. Tokens
+                # remain spent; closed/refused symbols never own this cleanup.
+                if release_budget is not None:
+                    try:
+                        _drive_maybe_async(release_budget)
+                    except Exception as exc:
+                        log.debug("price producer budget release failed: %s", exc)
+                        out["errors"] += 1
+                        with self._lock:
+                            self.errors += 1
             if not isinstance(obs, dict):
                 out["gaps"] += 1
                 with self._lock:

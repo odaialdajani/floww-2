@@ -41,8 +41,9 @@ from dataclasses import asdict, is_dataclass
 from datetime import date
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
+from auth import require_api_key
 from services.public_api_adapter import (
     PUBLIC_BARS_TIMEFRAMES,
     _get_broker,
@@ -272,7 +273,7 @@ async def get_public_bars(
     }
 
 
-@router.get("/portfolio/raw")
+@router.get("/portfolio/raw", dependencies=[Depends(require_api_key)])
 async def get_public_portfolio():
     """Return the raw authenticated Public.com paper-trading portfolio.
 
@@ -280,6 +281,11 @@ async def get_public_portfolio():
     fields) lives at GET /api/public/portfolio (routes/public_brokerage.py),
     which takes precedence on that path. This raw view is kept for
     debugging/inspection.
+
+    Account reads are sensitive: this route must carry the master key even
+    though it is a GET. Without the dependency, GET auth (mutating methods
+    only) left the account id, cash and positions readable to any reachable
+    client — reproduced 2026-11-01 before this fix.
     """
     broker = await _get_broker()
     if broker is None:

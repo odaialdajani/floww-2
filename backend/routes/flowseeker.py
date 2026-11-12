@@ -275,7 +275,8 @@ async def options_chain(symbol: str):
     if not sym:
         raise HTTPException(400, "symbol required")
 
-    public_only = os.getenv("FLOWW_MARKET_DATA_PROVIDER") == "public"
+    from data_providers import market_data_policy
+    public_only = market_data_policy()["public_only"]
     # Unknown/legacy provenance is never reusable under Public-only policy.
     if sym in _chain_cache:
         ts, data = _chain_cache[sym]
@@ -2017,6 +2018,44 @@ _TV_DEMO_TICKERS = {"AAPL", "AMZN", "GM", "KO", "MCD", "META", "VIX", "XOM"}
 _tv_signal_cache: dict[str, tuple[float, dict | None]] = {}
 _TV_CACHE_TTL = 60
 
+# The enrichment rides along in the regime response, so it has to name its
+# own source: it is NOT Public.com market data and a reader must not take
+# it for such.
+_TV_SOURCE = "tradingvolatility.net"
+_TV_IS_PUBLIC_DATA = False
+
+# Which chain the GEX structure was built from. The heatmap payload names
+# its own data source; the mapping keeps the response honest about where
+# the structure came from instead of implying a Public chain that may not
+# have been used.
+_STRUCTURE_SOURCE_BY_DATA_SOURCE = {
+    "public_api": "public_option_chain",
+    "cvserver": "cvserver_option_chain",
+    "databento+yfinance": "yfinance_databento_option_chain",
+    "yfinance": "yfinance_option_chain",
+}
+
+
+def _structure_source(payload: dict) -> str:
+    """Name the source of the option structure behind the regime."""
+    data_source = str((payload or {}).get("data_source") or "").strip().lower()
+    if data_source in _STRUCTURE_SOURCE_BY_DATA_SOURCE:
+        return _STRUCTURE_SOURCE_BY_DATA_SOURCE[data_source]
+    # The payload did not say. Under the Public-only policy the core chain
+    # fails closed to the legacy sources, so a Public chain is the only
+    # structure that could have been built. Outside it, say "unknown"
+    # rather than guess.
+    from data_providers import market_data_policy
+    if market_data_policy()["public_only"]:
+        return "public_option_chain"
+    return "unknown"
+
+
+def _tv_signal_mode() -> str:
+    """licensed when the request carried the provider's API key, else demo."""
+    return ("licensed" if os.environ.get("TRADING_VOLATILITY_API_KEY", "")
+            else "demo")
+
 
 async def _fetch_tv_signal(sym: str) -> dict | None:
     """Optional trading-volatility enrichment. Never raises, never blocks >2.5s."""
@@ -2094,6 +2133,7 @@ async def regime(ticker: str):
                 "ticker": sym, "current_state": "RANGING", "confidence": 0.0,
                 "is_warming": True, "gex_regime": gex_regime,
                 "asof": (hm or {}).get("asof"),
+                "structure_source": _structure_source(hm or {}),
             }
 
         confidence = min(abs(dist_pct) / 5.0, 1.0) if dist_pct is not None else 0.0
@@ -2109,10 +2149,16 @@ async def regime(ticker: str):
             "vol_env": vol_env,
             "atm_iv": mr.get("atm_iv"),
             "asof": (hm or {}).get("asof"),
+            "structure_source": _structure_source(hm or {}),
         }
         tv = await _fetch_tv_signal(sym)
         if tv:
             out["tv_signal"] = tv
+            # The enrichment is a separate, non-Public path: it has to say
+            # so, or a reader takes the signal for Public.com market data.
+            out["tv_signal_source"] = _TV_SOURCE
+            out["tv_signal_is_public_data"] = _TV_IS_PUBLIC_DATA
+            out["tv_signal_mode"] = _tv_signal_mode()
         # Paper-accurate GEX metrics (Barbon-Buraschi ΓIB + flip metrics)
         try:
             from services.gex_paper_accurate import DEFAULT_ADV_SHARES, compute_flip_metrics, compute_gamma_imbalance

@@ -54,7 +54,7 @@ test('B24 MOUNTED: the workspace binds the focused pane identity and emits it', 
   axios.get.mockImplementation(async () => ({ data: { ticker: 'SPY', frames: [
     { time: '2026-09-10T14:00:00+00:00', open: 100, high: 102, low: 99, close: 101, nodes: [] },
     { time: '2026-09-10T14:01:00+00:00', open: 101, high: 103, low: 100, close: 102, nodes: [] },
-  ], candles_with_recorded_nodes: 0, scopes: [], query_key: 'SPY:4:day:None:False' } }));
+  ], node_status: 'available', candles_with_recorded_nodes: 0, scopes: ['SPY:4:day:None:False'], query_key: 'SPY:4:day:None:False' } }));
   window.__FLOWW_CHART_WORKSPACE__ = true;
   try {
     const emitted = [];
@@ -84,7 +84,7 @@ test('R21-06: focus/layout transitions revoke the chart context atomically; late
   axios.get.mockImplementation(async () => ({ data: { ticker: 'SPY', frames: [
     { time: '2026-09-10T14:00:00+00:00', open: 100, high: 102, low: 99, close: 101, nodes: [] },
     { time: '2026-09-10T14:01:00+00:00', open: 101, high: 103, low: 100, close: 102, nodes: [] },
-  ], candles_with_recorded_nodes: 0, scopes: [], query_key: 'SPY:4:day:None:False' } }));
+  ], node_status: 'available', candles_with_recorded_nodes: 0, scopes: ['SPY:4:day:None:False'], query_key: 'SPY:4:day:None:False' } }));
   const { act, render, screen } = require('@testing-library/react');
   const React = require('react');
   const W = require('../ChartWorkspace').default;
@@ -145,7 +145,7 @@ test('R21-06 joint-freeze: a null emission (unrecorded cursor) revokes the bindi
     { time: '2026-09-10T14:00:00+00:00', open: 100, high: 102, low: 99, close: 101, nodes: [] },
     { time: '2026-09-10T14:01:00+00:00', open: 101, high: 103, low: 100, close: 102, nodes: [] },
   ];
-  axios.get.mockImplementation(async () => ({ data: { ticker: 'SPY', frames: FRAMES, candles_with_recorded_nodes: 0, scopes: [], query_key: 'SPY:4:day:None:False' } }));
+  axios.get.mockImplementation(async () => ({ data: { ticker: 'SPY', frames: FRAMES, node_status: 'available', candles_with_recorded_nodes: 0, scopes: ['SPY:4:day:None:False'], query_key: 'SPY:4:day:None:False' } }));
   window.__FLOWW_CHART_WORKSPACE__ = true;
   try {
     const emitted = [];

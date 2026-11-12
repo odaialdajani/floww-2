@@ -24,6 +24,33 @@ import aiohttp
 
 logger = logging.getLogger(__name__)
 
+
+# ---------------------------------------------------------------------------
+# Active market-data policy — one definition, shared by every gate
+# ---------------------------------------------------------------------------
+def market_data_policy() -> dict:
+    """The market-data policy this process is actually running under.
+
+    ``FLOWW_MARKET_DATA_PROVIDER=public`` is the Public-only policy: every
+    live market-data path is Public.com and the legacy sources are not
+    used at all. The comparison is exactly the one the core chain makes,
+    so a label derived from this can never disagree with the behaviour.
+
+    ``legacy_sources`` describes the legacy MARKET-DATA sources (the
+    quote/chain fallbacks). It says nothing about the reference feeds -
+    news, earnings and analyst recommendations still come from Finnhub
+    when a key is configured.
+    """
+    configured = os.environ.get("FLOWW_MARKET_DATA_PROVIDER", "") or ""
+    public_only = configured == "public"
+    return {
+        "market_data_provider": "public" if public_only else (configured or "legacy"),
+        "public_only": public_only,
+        "legacy_sources": "disabled" if public_only else "enabled",
+        "in_use_refers_to": "market_data",
+    }
+
+
 # ---------------------------------------------------------------------------
 # Provider call tracking — success/failure recording
 # ---------------------------------------------------------------------------
@@ -286,6 +313,13 @@ class DataAggregator:
         except Exception:
             _record_provider_call("public_api", False)
 
+        # Under the Public-only policy the legacy sources are not market-data
+        # sources. A price that is not Public's is not served at all: the
+        # caller gets no price rather than a price from a source the policy
+        # disabled.
+        if market_data_policy()["public_only"]:
+            return None
+
         # Try Finnhub first (fastest, highest rate limit)
         quote = await self.finnhub.get_quote(ticker)
         if quote:
@@ -366,19 +400,59 @@ class DataAggregator:
         # from Public API bars). Kept empty so callers don't hit a dead API.
         result["technicals"] = {}
 
-        # Options contracts (Polygon)
-        result["options_contracts"] = await self.polygon.get_options_contracts(ticker, limit=10)
+        # Options contracts (Polygon) — legacy market data. Under the
+        # Public-only policy the legacy sources are not market-data sources,
+        # so no legacy contract list is served.
+        if not market_data_policy()["public_only"]:
+            result["options_contracts"] = await self.polygon.get_options_contracts(
+                ticker, limit=10)
 
         return result
 
     def get_status(self) -> dict:
-        """Get status of all data providers."""
+        """Get status of all data providers.
+
+        Every provider names its role and whether the active policy routes
+        to it. A provider listed as enabled without a role is a claim this
+        status cannot make: a reader would take it for a live market-data
+        source. The labels follow the active policy, so they cannot
+        disagree with the behaviour.
+        """
+        policy = market_data_policy()
+        legacy_in_use = policy["legacy_sources"] == "enabled"
         return {
-            "public_api": {"enabled": True, "rate_limit": "primary source"},
-            "finnhub": {"enabled": self.finnhub.enabled, "rate_limit": "60/min"},
-            "polygon": {"enabled": self.polygon.enabled, "rate_limit": "5/min"},
-            "alphavantage": {"enabled": False, "rate_limit": "retired 2026-09-03 — use /api/public/*"},
-            "yfinance": {"enabled": True, "rate_limit": "unlimited (unofficial)"},
+            "public_api": {
+                "enabled": True,
+                "rate_limit": "primary source",
+                "role": "primary",
+                "in_use": True,
+            },
+            "finnhub": {
+                "enabled": self.finnhub.enabled,
+                "rate_limit": "60/min",
+                "role": "emergency_fallback",
+                "in_use": legacy_in_use,
+                "also_serves": (["news", "earnings", "analyst_recommendation"]
+                                if self.finnhub.enabled else []),
+            },
+            "polygon": {
+                "enabled": self.polygon.enabled,
+                "rate_limit": "5/min",
+                "role": "emergency_fallback",
+                "in_use": legacy_in_use,
+            },
+            "alphavantage": {
+                "enabled": False,
+                "rate_limit": "retired 2026-09-03 — use /api/public/*",
+                "role": "retired",
+                "in_use": False,
+            },
+            "yfinance": {
+                "enabled": True,
+                "rate_limit": "unlimited (unofficial)",
+                "role": "emergency_fallback",
+                "in_use": legacy_in_use,
+            },
         }
 
 

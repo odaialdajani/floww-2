@@ -1,0 +1,25 @@
+# FLOWW consolidation — November 12, 2026
+
+## Source and publication
+
+The product code checkpoint is `5d5389908c89d9cd90cad50036dc7d3c3c3dddf0`. It contains the integrated chart-scope callback, layout import, backend replay mirror, ETF expiry-clock lineage, and narrow-layout fixes. The outgoing 149-commit range was reviewed for accidental credentials, private account identifiers, host-only files, and transient artifacts before publication. Four pre-existing host-only dirty paths are excluded from this commit and publication.
+
+The full frontend source check passed 302 suites and 2,970 tests. The production frontend build succeeded. Retained independent reviews and focused backend results cover the replay and expiry-clock corrections. The unused Python replay mirror has no identified production consumer; its parity repair is source evidence rather than proof of a live path.
+
+## Running application
+
+Fresh observations of both managed version endpoints report `213dcee64`. The newer source has not completed full native acceptance. A candidate layout sweep passed on the actual candidate runtime, but the remaining checks missed the bounded acceptance window; the supervisor restored the accepted release. No incomplete acceptance receipt was written.
+
+The next release must pin the final canonical commit and both code trees, confirm current service ownership and storage capacity, verify a closed backup and restored records, then complete all seven required UI checks before the deadline. The prepared early capacity guard rejects insufficient storage before service shutdown and retains the second closed-source capacity check.
+
+## Agent and scheduling work
+
+OpenBot's upstream merge and retained gateway changes passed the focused 32-test suite on audited Bun 1.4.3. Full OpenBot application entitlement and the native gateway recovery remain separate held workstreams. The gateway's old owner is absent; its retained lock and exhausted budget must not be reset as routine cleanup.
+
+The three paper-trader schedule definitions have successful execution evidence in the continuation records. A current execution can still be running or fail; historical success does not prove future reliability or order execution. Provider/model configuration and each job's paper/dry-run constraints must be re-attested before changing scheduling. No live trading activation or venue-order authority is granted by this consolidation.
+
+## Remaining scope
+
+The latest 39-row ledger classifies 14 rows as actionable, 20 as partially actionable, and 5 as externally blocked. Those classifications are routing information, not completion. The original 450 historical requirements still require individual acceptance evidence. Remaining work includes full candidate runtime acceptance, gateway ownership recovery, OpenBot entitlement, research source authority and prospective outcomes, account/venue commissioning, cloud lifecycle, and an actual backup destination.
+
+Runtime receipts, complete raw-backup recovery archives, restore manifests, scheduler execution details, and historical failed attempts remain in the local continuation evidence. They are not copied into this public repository because publication needs only source and a truthful status checkpoint.

@@ -1,9 +1,12 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import axios from "axios";
 import { fmt, fmtAbs, pctClass } from "../lib/helpers";
 import { BACKEND_URL, API } from "../config/api";
 
 // BACKEND_URL and API imported from config/api.js
+
+const describeError = (error) =>
+  error?.response?.data?.detail || error?.message || "request failed";
 
 // ============ Position Sizing Widget ============
 function PositionSizing({ spot }) {
@@ -307,44 +310,125 @@ export default function PortfolioPanel({ ticker, spot }) {
   const [ivInput, setIvInput] = useState("0.15");
   const [scenarioStatus, setScenarioStatus] = useState(null);
   const [hedgeStatus, setHedgeStatus] = useState(null);
+  const [readState, setReadState] = useState({
+    phase: "idle", generation: 0, bookGeneration: 0, pricedGeneration: 0, message: null,
+  });
+  const [actionStatus, setActionStatus] = useState(null);
+  const readGeneration = useRef(0);
 
   const currentSpot = parseFloat(spotInput) || spot || 0;
   const currentIv = parseFloat(ivInput) || 0.15;
 
-  const refreshPortfolio = useCallback(async () => {
-    if (!currentSpot) return;
+  const readStoredBook = useCallback(async () => {
+    try {
+      const res = await axios.get(`${API}/portfolio/${portfolioName}`);
+      const data = res?.data;
+      if (!data || typeof data !== "object") {
+        return { ok: false, missing: false, error: new Error("stored book response was empty") };
+      }
+      if (!Array.isArray(data.positions)) {
+        return { ok: false, missing: false, error: new Error("stored book carried no positions list") };
+      }
+      return { ok: true, positions: data.positions, revision: data.book_revision };
+    } catch (e) {
+      return { ok: false, missing: e?.response?.status === 404, error: e };
+    }
+  }, [portfolioName]);
+
+  const readPricedBook = useCallback(async () => {
+    if (!currentSpot) return { ok: false, skipped: true, error: null };
     try {
       const res = await axios.get(`${API}/portfolio/${portfolioName}`, {
         params: { spot: currentSpot, iv: currentIv },
       });
-      setPortfolioData(res.data);
+      return { ok: true, data: res?.data };
     } catch (e) {
-      // Portfolio might not exist yet
+      return { ok: false, skipped: false, error: e };
     }
   }, [portfolioName, currentSpot, currentIv]);
 
+  const refreshPortfolio = useCallback(async () => {
+    const generation = readGeneration.current + 1;
+    readGeneration.current = generation;
+    setReadState((state) => ({ ...state, phase: "loading", generation, message: null }));
+    const [stored, priced] = await Promise.all([readStoredBook(), readPricedBook()]);
+    if (generation !== readGeneration.current) return;
+    if (stored.ok) {
+      setPositions(stored.positions.map((position, index) => ({
+        ...position, serverIndex: index, bookRevision: stored.revision,
+      })));
+      if (priced.ok && (!stored.revision || priced.data?.book_revision !== stored.revision)) {
+        priced.ok = false;
+        priced.error = new Error("The priced read belongs to another stored-book revision; refresh to price the current rows");
+      }
+      if (priced.ok) setPortfolioData(priced.data);
+      setReadState((state) => ({
+        ...state,
+        phase: priced.ok ? "ready" : "priced_failed",
+        generation,
+        bookGeneration: generation,
+        pricedGeneration: priced.ok ? generation : state.pricedGeneration,
+        message: priced.ok ? null : describeError(priced.error),
+      }));
+      return;
+    }
+    if (stored.missing) {
+      setPositions([]);
+      setPortfolioData(null);
+      setReadState((state) => ({
+        ...state,
+        phase: "empty",
+        generation,
+        bookGeneration: 0,
+        pricedGeneration: 0,
+        message: "the stored portfolio is gone, so the priced values were cleared",
+      }));
+      return;
+    }
+    setReadState((state) => ({ ...state, phase: "error", generation, message: describeError(stored.error) }));
+  }, [readStoredBook, readPricedBook]);
+
+  const refreshRef = useRef(null);
+  refreshRef.current = refreshPortfolio;
+  useEffect(() => {
+    refreshRef.current?.();
+  }, []);
+
   const addPosition = async (posData) => {
     setLoading(true);
+    setActionStatus(null);
     try {
       await axios.post(`${API}/portfolio/${portfolioName}/position`, posData);
-      setPositions((p) => [...p, posData]);
+      setActionStatus({ type: "ok", message: "Position added to the stored book." });
       await refreshPortfolio();
     } catch (e) {
+      setActionStatus({ type: "error", message: describeError(e) });
       console.error("Failed to add position:", e);
     }
     setLoading(false);
   };
 
-  const removePosition = async (index) => {
+  const removePosition = async (position) => {
     setLoading(true);
+    setActionStatus(null);
     try {
-      await axios.delete(`${API}/portfolio/${portfolioName}/position/${index}`);
-      setPositions((p) => p.filter((_, i) => i !== index));
+      if (!position?.bookRevision) {
+        setActionStatus({ type: "error", message: "Refresh the stored book before removing a position." });
+        await refreshPortfolio();
+        return;
+      }
+      await axios.delete(`${API}/portfolio/${portfolioName}/position/${position.serverIndex}`, {
+        params: { expected_revision: position.bookRevision },
+      });
+      setActionStatus({ type: "ok", message: "Position removed from the stored book." });
       await refreshPortfolio();
     } catch (e) {
+      setActionStatus({ type: "error", message: describeError(e) });
+      await refreshPortfolio();
       console.error("Failed to remove position:", e);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const runScenarios = async () => {
@@ -401,8 +485,36 @@ export default function PortfolioPanel({ ticker, spot }) {
     setLoading(false);
   };
 
-  const pnl = portfolioData?.pnl;
+  // The endpoint returns a typed P&L object (status, reason, coverage,
+  // multiplier provenance). A legacy bare number is still tolerated, but its
+  // missing fields stay unavailable instead of rendering as undefined/zero.
+  const rawPnl = portfolioData?.pnl;
+  const pnl = typeof rawPnl === "number"
+    ? { status: "partial", reason: "LEGACY_TOTAL_ONLY", total_pnl: rawPnl, pct_pnl: null,
+        pct_reason: "NO_ENTRY_VALUE", total_entry_value: null, total_current_value: null,
+        coverage: null }
+    : rawPnl;
   const greeks = portfolioData?.greeks;
+  const foreignSymbols = [...new Set(
+    positions.filter((p) => p.symbol && ticker && p.symbol !== ticker).map((p) => p.symbol),
+  )];
+  const staleRows = readState.phase === "error" && readState.bookGeneration > 0
+    && readState.bookGeneration < readState.generation;
+  const readStateText = readState.phase === "loading"
+    ? `Reading stored book · read #${readState.generation}…`
+    : readState.phase === "empty"
+      ? `No stored portfolio · read #${readState.generation}${readState.message ? ` — ${readState.message}` : ""}`
+      : readState.phase === "error"
+        ? `Stored book read failed · read #${readState.generation}${readState.message ? ` — ${readState.message}` : ""}${staleRows ? ` — showing rows from read #${readState.bookGeneration}` : ""}${readState.pricedGeneration > 0 && readState.pricedGeneration < readState.generation ? ` — showing priced values from read #${readState.pricedGeneration}` : ""}`
+        : readState.phase === "priced_failed"
+          ? `Stored book · read #${readState.generation} · priced read failed${readState.message ? ` — ${readState.message}` : ""}${readState.pricedGeneration > 0 && readState.pricedGeneration < readState.generation ? ` — showing priced values from read #${readState.pricedGeneration}` : ""}`
+          : readState.phase === "ready"
+            ? `Stored book · read #${readState.generation}`
+            : "Stored book · not read yet";
+  const money = (value, { sign = false, percent = false } = {}) => {
+    if (value === null || value === undefined) return "unavailable";
+    return `${sign && value > 0 ? "+" : ""}${percent ? `${value}%` : fmt(value, 0)}`;
+  };
 
   return (
     <div className="p-4 flex-1 overflow-auto">
@@ -431,31 +543,72 @@ export default function PortfolioPanel({ ticker, spot }) {
           </div>
         </div>
 
+        <div className="text-[10px] text-slate-500" data-testid="portfolio-read-state">{readStateText}</div>
+        {actionStatus && (
+          <div
+            className={`panel p-2 text-[10px] ${actionStatus.type === "error" ? "text-rose-400" : "text-emerald-400"}`}
+            data-testid="portfolio-action-status"
+          >
+            {actionStatus.message}
+          </div>
+        )}
+
         {/* P&L Summary */}
         {pnl && (
           <div className="panel p-3">
+            <div className="flex items-center justify-between mb-2">
+              <div className="label mb-0">P&L · model-priced</div>
+              {pnl.status !== "ok" && (
+                <div className="text-[10px] text-slate-400">
+                  unavailable{pnl.reason ? ` · ${pnl.reason}` : ""}
+                </div>
+              )}
+            </div>
             <div className="grid grid-cols-4 gap-3 text-center">
               <div>
                 <div className="label">Total P&L</div>
                 <div className={`text-xl mono font-bold ${pnl.total_pnl > 0 ? "text-emerald-400" : pnl.total_pnl < 0 ? "text-rose-400" : "text-slate-300"}`}>
-                  {pnl.total_pnl > 0 ? "+" : ""}{fmt(pnl.total_pnl, 0)}
+                  {money(pnl.total_pnl, { sign: true })}
                 </div>
               </div>
               <div>
                 <div className="label">P&L %</div>
                 <div className={`text-xl mono font-bold ${pctClass(pnl.pct_pnl)}`}>
-                  {pnl.pct_pnl > 0 ? "+" : ""}{pnl.pct_pnl}%
+                  {money(pnl.pct_pnl, { sign: true, percent: true })}
                 </div>
               </div>
               <div>
                 <div className="label">Entry Value</div>
-                <div className="text-lg mono text-slate-300">{fmt(pnl.total_entry_value, 0)}</div>
+                <div className="text-lg mono text-slate-300">{money(pnl.total_entry_value)}</div>
               </div>
               <div>
                 <div className="label">Current Value</div>
-                <div className="text-lg mono text-slate-300">{fmt(pnl.total_current_value, 0)}</div>
+                <div className="text-lg mono text-slate-300">{money(pnl.total_current_value)}</div>
               </div>
             </div>
+            {pnl.coverage && (
+              <div className="mt-2 text-[10px] text-slate-500 text-center">
+                {pnl.coverage.priced} priced · {pnl.coverage.skipped} skipped ·{" "}
+                {pnl.coverage.stored} stored
+              </div>
+            )}
+            {Array.isArray(portfolioData?.skipped) && portfolioData.skipped.length > 0 && (
+              <div className="mt-1 text-[10px] text-amber-400/80 text-center">
+                skipped: {portfolioData.skipped.map((s) => `${s.symbol || "position"} (${s.reason})`).join(", ")}
+              </div>
+            )}
+            {portfolioData?.valuation_basis && (
+              <div className="mt-1 text-[10px] text-slate-500 text-center">
+                {portfolioData.valuation_basis} · not a broker mark
+              </div>
+            )}
+          </div>
+        )}
+
+        {portfolioData && (
+          <div className="text-[10px] text-slate-500 text-center" data-testid="portfolio-valuation-note">
+            priced at spot {fmt(portfolioData.spot ?? currentSpot, 2)} · iv {((portfolioData.iv ?? currentIv) * 100).toFixed(1)}% · one spot for the whole stored book
+            {foreignSymbols.length > 0 ? ` · ${foreignSymbols.join(", ")} not in ${ticker}` : ""} · not a per-position mark
           </div>
         )}
 
@@ -496,9 +649,14 @@ export default function PortfolioPanel({ ticker, spot }) {
                         positions.map(p => ({ symbol: p.symbol, type: p.option_type, strike: p.strike, expiry: p.expiry, qty: p.quantity, entry_price: p.entry_price, entry_iv: p.entry_iv, underlying_price: p.underlying_price }))
                       )}
                       className="btn text-[9px] px-2 py-0.5"
-                    >Export CSV</button>
+                      >Export CSV</button>
                   )}
                 </div>
+                {positions.length > 0 && positions.some((p) => !p.bookRevision) && (
+                  <div className="text-[10px] text-amber-400/80 mb-1" data-testid="portfolio-removal-unavailable">
+                    Refresh to read the stored book before removing a position.
+                  </div>
+                )}
                 <table className="w-full text-[11px] mono">
                   <thead>
                     <tr className="text-slate-500 text-[10px] uppercase tracking-widest">
@@ -514,8 +672,8 @@ export default function PortfolioPanel({ ticker, spot }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {positions.map((p, i) => (
-                      <tr key={i} className="border-t border-slate-800/60 bar-row">
+                    {positions.map((p) => (
+                      <tr key={`${p.bookRevision || "unversioned"}-${p.serverIndex}`} className="border-t border-slate-800/60 bar-row">
                         <td className="px-2 py-1 font-bold">{p.symbol}</td>
                         <td className={`px-2 py-1 ${p.option_type === "call" ? "text-emerald-400" : "text-rose-400"}`}>{p.option_type}</td>
                         <td className="text-right px-2 py-1">{p.strike}</td>
@@ -525,7 +683,13 @@ export default function PortfolioPanel({ ticker, spot }) {
                         <td className="text-right px-2 py-1 text-slate-400">{(p.entry_iv * 100).toFixed(1)}%</td>
                         <td className="text-right px-2 py-1 text-slate-400">{p.underlying_price}</td>
                         <td className="px-2 py-1">
-                          <button onClick={() => removePosition(i)} className="text-rose-400 hover:text-rose-300 text-[10px]" aria-label={`Remove position ${i}`}>✕</button>
+                          <button
+                            onClick={() => removePosition(p)}
+                            disabled={loading || !p.bookRevision}
+                            title={p.bookRevision ? "Remove this position if the stored book is unchanged" : "Refresh the stored book first"}
+                            className="text-rose-400 hover:text-rose-300 text-[10px] disabled:text-slate-600 disabled:cursor-not-allowed"
+                            aria-label={`Remove position ${p.symbol} ${p.option_type} ${p.strike} ${p.expiry}`}
+                          >✕</button>
                         </td>
                       </tr>
                     ))}
@@ -533,8 +697,14 @@ export default function PortfolioPanel({ ticker, spot }) {
                 </table>
               </div>
             ) : (
-              <div className="panel p-6 text-center text-slate-500 text-[11px]">
-                No positions yet. Add your first position above.
+              <div className={`panel p-6 text-center text-[11px] ${readState.phase === "error" ? "text-rose-400/80" : "text-slate-500"}`}>
+                {readState.phase === "error"
+                  ? "The stored book could not be read. Open positions are unknown until a read succeeds."
+                  : readState.phase === "loading"
+                    ? "Reading the stored book…"
+                    : readState.phase === "empty"
+                      ? "No stored portfolio yet. Add a position to create it."
+                      : "No positions yet. Add your first position above."}
               </div>
             )}
           </div>

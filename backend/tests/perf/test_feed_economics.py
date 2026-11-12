@@ -39,7 +39,8 @@ class CountingBroker:
             await asyncio.sleep(self.delay)
         return ["2026-12-18", "2027-01-15", "2027-02-19", "2027-03-19"]
 
-    async def get_quotes(self, symbols, account_id):
+    async def get_quotes(self, symbols, account_id, *, instrument_type):
+        assert instrument_type == "EQUITY"
         self.calls["quotes"] += 1
         return [SimpleNamespace(mid_price=100.0, last=99.9)]
 

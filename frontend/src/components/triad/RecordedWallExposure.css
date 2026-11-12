@@ -1,0 +1,15 @@
+.rwe-section { border: 1px solid var(--floww-line, #454545); border-radius: 6px; background: var(--floww-surface, #111111); }
+.rwe-section > summary { padding: 8px 10px; cursor: pointer; font-size: 12px; color: var(--text, #d5dde5); }
+.rwe-section summary:focus-visible, .rwe-section select:focus-visible, .rwe-section button:focus-visible { outline: 2px solid var(--text, #d5dde5); outline-offset: 2px; }
+.rwe-body { padding: 0 10px 10px; font-size: 12px; min-width: 0; overflow-wrap: anywhere; }
+.rwe-body label { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.rwe-body select, .rwe-body button { min-width: 0; max-width: 100%; background: var(--floww-control, #222222); color: var(--text, #d5dde5); border: 1px solid var(--floww-line, #454545); border-radius: 4px; padding: 4px; font: inherit; }
+.rwe-body svg { display: block; width: 100%; height: auto; color: var(--text, #d5dde5); }
+.rwe-body svg line { stroke: currentColor; stroke-width: 1.5; }
+.rwe-body svg circle { fill: currentColor; }
+.rwe-body svg text { fill: currentColor; font-size: 10px; }
+.rwe-note { color: var(--text-dim, #aaa); line-height: 1.5; }
+.rwe-observations summary { cursor: pointer; }
+.rwe-observations ol { max-height: 300px; overflow: auto; padding-left: 20px; }
+.rwe-observations li { margin: 8px 0; }
+.rwe-observations li > span { display: block; color: var(--text-dim, #aaa); margin-top: 3px; }

@@ -1,0 +1,65 @@
+/* Shared by the chart workspace and the older price-history drawer. */
+.drawing-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  color: var(--text-primary, #dce8f2);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.drawing-rail .rail-tools {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+.drawing-rail :is(button, input[type="text"], select) {
+  min-width: 0;
+  max-width: 100%;
+  min-height: 30px;
+  padding: 5px 8px;
+  border: 1px solid var(--floww-line, #454545);
+  border-radius: 4px;
+  background: var(--floww-control, #222222);
+  color: inherit;
+  font: inherit;
+}
+.drawing-rail button { cursor: pointer; overflow-wrap: anywhere; }
+.drawing-rail .rail-tools button { text-align: left; text-transform: capitalize; }
+.drawing-rail button:hover:enabled { background: var(--floww-raised, #191919); }
+.drawing-rail button[aria-pressed="true"] {
+  border-color: var(--gold, #e3c16a);
+  color: var(--gold, #e3c16a);
+}
+.drawing-rail :is(button, input, select):focus-visible {
+  outline: 2px solid var(--gold, #e3c16a);
+  outline-offset: 2px;
+}
+.drawing-rail button:disabled { opacity: .45; cursor: default; }
+.drawing-rail .rail-presets {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border, #282828);
+}
+.drawing-rail :is(.rail-presets-local, .rail-preset-cap) {
+  color: var(--text-secondary, #a4a8ae);
+  overflow-wrap: anywhere;
+}
+.drawing-rail .rail-preset-create-row { display: grid; gap: 6px; }
+.drawing-rail :is(.rail-style-row, .rail-preset, .rail-drawing) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+}
+.drawing-rail .rail-style-row label { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.drawing-rail :is(.rail-preset, .rail-drawing) {
+  padding: 8px;
+  border: 1px solid var(--border, #282828);
+  border-radius: 4px;
+}
+.drawing-rail :is(.rail-preset, .rail-drawing) > span { flex-basis: 100%; overflow-wrap: anywhere; }
+.drawing-rail .rail-drawing[data-selected="true"] { border-color: var(--gold, #e3c16a); }

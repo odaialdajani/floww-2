@@ -114,3 +114,37 @@ def test_r05b_file_backed_restart_replay_parity(tmp_path):
                       f"'{did}'").fetchone()[0]
     assert n == 1
     conn2.close()
+
+
+def test_public_quote_sizes_survive_migration_and_replay(tmp_path):
+    import duckdb
+
+    from services.heatmap_history import DDL, ensure_tables, record_snapshot, replay_snapshot
+
+    path = str(tmp_path / "quote_sizes.duckdb")
+    ddl = DDL["contract_observations_v2"].replace("bid_size BIGINT, ask_size BIGINT,", "")
+    with duckdb.connect(path) as conn:
+        conn.execute(ddl)
+        conn.execute("INSERT INTO contract_observations_v2 (snapshot_id, osi) VALUES ('old', 'C1')")
+        ensure_tables(conn)
+        ensure_tables(conn)
+        assert conn.execute(
+            "SELECT bid_size, ask_size FROM contract_observations_v2 WHERE snapshot_id = 'old'"
+        ).fetchone() == (None, None)
+        payload = _payload()
+        row = payload["contracts"][0]
+        row.update(bid_size=0, ask_size=17, bid_timestamp="2030-01-02T13:59:58+00:00",
+                   ask_timestamp="2030-01-02T13:59:59+00:00")
+        payload["contracts"].append(dict(row, osi="C2", bid_size=True, ask_size=1.5))
+        payload["contracts"].append(dict(row, osi="C3", bid_size=2**63 - 1, ask_size=None))
+        snapshot_id = record_snapshot(conn, payload, "q")
+        assert snapshot_id
+        assert record_snapshot(conn, payload, "q") == snapshot_id
+
+    with duckdb.connect(path, read_only=True) as conn:
+        by_osi = {row["osi"]: row for row in replay_snapshot(conn, snapshot_id)["contracts"]}
+        assert by_osi["C1"]["bid_size"] == 0 and by_osi["C1"]["ask_size"] == 17
+        assert by_osi["C1"]["bid_timestamp"] == "2030-01-02T13:59:58+00:00"
+        assert by_osi["C1"]["ask_timestamp"] == "2030-01-02T13:59:59+00:00"
+        assert by_osi["C2"]["bid_size"] is None and by_osi["C2"]["ask_size"] is None
+        assert by_osi["C3"]["bid_size"] == 2**63 - 1 and by_osi["C3"]["ask_size"] is None

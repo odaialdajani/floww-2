@@ -841,8 +841,18 @@ async def fetch_range_analytics(
 
     if persist_conn is not None:
         from services.heatmap_history import record_range_envelope
+        from services.store_executor import StoreBusy, run_store
         try:
-            envelope["persistence"] = record_range_envelope(persist_conn, envelope)
+            # The write takes the shared DuckDB connection lock for the whole
+            # envelope, so it belongs on the bounded store pool: on the event
+            # loop it froze every unrelated request for its duration.
+            envelope["persistence"] = await run_store(
+                record_range_envelope, persist_conn, envelope)
+        except StoreBusy:
+            # Backpressure: the envelope was not stored. Let it reach the 503
+            # handler instead of reporting a refused write as a refusal of
+            # the range itself.
+            raise
         except Exception as exc:  # required write failure stays visible
             log.warning("range envelope persist failed: %s", exc)
             envelope["persistence"] = {"status": "refused",

@@ -13,7 +13,7 @@ input on failure — the pure functions tolerate that.
 
 import asyncio
 import logging
-from datetime import UTC
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
@@ -28,7 +28,9 @@ from services.heatseeker import (
     detect_beach_ball,
     detect_rainbow_road,
     detect_reverse_rug,
+    group_replay_sessions,
 )
+from services.store_executor import STORE_BUSY_MESSAGE, StoreBusy, run_store
 
 logger = logging.getLogger(__name__)
 
@@ -245,13 +247,20 @@ async def node_lifecycle_route(
             from services.duckdb_engine import db as _duckdb
             from services.heatmap_history import latest_node_lifecycle, recorder_status
             _hconn = getattr(_duckdb, "_conn", getattr(_duckdb, "conn", None))
-            _stored = latest_node_lifecycle(_hconn, ticker.upper(), "microstructure") \
+            _stored = await run_store(
+                latest_node_lifecycle, _hconn, ticker.upper(), "microstructure") \
                 if _hconn is not None else None
             if _stored:
-                durable = bool(recorder_status(
-                    _hconn, _os.environ.get("DUCKDB_PATH", ":memory:"))["durable"])
+                durable = bool((await run_store(
+                    recorder_status,
+                    _hconn, _os.environ.get("DUCKDB_PATH", ":memory:")))["durable"])
             else:
                 durable = False
+        except StoreBusy:
+            # The join is best-effort, but a refusal from the bounded pool is
+            # backpressure: it has to reach this route's degraded body
+            # instead of being answered as "no durable state".
+            raise
         except Exception:
             durable = None
         out = {"ticker": ticker.upper(), "spot": spot,
@@ -263,6 +272,11 @@ async def node_lifecycle_route(
         return _sanitize(out)
     except HTTPException:
         raise
+    except StoreBusy:
+        # The bounded store pool refused the read: answer with the same fixed
+        # body the global 503 handler uses, never the pool's own text.
+        logger.warning("node-lifecycle route store busy")
+        return {"ticker": ticker.upper() if isinstance(ticker, str) else "unknown", "spot": 0, "nodes": [], "n_nodes": 0, "error": STORE_BUSY_MESSAGE, "status": "degraded"}
     except Exception as e:
         logger.warning(f"node-lifecycle route fail: {e}")
         return {"ticker": ticker.upper() if isinstance(ticker, str) else "unknown", "spot": 0, "nodes": [], "n_nodes": 0, "error": str(e), "status": "degraded"}
@@ -274,7 +288,15 @@ async def air_pockets_route(
     min_gap_pct: float = Query(default=0.02, description="Minimum gap as fraction of spot; percents normalized, never 422"),
     expiries: int = Query(default=4, ge=1, le=12),
 ):
-    """Contiguous strike ranges with |GEX| below 20% of the local median."""
+    """Contiguous gross-exposure runs below 20% of the local median.
+
+    The thin test uses GROSS exposure (call/put cancellation cannot fake a
+    thin strike) and the expected strike spacing is carried from the same
+    loaded observation, so a pocket never bridges a strike that was not
+    loaded. The response discloses that ladder: ``basis``,
+    ``coverage_status``, ``strikes_observed``, ``expected_step`` and
+    ``n_omitted_strikes``.
+    """
     try:
         from server import _sanitize
         raw = await _fetch_chain(ticker, expiries)
@@ -289,7 +311,119 @@ async def air_pockets_route(
         raise
     except Exception as e:
         logger.warning(f"air-pockets route fail: {e}")
-        return {"ticker": ticker.upper() if isinstance(ticker, str) else "unknown", "spot": 0, "air_pockets": [], "error": str(e), "status": "degraded"}
+        return {"ticker": ticker.upper() if isinstance(ticker, str) else "unknown", "spot": 0, "air_pockets": [], "basis": "gross_exposure", "coverage_status": "unknown", "reason": "ROUTE_FAILED", "error": str(e), "status": "degraded"}
+
+
+# ---------------------------------------------------------------------------
+# Replay session manifest — scope-aware (read-only)
+# ---------------------------------------------------------------------------
+
+async def _read_replay_session_rows(ticker: str, day: str) -> list[dict[str, Any]] | None:
+    """
+    Read one UTC day's stored replay rows for ``ticker`` from the recorder
+    store, read-only.
+
+    Day attribution is the stored ``asof_ts`` timestamp prefix — the SAME key
+    the owning manifest route matches with ``LIKE day%`` — so this read can
+    never disagree with it about which day owns a snapshot. Every row keeps
+    its query scope (``query_key``) so the caller can group by scope.
+
+    Returns None when no store connection is available (the route answers
+    'recorder_unavailable', never a fabricated session). A refusal from the
+    bounded store pool propagates as StoreBusy so backpressure reaches the
+    route's degraded body instead of being answered as "no rows".
+    """
+    conn = None
+    try:
+        from services.duckdb_engine import db as eng
+
+        conn = eng.conn if hasattr(eng, "conn") else None
+    except Exception as e:
+        logger.warning(f"replay-sessions store connect fail for {ticker}: {e}")
+        conn = None
+    if conn is None:
+        return None
+
+    from services.connection_guard import query_rows
+
+    rows = await run_store(
+        query_rows,
+        conn,
+        "SELECT snapshot_id, asof_ts, query_key, n_contracts "
+        "FROM heatmap_snapshots_v2 WHERE ticker = ? AND asof_ts LIKE ? "
+        "ORDER BY asof_ts ASC",
+        [ticker.upper(), day + "%"],
+    )
+    return [
+        {
+            "snapshot_id": r[0],
+            "asof": r[1],
+            "query_key": r[2],
+            "n_contracts": r[3],
+        }
+        for r in (rows or [])
+    ]
+
+
+def _valid_day(day: str) -> bool:
+    """A UTC day is a stored YYYY-MM-DD prefix, validated before any read."""
+    try:
+        datetime.strptime(day, "%Y-%m-%d")
+    except (TypeError, ValueError):
+        return False
+    return True
+
+
+@router.get("/replay-sessions/{ticker}")
+async def replay_sessions_route(
+    ticker: str,
+    day: str = Query("", description="UTC day as a stored YYYY-MM-DD prefix"),
+    cadence_s: float = Query(300.0, gt=0, description="Expected capture cadence in seconds; gap detection needs it"),
+):
+    """
+    Scope-aware replay session manifest for one ticker on one UTC day.
+
+    A UTC-day row list is NOT one market session when the rows come from
+    different query scopes: snapshots from a 4-expiry query and a 12-expiry
+    query describe different observations, and heartbeat or gap arithmetic
+    across them would silently mix scopes. The rows are therefore grouped
+    per scope, each scope keeps its own snapshot list and gap accounting,
+    and the day-level certification is refused explicitly
+    (``MIXED_QUERY_SCOPES``) instead of being asserted.
+
+    Read-only: no provider request, no replay activation, no order path.
+    """
+    from server import _sanitize
+
+    t = ticker.strip().upper()
+    if not day:
+        # A day is never guessed: an absent day is refused, not defaulted to
+        # "today", because a silently chosen day is exactly the kind of
+        # unstated scope this endpoint exists to refuse.
+        return _sanitize({"ticker": t, "day": None, "status": "refused",
+                          "reason": "DAY_REQUIRED", "sessions": [], "n_scopes": 0,
+                          "n_snapshots": 0})
+    if not _valid_day(day):
+        return _sanitize({"ticker": t, "day": day, "status": "refused",
+                          "reason": "INVALID_DAY", "sessions": [], "n_scopes": 0,
+                          "n_snapshots": 0})
+    try:
+        rows = await _read_replay_session_rows(t, day)
+    except StoreBusy:
+        # The bounded pool refused the read: backpressure, not a missing day.
+        logger.warning("replay-sessions route store busy")
+        return _sanitize({"ticker": t, "day": day, "status": "degraded",
+                          "error": STORE_BUSY_MESSAGE, "sessions": [], "n_scopes": 0,
+                          "n_snapshots": 0})
+    if rows is None:
+        return _sanitize({"ticker": t, "day": day, "status": "unavailable",
+                          "reason": "recorder_unavailable", "sessions": [],
+                          "n_scopes": 0, "n_snapshots": 0})
+
+    out = group_replay_sessions(
+        rows, expected_cadence_s=cadence_s, day=day, ticker=t,
+    )
+    return _sanitize(out)
 
 
 # ---------------------------------------------------------------------------
@@ -705,12 +839,17 @@ async def node_confluence_route(
             try:
                 from services.duckdb_engine import db as _ddb
                 from services.flow_alerts import read_alert_feed
-                flow_rows = await asyncio.to_thread(
+                flow_rows = await run_store(
                     read_alert_feed, _ddb, days=2, ticker=t, sort_by="conviction", raise_on_error=True
                 )
                 selected_expiries = {str(c.get("expiry")) for c in contracts if c.get("expiry")}
                 flow_rows = [r for r in flow_rows if str(r.get("expiry") or r.get("exp") or "") in selected_expiries]
                 flow_status = "ok" if flow_rows else "no_prints"
+            except StoreBusy:
+                # The flow read is best-effort, but a refusal from the
+                # bounded pool is backpressure: it has to reach this route's
+                # degraded body instead of being answered as "unavailable".
+                raise
             except Exception as e:
                 logger.warning("node-confluence flow read failed: %s", e)
                 flow_status = "unavailable"
@@ -719,6 +858,18 @@ async def node_confluence_route(
         return _sanitize({**out, "spot": spot, "flow_status": flow_status})
     except HTTPException:
         raise
+    except StoreBusy:
+        # The bounded store pool refused the read: answer with the same fixed
+        # body the global 503 handler uses, never the pool's own text.
+        logger.warning("node-confluence route store busy")
+        return {
+            "ticker": ticker.upper() if isinstance(ticker, str) else "unknown",
+            "spot": 0,
+            "rows": [],
+            "strikes_considered": 0,
+            "error": STORE_BUSY_MESSAGE,
+            "status": "degraded",
+        }
     except Exception as e:
         logger.warning(f"node-confluence route fail: {e}")
         return {

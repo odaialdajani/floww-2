@@ -15,8 +15,8 @@ import { resolveContext } from "./chart/context/chartContext";
  * replay with complete identity, plus resolved listed-contract selectors.
  * Comparable stored windows require their baseline/interval selectors.
  * Stored range-replay cells use the shared completeness guard; raw
- * populations and full producer integrity remain pending. Price-history
- * remains unavailable. Only the server resolves facts.
+ * populations and full producer integrity remain pending. A focused chart
+ * can ask only about its saved scope and cursor. Only the server resolves facts.
  * The published screen context (not these props)
  * is what the server validates; client values are never numeric evidence.
  */
@@ -24,6 +24,11 @@ export const STARTERS = [
   "Why this wall?",
   "What changed?",
   "What confirms or invalidates?",
+];
+const CHART_STARTERS = [
+  "Explain this recorded chart reading",
+  "Where were the recorded wall levels?",
+  "What is missing at this cursor?",
 ];
 
 export function admissionBlock({ context, overlayMetric, displayMode, chartContext }) {
@@ -41,7 +46,7 @@ export function admissionBlock({ context, overlayMetric, displayMode, chartConte
     // offered. Without a chart context the honest legacy refusal stands.
     if (chartContext) {
       const resolved = resolveContext(chartContext.descriptor, chartContext.current);
-      if (resolved.status === "refused") return `Focused chart context refused: ${resolved.reason} — the ask stays closed until the focused pane is current.`;
+      if (resolved.status === "refused") return `Focused chart context refused: ${chartContext.descriptor?.reason || resolved.reason} — the ask stays closed until the focused pane is current.`;
       return null;
     }
     return "Close the price-history chart to ask about the live map.";
@@ -71,14 +76,14 @@ export function admissionBlock({ context, overlayMetric, displayMode, chartConte
   return null;
 }
 
-function AskFlow({ subject = "", overlayMetric = "raw", displayMode = "live", compact = false, testId = "ask-lodestar", starters = STARTERS, chartContext = null }) {
+function AskFlow({ subject = "", overlayMetric = "raw", displayMode = "live", compact = false, testId = "ask-lodestar", starters = displayMode === "price-history" ? CHART_STARTERS : STARTERS, chartContext = null }) {
   const agent = useAgent();
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState(null);
   const host=useRef(null),trigger=useRef(null),menu=useRef(null);
   const [focused,setFocused]=useState(0);
-  useEffect(()=>{if(!open)return;const items=[...menu.current?.querySelectorAll("button") || []];items[0]?.focus();const outside=e=>{if(!host.current?.contains(e.target))setOpen(false);};document.addEventListener("pointerdown",outside);return()=>document.removeEventListener("pointerdown",outside);},[open]);
-  const menuKey=e=>{const items=[...menu.current?.querySelectorAll("button") || []];let next=focused;if(e.key==="Escape"){e.preventDefault();e.stopPropagation();setOpen(false);trigger.current?.focus();return;}if(e.key==="ArrowDown")next=(focused+1)%items.length;else if(e.key==="ArrowUp")next=(focused+items.length-1)%items.length;else if(e.key==="Home")next=0;else if(e.key==="End")next=items.length-1;else return;e.preventDefault();e.stopPropagation();setFocused(next);items[next]?.focus();};
+  useEffect(()=>{if(!open)return;const items=[...menu.current?.querySelectorAll("button") || []];(items[focused]||items[0])?.focus();const outside=e=>{if(!host.current?.contains(e.target))setOpen(false);};document.addEventListener("pointerdown",outside);return()=>document.removeEventListener("pointerdown",outside);},[open,focused]);
+  const menuKey=e=>{const items=[...menu.current?.querySelectorAll("button") || []];let next=focused;if(e.key==="Escape"){e.preventDefault();e.stopPropagation();setOpen(false);trigger.current?.focus();return;}if(e.key==="ArrowDown")next=(focused+1)%items.length;else if(e.key==="ArrowUp")next=(focused+items.length-1)%items.length;else if(e.key==="Home")next=0;else if(e.key==="End")next=items.length-1;else {e.stopPropagation();return;}e.preventDefault();e.stopPropagation();setFocused(next);items[next]?.focus();};
   if (!agent) {
     return (
       <span className="lodestar-ask lodestar-ask-off" data-testid={`${testId}-unavailable`}
@@ -99,9 +104,9 @@ function AskFlow({ subject = "", overlayMetric = "raw", displayMode = "live", co
     // the ask — the admission gate above already resolved it against the LIVE
     // pane, and the server re-resolves every fact from the recorded store at
     // the descriptor's cursor. The descriptor carries no evidence values.
-    const forward = chartContext && chartContext.descriptor && typeof chartContext.descriptor === "object"
-      ? { chartContext: chartContext.descriptor } : {};
-    agent.askQuestion(subject ? `${q} (${subject})` : q, forward);
+    const descriptor = displayMode === "price-history" ? chartContext?.descriptor : null;
+    const questionSubject = descriptor ? `$${descriptor.focus}` : subject;
+    agent.askQuestion(questionSubject ? `${q} (${questionSubject})` : q, descriptor ? {chartContext: descriptor} : {});
   };
   return (
     <span ref={host} className={`lodestar-ask${compact ? " compact" : ""}`} data-testid={testId}>
@@ -109,7 +114,7 @@ function AskFlow({ subject = "", overlayMetric = "raw", displayMode = "live", co
         aria-haspopup="menu" aria-expanded={open} disabled={busy}
         title={block || "Ask Flow about the selected reading"}
         data-testid={`${testId}-btn`}
-        onKeyDown={e=>{if(e.key==="ArrowDown" && !busy){e.preventDefault();e.stopPropagation();setFocused(0);setOpen(true);}}}
+        onKeyDown={e=>{if((e.key==="ArrowDown"||e.key==="ArrowUp") && !busy){e.preventDefault();e.stopPropagation();setFocused(e.key==="ArrowUp"?Math.max(starters.length-1,0):0);setOpen(true);}}}
         onClick={() => { setNote(null);setFocused(0); setOpen((o) => !o); }}>
         Ask Flow
       </button>

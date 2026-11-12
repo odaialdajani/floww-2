@@ -1,10 +1,7 @@
 # STATE.md — Confluence Decoder
 
-**Current entry point, updated 2026-10-28:** [Direct cleanup and current queue](CURRENT.md).
-The owner has one implementation owner in this chat. Earlier worker assignments,
-test totals and runtime descriptions below are dated history. Current Stock chart
-and Market view cleanup supersedes those handoffs; retained obligations remain
-explicit in the linked record.
+**Current entry point, updated 2026-11-07:** [Current source and autonomous operations](CURRENT.md).
+The user now requests parallel scoped workers, durable coordination and verified Liquid Paper integration. One integrator owns source changes. The operations specification/plan linked there supersedes earlier source locations and no-worker assignments. All snapshots below remain historical; their test totals and launch instructions are not current proof.
 
 **Historical snapshot last updated:** 2026-10-16
 

@@ -98,14 +98,13 @@ async def list_all_tickers(
     refresh: bool = Query(False),
 ):
     """Provider stock/fund catalog; custom scan lists do not restrict browsing."""
-    from services.market_catalog import get_catalog
+    from services.market_catalog import get_catalog_page
 
-    catalog = await get_catalog(refresh=refresh)
-    symbols = [row["symbol"] for row in catalog["instruments"]]
-    start = (page - 1) * limit
-    return {**{k: v for k, v in catalog.items() if k != "instruments"},
-            "tickers": symbols[start:start + limit], "page": page, "limit": limit,
-            "has_more": start + limit < len(symbols), "cached": True}
+    result = await get_catalog_page(page=page, limit=limit, refresh=refresh)
+    result["tickers"] = [row["symbol"] for row in result.pop("instruments")]
+    result.pop("matches")
+    result["cached"] = True
+    return result
 
 
 @router.get("/heatmap/{ticker}")
@@ -233,19 +232,25 @@ async def chain(
         contracts = [c for c in contracts if (c.get("oi", 0) or c.get("open_interest", 0)) >= min_oi]
     spot = raw["spot"]
     from services.chain_readings import chain_readings
-    rows = chain_readings(contracts, spot, t)
-    # Same canonical exposure as /api/public/chain (C3 wiring): identical
-    # values for standard contracts, quarantine+basis for the rest, so the
-    # two chain routes never disagree on a row.
     from services.triad_projection import annotate_contract_exposure
-    rows = annotate_contract_exposure(rows, spot)
-    # Apply DTE filter if specified
-    if dte_max is not None:
-        rows = [r for r in rows if r.get("dte") is not None and r["dte"] <= dte_max]
-    return _sanitize({"ticker": t, "spot": raw["spot"], "expiries": raw.get("expiries", []), "rows": rows, "count": len(rows),
-                      "gex_unit": "USD per 1% spot move (sign*gamma*OI*100*spot^2*0.01; +call/-put)",
-                      **{key: raw.get(key) for key in ("data_source", "event_time", "fetched_at", "spot_source",
-                                                      "spot_event_time", "spot_fetched_at", "stale", "cache_age_s")}})
+
+    def _chain_rows():
+        rows = chain_readings(contracts, spot, t)
+        # Same canonical exposure as /api/public/chain (C3 wiring): identical
+        # values for standard contracts, quarantine+basis for the rest, so the
+        # two chain routes never disagree on a row.
+        rows = annotate_contract_exposure(rows, spot)
+        # Apply DTE filter if specified
+        if dte_max is not None:
+            rows = [r for r in rows if r.get("dte") is not None and r["dte"] <= dte_max]
+        return rows
+
+    rows = await asyncio.to_thread(_chain_rows)
+    return await asyncio.to_thread(_sanitize, {
+        "ticker": t, "spot": raw["spot"], "expiries": raw.get("expiries", []), "rows": rows, "count": len(rows),
+        "gex_unit": "USD per 1% spot move (sign*gamma*OI*100*spot^2*0.01; +call/-put)",
+        **{key: raw.get(key) for key in ("data_source", "event_time", "fetched_at", "spot_source",
+                                        "spot_event_time", "spot_fetched_at", "stale", "cache_age_s")}})
 
 
 @router.get("/gex-timeframes/{ticker}")
@@ -262,8 +267,8 @@ async def gex_timeframes(
     spot = raw.get("spot", 0)
     if not spot or not raw.get("contracts"):
         raise HTTPException(404, f"No options data for {ticker}")
-    result = calc_gex_timeframes(spot, raw["contracts"], t)
-    return _sanitize(result)
+    result = await asyncio.to_thread(calc_gex_timeframes, spot, raw["contracts"], t)
+    return await asyncio.to_thread(_sanitize, result)
 
 
 @router.get("/uoa/{ticker}")

@@ -330,6 +330,40 @@ test("replay strip loads manifest", async () => {
   expect(screen.getByTestId("solstice-compare-result").textContent).toContain("13:00→14:00");
 });
 
+test.each([
+  ["partial", { status: "partial", requested: 5, comparable: 2, missing: 1,
+    invalid: 1, rebased: 1, increased: 1, unchanged: 1 }, "volume: 2/5 strikes comparable"],
+  ["complete", { status: "complete", requested: 25, comparable: 25, missing: 0,
+    invalid: 0, rebased: 0, increased: 25, unchanged: 0 }, "25 increased"],
+  ["older response", null, "volume coverage unknown"],
+  ["contradictory response", { status: "complete", requested: 2, comparable: 2,
+    missing: 1, invalid: 0, rebased: 0, increased: 2, unchanged: 0 }, "volume coverage unknown"],
+])("replay comparison discloses %s volume coverage", async (_name, coverage, expected) => {
+  const axios = require("axios");
+  axios.get.mockImplementation(async (url) => {
+    if (String(url).includes("/price-paths/comparable")) return { data: {
+      version: "coverage-read.v1", admitted: true, baseline_id: "s0", snapshot_id: "s1",
+    } };
+    if (String(url).includes("/attribute/")) return { data: {
+      status: "ok", ticker: "SPY",
+      from: { id: "s0", asof: "2026-09-03T13:00:00Z" },
+      to: { id: "s1", asof: "2026-09-03T14:00:00Z" },
+      strike_deltas: [], walls_added: [], walls_removed: [],
+      volume_deltas: [{ strike: 500, delta_volume: 10 }], volume_rebased: [],
+      ...(coverage ? { volume_coverage: { ...coverage, units: "contracts" } } : {}),
+    } };
+    return { data: { snapshots: [{ id: "s1" }] } };
+  });
+  await act(async () => { render(<ReplayStrip ticker="SPY" />); });
+  await act(async () => { fireEvent.click(screen.getByTestId("solstice-compare-btn")); });
+  const result = screen.getByTestId("solstice-compare-result");
+  expect(result).toHaveTextContent(expected);
+  if (_name === "partial") {
+    for (const label of ["1 unchanged", "1 missing", "1 invalid", "1 decreased"])
+      expect(result).toHaveTextContent(label);
+  }
+});
+
 test("replay strip shows truthful recorder badge (R6-3)", async () => {
   const axios = require("axios");
   axios.get.mockImplementation(async (url) => {

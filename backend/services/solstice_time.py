@@ -28,6 +28,9 @@ YEAR_DAYS = 365.0
 MIN_T_YEARS = 1.0 / (365.0 * 24.0 * 60.0)  # ~1 minute in years
 # Clock construction version. Bump when product/series rules change.
 CLOCK_VERSION = "clock.v2"
+# New results that use the separately versioned designated-ETF deadline.
+# Legacy and all other product clocks retain CLOCK_VERSION semantics.
+ETF_CLOCK_VERSION = "clock.v3"
 
 
 def third_friday(year: int, month: int) -> int:
@@ -85,7 +88,8 @@ def _last_open_on_or_before(day_et: datetime) -> tuple[str, str] | None:
     return None
 
 
-def last_trading_utc(expiry: str, series: str | None = None, ticker: str | None = None) -> datetime | None:
+def last_trading_utc(expiry: str, series: str | None = None, ticker: str | None = None,
+                     option_root: str | None = None) -> datetime | None:
     """Last tradable instant for an expiry date, as UTC (R7-06, clock.v2).
 
     Separate product/series clocks (never one hardcoded 16:00):
@@ -120,10 +124,21 @@ def last_trading_utc(expiry: str, series: str | None = None, ticker: str | None 
         else:
             close_et = (day_et - timedelta(days=1)).replace(hour=17, minute=0)
         return close_et.astimezone(UTC)
+    # ETF option last-trade rules are separate from the underlying XNYS close.
+    # Require exact OSI root + display ticker agreement; the authority is
+    # analytical only and does not affect session/entry eligibility.
+    from services.etf_expiry_authority import etf_authority_for, etf_early_close_applies
+    authority = etf_authority_for(option_root, ticker=ticker, series=s)
     info = _open_day_info(day_et.strftime("%Y-%m-%d"))
     if info and info.get("is_open") and info.get("close_et"):
         try:
             ch, cm = (int(x) for x in info["close_et"].split(":"))
+            if authority.get("status") == "authoritative":
+                if (ch, cm) == (13, 0):
+                    if etf_early_close_applies(authority, day_et.strftime("%Y-%m-%d")):
+                        ch, cm = authority["early_close"]
+                else:
+                    ch, cm = authority["close_et"]
             return day_et.replace(hour=ch, minute=cm).astimezone(UTC)
         except (TypeError, ValueError):
             pass
@@ -133,14 +148,55 @@ def last_trading_utc(expiry: str, series: str | None = None, ticker: str | None 
         try:
             y, m, d = (int(x) for x in _d.split("-"))
             ch, cm = (int(x) for x in _close.split(":"))
+            if authority.get("status") == "authoritative":
+                if (ch, cm) == (13, 0):
+                    if etf_early_close_applies(authority, _d):
+                        ch, cm = authority["early_close"]
+                else:
+                    ch, cm = authority["close_et"]
             return datetime(y, m, d, ch, cm, tzinfo=ET).astimezone(UTC)
         except (TypeError, ValueError):
             pass
     return day_et.replace(hour=16, minute=0).astimezone(UTC)
 
 
+def expiry_clock_lineage(expiry: str, series: str | None = None,
+                         ticker: str | None = None,
+                         option_root: str | None = None) -> dict[str, Any] | None:
+    """Additive provenance for calculations using the designated ETF rule.
+
+    Returns None for legacy/default and other product clocks, preserving their
+    existing output shape and the interpretation of stored clock.v2 values.
+    """
+    from services.etf_expiry_authority import etf_authority_for
+
+    authority = etf_authority_for(option_root, ticker=ticker, series=series)
+    if authority.get("status") != "authoritative":
+        return None
+    deadline = last_trading_utc(expiry, series=series, ticker=ticker,
+                                option_root=option_root)
+    if deadline is None:
+        return None
+    # Emit a new-clock label only when the designated authority actually
+    # changes the resolved deadline. Unknown calendar/date cases retain the
+    # conservative legacy deadline and must not be relabeled as clock.v3.
+    legacy_deadline = last_trading_utc(expiry, series=series, ticker=ticker)
+    if legacy_deadline is None or deadline == legacy_deadline:
+        return None
+    return {
+        "version": ETF_CLOCK_VERSION,
+        "deadline_utc": deadline.isoformat(),
+        "authority": {
+            "version": authority["authority"],
+            "status": authority["status"],
+            "sources": list(authority["sources"]),
+            "reason": authority.get("reason"),
+        },
+    }
+
+
 def time_to_expiry_years(expiry: str, now: datetime | None = None, series: str | None = None,
-                         ticker: str | None = None) -> tuple[float | None, bool, str | None]:
+                         ticker: str | None = None, option_root: str | None = None) -> tuple[float | None, bool, str | None]:
     """Return (T_years | None, floored, reason).
 
     - Expired (now >= last trading) → (None, False, 'EXPIRED').
@@ -150,7 +206,7 @@ def time_to_expiry_years(expiry: str, now: datetime | None = None, series: str |
     now_utc = now.astimezone(UTC) if now is not None else datetime.now(UTC)
     if now_utc.tzinfo is None:
         now_utc = now_utc.replace(tzinfo=UTC)
-    end = last_trading_utc(expiry, series=series, ticker=ticker)
+    end = last_trading_utc(expiry, series=series, ticker=ticker, option_root=option_root)
     if end is None:
         return None, False, "INVALID_EXPIRY"
     remaining_s = (end - now_utc).total_seconds()

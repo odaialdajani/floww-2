@@ -18,6 +18,8 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
+from services.store_executor import StoreBusy, run_store
+
 router = APIRouter(prefix="/api/solstice/price-paths", tags=["solstice"])
 
 COVERAGE_VERSION = "coverage-read.v1"
@@ -74,7 +76,7 @@ async def price_paths_status() -> dict[str, Any]:
         conn = eng.conn if hasattr(eng, "conn") else None
     except Exception:
         conn = None
-    store = recorder_status(conn) if conn is not None else {"durable": False, "mode": "no_connection"}
+    store = await run_store(recorder_status, conn) if conn is not None else {"durable": False, "mode": "no_connection"}
     # Module singleton state when a worker was registered; otherwise OFF receipt.
     capture_registered = False
     worker_state = "absent"
@@ -126,7 +128,8 @@ async def price_path_points(
         conn = None
     if conn is None:
         return {"ticker": ticker.upper(), "points": [], "error": "recorder_unavailable"}
-    pts = price_paths_since(conn, ticker, since_ts=float(since), limit=int(limit))
+    pts = await run_store(price_paths_since, conn, ticker,
+                          since_ts=float(since), limit=int(limit))
     return {"ticker": ticker.upper(), "since": float(since), "limit": int(limit),
             "n_points": len(pts), "points": [[t, p] for t, p in pts]}
 
@@ -156,12 +159,17 @@ async def price_path_sessions(
     try:
         from services.connection_guard import query_rows
 
-        rows = query_rows(
+        rows = await run_store(
+            query_rows,
             conn,
             "SELECT asof_ts, snapshot_id FROM heatmap_snapshots_v2 WHERE ticker = ? "
             "ORDER BY asof_ts ASC",
             [ticker.upper()],
         )
+    except StoreBusy:
+        # The bounded pool refused the read: that is backpressure, not a
+        # missing recorder. Let it reach the 503 handler.
+        raise
     except Exception:
         return {"ticker": ticker.upper(), "days": [], "n_days": 0,
                 "error": "recorder_unavailable"}
@@ -345,8 +353,8 @@ async def price_path_comparable(
             "asof": snap.get("asof_ts"),
         }
 
-    base = _meta(replay_snapshot(conn, baseline_id))
-    cur = _meta(replay_snapshot(conn, snapshot_id))
+    base = _meta(await run_store(replay_snapshot, conn, baseline_id))
+    cur = _meta(await run_store(replay_snapshot, conn, snapshot_id))
     if base is None:
         return {"admitted": False, "reason": "NO_BASELINE",
                 "detail": f"baseline {baseline_id} not stored",
@@ -390,9 +398,9 @@ async def range_record_index(
     if conn is None:
         return {"version": "range-records.v1", "status": "refused",
                 "reason": "recorder_unavailable", "rows": [], "n_returned": 0}
-    return list_range_envelopes(conn, ticker=ticker, min_dte=min_dte,
-                                max_dte=max_dte, as_of=as_of, status=status,
-                                limit=limit, offset=offset)
+    return await run_store(list_range_envelopes, conn, ticker=ticker,
+                           min_dte=min_dte, max_dte=max_dte, as_of=as_of,
+                           status=status, limit=limit, offset=offset)
 
 
 @router.get("/range-records/{record_id}")
@@ -411,7 +419,7 @@ async def range_record_replay(record_id: str) -> Any:
             "version": "range-records.v1",
             "status": "refused", "reason": "recorder_unavailable",
         })
-    rep = replay_range_envelope(conn, record_id)
+    rep = await run_store(replay_range_envelope, conn, record_id)
     if rep is None:
         return JSONResponse(status_code=404, content={
             "version": "range-records.v1", "status": "refused",

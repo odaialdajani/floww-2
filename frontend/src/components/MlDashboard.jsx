@@ -5,27 +5,35 @@
  drift status, and prediction history. Uses the unified /api/ml/briefing endpoint.
  */
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { BACKEND_URL, API } from "../config/api";
+import { API } from "../config/api";
 
 // API imported from config/api.js
 
+const isProbability = value => Number.isFinite(value) && value >= 0 && value <= 1;
+const SIGNALS = {BULLISH:"BULLISH",UP:"BULLISH",NEUTRAL:"NEUTRAL",HOLD:"NEUTRAL",BEARISH:"BEARISH",DOWN:"BEARISH"};
+function normalizeSignal(value) {
+  return typeof value === "string" ? SIGNALS[value.trim().toUpperCase()] ?? null : null;
+}
+
 function SignalBadge({ signal, confidence }) {
+  const label = normalizeSignal(signal);
   const colorMap = {
     BULLISH: "bg-emerald-500/20 border-emerald-500 text-emerald-400",
     NEUTRAL: "bg-slate-700/50 border-slate-600 text-slate-400",
     BEARISH: "bg-rose-500/20 border-rose-500 text-rose-400",
   };
-  const color = colorMap[signal] || colorMap.NEUTRAL;
+  const color = colorMap[label] || colorMap.NEUTRAL;
   return (
     <span className={`inline-block px-2 py-0.5 rounded border text-[10px] font-bold tracking-wider ${color}`}>
-      {signal?.replace("_", " ") ?? "—"}
-      {confidence != null && <span className="ml-1 opacity-70">{(confidence * 100).toFixed(0)}%</span>}
+      {label || "Unavailable"}
+      {label && isProbability(confidence) && <span className="ml-1 opacity-70">{(confidence * 100).toFixed(0)}%</span>}
     </span>
   );
 }
 
 function ConfidenceBar({ value, label, color = "emerald" }) {
-  const pct = Math.min(100, Math.max(0, (value || 0) * 100));
+  if (!isProbability(value)) return null;
+  const pct = value * 100;
   const barColor = color === "emerald" ? "bg-emerald-500" : color === "rose" ? "bg-rose-500" : "bg-amber-500";
   return (
     <div className="flex items-center gap-2 text-[10px]">
@@ -33,7 +41,7 @@ function ConfidenceBar({ value, label, color = "emerald" }) {
       <div className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden">
         <div className={`h-full ${barColor} rounded-full transition-all`} style={{ width: `${pct}%` }} />
       </div>
-      <span className="text-slate-400 w-10 text-right">{(value || 0).toFixed(2)}</span>
+      <span className="text-slate-400 w-10 text-right">{value.toFixed(2)}</span>
     </div>
   );
 }
@@ -42,7 +50,9 @@ function FeatureChart({ features }) {
   if (!features || Object.keys(features).length === 0) {
     return <div className="text-[10px] text-slate-500 py-2">No feature data</div>;
   }
-  const sorted = Object.entries(features).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, 8);
+  const sorted = Object.entries(features).filter(([, value]) => Number.isFinite(value))
+    .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, 8);
+  if (!sorted.length) return <div className="text-[10px] text-slate-500 py-2">Feature data unavailable</div>;
   const maxVal = Math.max(...sorted.map(([, v]) => Math.abs(v)));
   return (
     <div className="space-y-1">
@@ -70,29 +80,38 @@ export function MlDashboard({ ticker = "SPY", spot }) {
   const [training, setTraining] = useState(false);
   const [activeTab, setActiveTab] = useState("predict");
   const trainTimerRef = useRef(null);
+  const requestRef = useRef(null);
 
   const fetchPrediction = useCallback(async () => {
     if (!ticker) return;
+    requestRef.current?.abort();
+    const controller = new AbortController();
+    requestRef.current = controller;
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
     setLoading(true);
     setError(null);
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000);
       const r = await fetch(`${API}/ml/predict/${ticker}`, { signal: controller.signal });
-      clearTimeout(timeoutId);
       if (!r.ok) {
         if (r.status === 404) throw new Error("ML model not loaded for this ticker");
         if (r.status === 503) throw new Error("ML service unavailable");
         throw new Error(`HTTP ${r.status}`);
       }
       const data = await r.json();
+      if (requestRef.current !== controller) return;
       setPrediction(data);
       setHistory(prev => [data, ...prev.filter(p => !(p.ticker === data.ticker && p.ts === data.ts))].slice(0, 20));
     } catch (e) {
-      if (e.name === "AbortError") setError("ML inference timeout — model may be loading");
+      if (requestRef.current !== controller) return;
+      setPrediction(null);
+      if (e.name === "AbortError") setError("Prediction read timed out");
       else setError(e.message);
     } finally {
-      setLoading(false);
+      clearTimeout(timeoutId);
+      if (requestRef.current === controller) {
+        requestRef.current = null;
+        setLoading(false);
+      }
     }
   }, [ticker]);
 
@@ -109,26 +128,27 @@ export function MlDashboard({ ticker = "SPY", spot }) {
   }, [ticker, fetchPrediction]);
 
   useEffect(() => {
+    setPrediction(null);
     fetchPrediction();
     const id = setInterval(fetchPrediction, 60000);
-    return () => { clearInterval(id); if (trainTimerRef.current) clearTimeout(trainTimerRef.current); };
+    return () => {
+      requestRef.current?.abort(); requestRef.current = null;
+      clearInterval(id); if (trainTimerRef.current) clearTimeout(trainTimerRef.current);
+    };
   }, [fetchPrediction]);
 
-  const predSignal = prediction?.prediction_label?.toUpperCase();
-  const predConf = prediction?.confidence;
+  const displaySignal = normalizeSignal(prediction?.prediction_label ?? prediction?.prediction);
+  const predConf = isProbability(prediction?.confidence) ? prediction.confidence : null;
   const probs = prediction?.probabilities || {};
   const features = prediction?.feature_values || {};
 
-  // Map 3-class to display signal
-  const signalMap = {
-    BULLISH: "BULLISH",
-    NEUTRAL: "NEUTRAL",
-    BEARISH: "BEARISH",
-  };
-  const displaySignal = signalMap[predSignal] || "NEUTRAL";
-  const upProb = probs.up ?? probs.bullish ?? 0.33;
-  const downProb = probs.down ?? probs.bearish ?? 0.33;
-  const holdProb = probs.hold ?? 0;
+  // Map model labels to the display signal. An absent/unknown label stays
+  // null so the UI never substitutes a neutral reading for missing output.
+  const probabilityRows = [
+    { key: "DOWN", label: "DOWN", color: "rose", value: probs.down ?? probs.bearish },
+    { key: "HOLD", label: "HOLD", color: "amber", value: probs.hold },
+    { key: "UP", label: "UP", color: "emerald", value: probs.up ?? probs.bullish },
+  ].filter(row => isProbability(row.value));
 
   return (
     <div className="panel-2 p-2 space-y-2">
@@ -147,7 +167,6 @@ export function MlDashboard({ ticker = "SPY", spot }) {
       {error && (
         <div className="text-[10px] text-amber-400 bg-amber-500/5 rounded-lg px-2 py-1.5 border border-amber-500/20">
           <span className="font-bold">⚠</span> {error}
-          {!error.includes("timeout") && <span className="text-slate-500 ml-1">— ML models may need training</span>}
         </div>
       )}
 
@@ -167,14 +186,22 @@ export function MlDashboard({ ticker = "SPY", spot }) {
           {prediction ? (
             <>
               <div className="bg-slate-800/50 rounded p-2 border border-slate-700/50 text-center">
-                <div className={`text-sm font-bold ${displaySignal === "BULLISH" ? "text-emerald-400" : displaySignal === "BEARISH" ? "text-rose-400" : "text-slate-400"}`}>
-                  {displaySignal}
-                </div>
-                <div className="space-y-1 mt-1.5">
-                  <ConfidenceBar value={downProb} label="DOWN" color="rose" />
-                  <ConfidenceBar value={holdProb} label="HOLD" color="amber" />
-                  <ConfidenceBar value={upProb} label="UP" color="emerald" />
-                </div>
+                {displaySignal ? (
+                  <div className={`text-sm font-bold ${displaySignal === "BULLISH" ? "text-emerald-400" : displaySignal === "BEARISH" ? "text-rose-400" : "text-slate-400"}`}>
+                    {displaySignal}
+                  </div>
+                ) : (
+                  <div className="text-sm font-bold text-slate-400">Signal unavailable</div>
+                )}
+                {probabilityRows.length > 0 ? (
+                  <div className="space-y-1 mt-1.5">
+                    {probabilityRows.map(({ key, label, color, value }) => (
+                      <ConfidenceBar key={key} value={value} label={label} color={color} />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-[9px] text-slate-500 mt-1.5">Probability breakdown unavailable</div>
+                )}
               </div>
               {Object.keys(features).length > 0 && (
                 <div>
@@ -185,7 +212,7 @@ export function MlDashboard({ ticker = "SPY", spot }) {
             </>
           ) : (
             <div className="text-center text-[10px] text-slate-500 py-3">
-              {loading ? "Loading…" : "No prediction"}
+              {loading ? "Loading…" : "Prediction unavailable"}
             </div>
           )}
         </div>
@@ -254,7 +281,7 @@ export function MlDashboard({ ticker = "SPY", spot }) {
           {history.length > 0 ? history.map((h, i) => (
             <div key={i} className="flex items-center justify-between py-0.5 border-b border-slate-800/50 text-[9px]">
               <span className="text-slate-500">{h.ticker}</span>
-              <SignalBadge signal={h.prediction_label?.toUpperCase()} confidence={h.confidence} />
+              <SignalBadge signal={h.prediction_label ?? h.prediction} confidence={h.confidence} />
               <span className="text-slate-600">{h.ts ? new Date(h.ts).toLocaleTimeString() : "—"}</span>
             </div>
           )) : (

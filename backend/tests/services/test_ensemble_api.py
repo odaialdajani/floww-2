@@ -109,9 +109,11 @@ class TestEnsembleStateEndpoint:
         assert "horizons" in data
         assert data["horizons"] == [1, 5, 15, 60]
 
-    def test_state_creates_ensemble_if_missing(self, client):
-        """State endpoint should create ensemble for new ticker."""
+    def test_state_does_not_create_ensemble_if_missing(self, client):
+        """A status read reports missing observations without loading a model."""
         resp = client.get("/api/ensemble/state?ticker=IWM")
         assert resp.status_code == 200
         data = resp.json()
         assert data["ticker"] == "IWM"
+        assert data["initialized"] is False
+        assert data["ensemble_probabilities"] == {}

@@ -6,6 +6,7 @@ beforeEach(()=>{
 afterEach(()=>{stop?.();window.WebSocket=socketBefore;jest.useRealTimers();});
 const reply=(status)=>({ok:status>=200 && status<300,status});
 const api=require("../config/api").API;
+const advance=async ms=>{jest.advanceTimersByTime(ms);await Promise.resolve();await Promise.resolve();};
 
 test("a cached failed GET retries once and records its result",async()=>{
  jest.useRealTimers();
@@ -69,4 +70,38 @@ test("connection failures are reported once without token queries",()=>{
  const events=JSON.parse(localStorage.getItem("floww.problemQueue"));
  expect(events).toHaveLength(1);expect(events[0].kind).toBe("socket_error");
  expect(JSON.stringify(events)).not.toContain("private-token");
+});
+
+test("a refused diagnostic upload pauses retries and retains its stable report",async()=>{
+ const native=window.fetch.mockResolvedValue(reply(403));stop=tracker.startProblemTracking();
+ tracker.reportProblem({kind:"browser_error",name:"TypeError"});
+ const saved=localStorage.getItem("floww.problemQueue");
+ await tracker.flushProblems();await advance(60000);
+ expect(native).toHaveBeenCalledTimes(1);
+ expect(localStorage.getItem("floww.problemQueue")).toBe(saved);
+});
+
+test("diagnostic failure backoff honors Retry-After and resets after success",async()=>{
+ const native=window.fetch.mockResolvedValueOnce({...reply(429),headers:{get:()=>"120"}})
+  .mockResolvedValue(reply(200));stop=tracker.startProblemTracking();
+ tracker.reportProblem({kind:"browser_error",name:"TypeError"});
+ await tracker.flushProblems();await advance(119999);
+ expect(native).toHaveBeenCalledTimes(1);
+ await advance(1);expect(native).toHaveBeenCalledTimes(2);
+ expect(JSON.parse(localStorage.getItem("floww.problemQueue"))).toEqual([]);
+ tracker.reportProblem({kind:"read_error",route:"/api/health"});
+ await tracker.flushProblems();expect(native).toHaveBeenCalledTimes(3);
+});
+
+test("tracker cleanup aborts a pending upload and retains its queue",async()=>{
+ let signal;
+ const native=window.fetch.mockImplementation((url,options)=>new Promise((resolve,reject)=>{
+  signal=options.signal;signal.addEventListener("abort",()=>reject(new DOMException("Stopped","AbortError")));
+ }));stop=tracker.startProblemTracking();
+ tracker.reportProblem({kind:"screen_lag",duration_ms:1200});
+ const pending=tracker.flushProblems();stop();stop=null;
+ expect(signal.aborted).toBe(true);await pending;
+ await advance(20000);
+ expect(native).toHaveBeenCalledTimes(1);
+ expect(JSON.parse(localStorage.getItem("floww.problemQueue"))).toHaveLength(1);
 });

@@ -12,15 +12,26 @@ router = APIRouter(prefix="/api/data", tags=["data"])
 
 @router.get("/status")
 async def get_data_status():
-    """Get status of all data providers."""
+    """Get status of all data providers.
+
+    Every provider names its role and whether the active policy routes to
+    it, and the policy itself is stated next to the labels: without it,
+    "in_use" would be an unanchored claim.
+    """
     try:
-        from data_providers import FINNHUB_API_KEY, POLYGON_API_KEY, DataAggregator
+        from data_providers import (
+            FINNHUB_API_KEY,
+            POLYGON_API_KEY,
+            DataAggregator,
+            market_data_policy,
+        )
         agg = DataAggregator()
         status = agg.get_status()
         return {
             "providers": status,
             "primary": "public_api",
             "retired": ["schwab", "alphavantage"],
+            "policy": market_data_policy(),
             "env_vars_set": {
                 "PUBLIC_API_KEY": bool(os.environ.get("PUBLIC_API_KEY", "")),
                 "FINNHUB_API_KEY": bool(FINNHUB_API_KEY),
@@ -111,11 +122,17 @@ async def get_quote(ticker: str):
         spot = await fetch_spot_from_public_api(ticker.upper())
         if spot and spot > 0:
             return {"ticker": ticker.upper(), "price": spot, "source": "public_api"}
-        from data_providers import DataAggregator
+        from data_providers import DataAggregator, market_data_policy
         agg = DataAggregator()
         spot_data = await agg.get_spot_price(ticker.upper())
         if spot_data:
             return {"ticker": ticker.upper(), **spot_data}
+        if market_data_policy()["public_only"]:
+            # Honest refusal: the alternate sources are disabled by policy,
+            # so there is no price to report and no fallback to reach for.
+            return {"ticker": ticker.upper(), "price": None,
+                    "error": "Public market data is unavailable; "
+                             "alternate sources are disabled"}
         return {"ticker": ticker.upper(), "error": "No data available", "price": None}
     except Exception as e:
         return {"ticker": ticker.upper(), "error": str(e), "price": None}

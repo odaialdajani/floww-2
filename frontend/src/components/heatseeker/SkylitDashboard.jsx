@@ -1,6 +1,6 @@
 import ChartWorkspace, { isChartWorkspaceEnabled } from "./chart/ChartWorkspace";
 import SavedChartReadings from "./SavedChartReadings";
-import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { Activity, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { API as BACKEND_API } from "../../config/api";
 import SkylitControlBar from "./SkylitControlBar";
@@ -913,6 +913,7 @@ function SkylitDashboard({
           <p className="chart-map-level-note">Displayed map levels — not historical candle-time levels. Missing saved chart nodes remain gaps.</p>
         </section>
       </div>
+      <Activity mode={rangeOpen || !deskOpen || chartFocus ? "hidden" : "visible"}>
       <div className="skylit-options-study" ref={optionsStudyRef} role="region" aria-label={ticker + " options desk"} tabIndex={-1} hidden={rangeOpen || !deskOpen || chartFocus}
         onPointerDownCapture={() => focusStudy("options")} onClickCapture={() => focusStudy("options")} onChangeCapture={() => focusStudy("options")} onFocusCapture={() => focusStudy("options")} >
       <button type="button" className="range-mode-toggle" aria-pressed={rangeOpen} onClick={() => {
@@ -1211,7 +1212,7 @@ function SkylitDashboard({
             context={<ReviewSelectionContext ticker={ticker} data={visibleData} wall={resolvedWall} cell={selectedCell} metric={activeMetric} replay={isReplay}/>}
             selectionKey={`${ticker}|${selectedCell?.wall_id || ""}|${contractScope}|${isReplay}|${reviewSelectionRevision}`}
             wall={<SelectedWallBlock
-              data={displayData} spot={displaySpot}
+              data={visibleData} spot={displaySpot}
               selectedCell={followWall && effectiveWallId
                 ? { ...selectedCell, wall_id: effectiveWallId }
                 : selectedCell}
@@ -1410,6 +1411,7 @@ function SkylitDashboard({
         </div>
       </div>
       </div>
+      </Activity>
       </>
     </div>
   );

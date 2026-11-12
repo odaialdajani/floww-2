@@ -53,13 +53,13 @@ NOW = datetime(2026, 10, 27, 14, tzinfo=UTC)
 EPOCH = str(uuid.uuid4())
 
 
-def _staged_book():
+def _staged_book(*, latency_ms=0):
     state = new_book("1000", currency="USD")
     result, event = stage_order(
         state, epoch=EPOCH, contract_id="synthetic-option", product_kind="option",
         premium_factor="100", side="buy", quantity=2, limit="2.60", fee_per_unit="0.65",
         slippage_enabled=True, slippage_method="price", price_increment="0.05",
-        max_quote_age_seconds=60, max_spread="0.20", latency_ms=0, now=NOW,
+        max_quote_age_seconds=60, max_spread="0.20", latency_ms=latency_ms, now=NOW,
         order_expires_at=NOW + timedelta(minutes=10), proposal_digest="a" * 64,
         committed_version=1, currency="USD",
     )
@@ -187,6 +187,22 @@ class TestQuoteReplayIdempotency:
         state, replay, changed = fill_order(state, order_id, _quote(), now=NOW, committed_version=3)
         assert changed is False
         assert replay == first, "a replayed source quote must return the original receipt"
+
+    def test_positive_latency_requires_a_new_source_observation(self):
+        state, order_id = _staged_book(latency_ms=1000)
+        eligible_at = NOW + timedelta(seconds=1)
+        old_quote = _quote()
+        old_quote["received_at"] = eligible_at.isoformat()
+        with pytest.raises(PaperConflict, match="observed before simulated latency elapsed"):
+            fill_order(state, order_id, old_quote, now=eligible_at, committed_version=2)
+        assert state["orders"][order_id]["status"] == "working"
+        assert state["quotes"] == {}
+        assert Decimal(state["cash"]) == Decimal("1000")
+
+        fresh_quote = _quote(source_id="fresh", observed=eligible_at)
+        state, fill, changed = fill_order(state, order_id, fresh_quote, now=eligible_at, committed_version=2)
+        assert changed is True
+        assert fill["source_observed_at"] == eligible_at.isoformat()
 
     def test_clock_rollback_refused(self):
         state, order_id = _staged_book()

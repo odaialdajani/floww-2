@@ -4,7 +4,7 @@
 <!-- Regenerate: python3 qc/audit/generate_api_docs.py -->
 <!-- Verify:     python3 qc/audit/generate_api_docs.py --check -->
 
-Total endpoints: 405
+Total endpoints: 409
 Route groups: 106
 
 Generated from the live FastAPI app, so every path below is a real,
@@ -35,13 +35,15 @@ callable route rather than a hand-copied guess.
 |--------|------|---------|
 | GET | `/api/advanced/{ticker}` | Advanced Analytics |
 
-## agent (17 endpoints)
+## agent (19 endpoints)
 
 | Method | Path | Summary |
 |--------|------|---------|
 | POST | `/api/agent/ask` | Ask |
 | GET | `/api/agent/budget` | Budget |
 | POST | `/api/agent/cancel/{turn_id}` | Cancel |
+| GET | `/api/agent/citations` | Citations |
+| GET | `/api/agent/citations/{citation_id}` | Citation |
 | GET | `/api/agent/claims` | Claims |
 | GET | `/api/agent/handoffs` | Native Handoff History |
 | POST | `/api/agent/handoffs` | Save Native Handoff |
@@ -428,7 +430,7 @@ callable route rather than a hand-copied guess.
 | GET | `/api/heatmap/{ticker}` | Heatmap |
 | GET | `/api/heatmap/{ticker}/range-analytics` | Heatmap Range Analytics |
 
-## heatseeker (20 endpoints)
+## heatseeker (21 endpoints)
 
 | Method | Path | Summary |
 |--------|------|---------|
@@ -444,6 +446,7 @@ callable route rather than a hand-copied guess.
 | GET | `/api/heatseeker/price-history/{ticker}` | Price History |
 | GET | `/api/heatseeker/rainbow-road` | Rainbow Road Route |
 | POST | `/api/heatseeker/record/{ticker}` | Record Snapshot Now |
+| GET | `/api/heatseeker/replay-sessions/{ticker}` | Replay Sessions Route |
 | GET | `/api/heatseeker/reverse-rug` | Reverse Rug Route |
 | GET | `/api/heatseeker/rolling-floors-ceilings` | Rolling Floors Ceilings Route |
 | POST | `/api/heatseeker/snapshot/{ticker}` | Trigger Snapshot |
@@ -808,7 +811,7 @@ callable route rather than a hand-copied guess.
 | GET | `/api/social/sentiment/{ticker}` | Get Sentiment |
 | GET | `/api/social/status` | Get Pipeline Status |
 
-## solstice (26 endpoints)
+## solstice (27 endpoints)
 
 | Method | Path | Summary |
 |--------|------|---------|
@@ -833,6 +836,7 @@ callable route rather than a hand-copied guess.
 | GET | `/api/solstice/scout/{ticker}` | Scout |
 | GET | `/api/solstice/snapshot/{ticker}` | Snapshot |
 | GET | `/api/solstice/vanna/{ticker}` | Vanna |
+| GET | `/api/solstice/wall-curve/{ticker}` | Wall Curve Route |
 | GET | `/api/solstice/walls/{ticker}` | Walls |
 | GET | `/api/solstice/{ticker}/contract` | Contract Detail |
 | GET | `/api/solstice/{ticker}/decisions` | Decisions List |

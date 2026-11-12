@@ -1,15 +1,9 @@
 import React from 'react';
 // B11 pane layouts: named presets with real pane counts, a focusable slot per
-// pane, and phone stacking (single column under 620px). The manager renders
+// pane, and narrow/high-zoom stacking through the workspace CSS. The manager renders
 // REAL chart panes through renderPane — layout metadata alone does not count.
-export const LAYOUT_PRESETS = [
-  { id: 'single', label: 'Single pane', panes: 1, className: 'pane-layout-single' },
-  { id: 'split', label: 'Split · 2 panes', panes: 2, className: 'pane-layout-split' },
-  { id: 'three', label: 'Three panes', panes: 3, className: 'pane-layout-three' },
-];
-export function layoutById(id) {
-  return LAYOUT_PRESETS.find(l => l.id === id) || LAYOUT_PRESETS[0];
-}
+import { layoutById } from './paneLayoutPresets';
+export { LAYOUT_PRESETS, layoutById } from './paneLayoutPresets';
 export default function PaneLayouts({ layout, panes, onFocus, renderPane }) {
   const def = layoutById(layout);
   const visible = panes.slice(0, def.panes);

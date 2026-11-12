@@ -72,7 +72,9 @@ async def test_portfolio_hedge(aclient):
 
 async def test_portfolio_remove_position(aclient):
     """Remove a position."""
-    r = await aclient.delete("/api/portfolio/test/position/0")
+    book = await aclient.get("/api/portfolio/test")
+    assert book.status_code == 200, book.text
+    r = await aclient.delete("/api/portfolio/test/position/0", params={"expected_revision": book.json()["book_revision"]})
     assert r.status_code == 200, r.text
     d = r.json()
     assert d["status"] == "removed"

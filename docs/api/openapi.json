@@ -1207,6 +1207,153 @@
         ]
       }
     },
+    "/api/agent/citations": {
+      "get": {
+        "description": "The owner's citation index over saved answers.\n\nA citation points at one reading in one saved answer and keeps that\nreading's own source, clocks, status and reason. Nothing is re-fetched\nor recomputed here, and another owner's citations are never visible.",
+        "operationId": "get_api_agent_citations",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "turn_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Turn Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "metric",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Metric"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Citations",
+        "tags": [
+          "agent",
+          "agent"
+        ]
+      }
+    },
+    "/api/agent/citations/{citation_id}": {
+      "get": {
+        "description": "One citation from the owner's saved answers.\n\nUse the returned detail_path for lookup through the exact saved answer,\nindependent of newer answers. ID-only lookups retain a bounded recent\nwindow. Another owner's or an unfinished answer is never returned.",
+        "operationId": "get_api_agent_citations_citation_id",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "citation_id",
+            "required": true,
+            "schema": {
+              "title": "Citation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "turn_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Turn Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Citation",
+        "tags": [
+          "agent",
+          "agent"
+        ]
+      }
+    },
     "/api/agent/claims": {
       "get": {
         "operationId": "get_api_agent_claims",
@@ -5197,7 +5344,7 @@
     },
     "/api/data/status": {
       "get": {
-        "description": "Get status of all data providers.",
+        "description": "Get status of all data providers.\n\nEvery provider names its role and whether the active policy routes to\nit, and the policy itself is stated next to the labels: without it,\n\"in_use\" would be an unanchored claim.",
         "operationId": "get_api_data_status",
         "responses": {
           "200": {
@@ -5638,7 +5785,7 @@
     },
     "/api/ensemble/state": {
       "get": {
-        "description": "Get full ensemble state including calibration and history.",
+        "description": "Read existing state without initializing models or adding observations.",
         "operationId": "get_api_ensemble_state",
         "parameters": [
           {
@@ -8989,7 +9136,7 @@
     },
     "/api/heatseeker/air-pockets": {
       "get": {
-        "description": "Contiguous strike ranges with |GEX| below 20% of the local median.",
+        "description": "Contiguous gross-exposure runs below 20% of the local median.\n\nThe thin test uses GROSS exposure (call/put cancellation cannot fake a\nthin strike) and the expected strike spacing is carried from the same\nloaded observation, so a pocket never bridges a strike that was not\nloaded. The response discloses that ladder: ``basis``,\n``coverage_status``, ``strikes_observed``, ``expected_step`` and\n``n_omitted_strikes``.",
         "operationId": "get_api_heatseeker_air-pockets",
         "parameters": [
           {
@@ -9955,6 +10102,73 @@
         "summary": "Record Snapshot Now",
         "tags": [
           "price-node-history"
+        ]
+      }
+    },
+    "/api/heatseeker/replay-sessions/{ticker}": {
+      "get": {
+        "description": "Scope-aware replay session manifest for one ticker on one UTC day.\n\nA UTC-day row list is NOT one market session when the rows come from\ndifferent query scopes: snapshots from a 4-expiry query and a 12-expiry\nquery describe different observations, and heartbeat or gap arithmetic\nacross them would silently mix scopes. The rows are therefore grouped\nper scope, each scope keeps its own snapshot list and gap accounting,\nand the day-level certification is refused explicitly\n(``MIXED_QUERY_SCOPES``) instead of being asserted.\n\nRead-only: no provider request, no replay activation, no order path.",
+        "operationId": "get_api_heatseeker_replay-sessions_ticker",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ticker",
+            "required": true,
+            "schema": {
+              "title": "Ticker",
+              "type": "string"
+            }
+          },
+          {
+            "description": "UTC day as a stored YYYY-MM-DD prefix",
+            "in": "query",
+            "name": "day",
+            "required": false,
+            "schema": {
+              "default": "",
+              "description": "UTC day as a stored YYYY-MM-DD prefix",
+              "title": "Day",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Expected capture cadence in seconds; gap detection needs it",
+            "in": "query",
+            "name": "cadence_s",
+            "required": false,
+            "schema": {
+              "default": 300.0,
+              "description": "Expected capture cadence in seconds; gap detection needs it",
+              "exclusiveMinimum": 0,
+              "title": "Cadence S",
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Replay Sessions Route",
+        "tags": [
+          "heatseeker",
+          "heatseeker"
         ]
       }
     },
@@ -14538,7 +14752,7 @@
     },
     "/api/paper-trading/attribution": {
       "get": {
-        "description": "P&L attribution by ticker (Phase 6.5, 2026-09-05).\n\nQuery params:\n  tickers: optional comma-separated symbols to fetch live marks for\n    unrealized P&L (via the merged chain fetcher). Omitted tickers\n    report unrealized_pnl=null (unknown, never mark-to-model).",
+        "description": "P&L attribution by ticker (Phase 6.5, 2026-09-05).\n\nQuery params:\n  tickers: optional comma-separated symbols to fetch live marks for\n    unrealized P&L (via the merged chain fetcher). Omitted tickers\n    report unrealized_pnl=null (unknown, never mark-to-model).\n\nEvery mark carries its provenance (provider, source, receipt clock, event\nclock, staleness). A failed fetch is an unavailable mark with a reason,\nnever a zero.",
         "operationId": "get_api_paper-trading_attribution",
         "parameters": [
           {
@@ -15017,6 +15231,25 @@
               "minimum": 0,
               "title": "Index",
               "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "expected_revision",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "minLength": 64,
+                  "pattern": "^[a-f0-9]{64}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Expected Revision"
             }
           }
         ],
@@ -16086,7 +16319,7 @@
     },
     "/api/public/portfolio/raw": {
       "get": {
-        "description": "Return the raw authenticated Public.com paper-trading portfolio.\n\nNOTE: the canonical UI-facing portfolio (flattened positions, money\nfields) lives at GET /api/public/portfolio (routes/public_brokerage.py),\nwhich takes precedence on that path. This raw view is kept for\ndebugging/inspection.",
+        "description": "Return the raw authenticated Public.com paper-trading portfolio.\n\nNOTE: the canonical UI-facing portfolio (flattened positions, money\nfields) lives at GET /api/public/portfolio (routes/public_brokerage.py),\nwhich takes precedence on that path. This raw view is kept for\ndebugging/inspection.\n\nAccount reads are sensitive: this route must carry the master key even\nthough it is a GET. Without the dependency, GET auth (mutating methods\nonly) left the account id, cash and positions readable to any reachable\nclient \u2014 reproduced 2026-11-01 before this fix.",
         "operationId": "get_api_public_portfolio_raw",
         "responses": {
           "200": {
@@ -18820,6 +19053,132 @@
           }
         },
         "summary": "Vanna",
+        "tags": [
+          "solstice",
+          "solstice"
+        ]
+      }
+    },
+    "/api/solstice/wall-curve/{ticker}": {
+      "get": {
+        "description": "Recorded same-wall curve (`recorded-wall-curve.v1`).\n\nRead-only over the recorder store: the stored observations of ONE raw\nwall inside ONE declared scope. No live chain, no recomputation, no\nforward fill. A removed wall, a changed definition and a session, scope\nor provider change break the line and leave an explicit gap; missing,\ninvalid, unavailable and a measured zero stay distinct.",
+        "operationId": "get_api_solstice_wall-curve_ticker",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ticker",
+            "required": true,
+            "schema": {
+              "title": "Ticker",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "wall_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Wall Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "metric_id",
+            "required": false,
+            "schema": {
+              "default": "dadgex_net_v1",
+              "title": "Metric Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "query_key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Query Key"
+            }
+          },
+          {
+            "in": "query",
+            "name": "as_of",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "As Of"
+            }
+          },
+          {
+            "in": "query",
+            "name": "day",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Day"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "maximum": 2000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Wall Curve Route Api Solstice Wall Curve  Ticker  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Wall Curve Route",
         "tags": [
           "solstice",
           "solstice"

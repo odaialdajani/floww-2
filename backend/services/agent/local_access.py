@@ -11,7 +11,8 @@ from starlette.responses import Response
 COOKIE = "floww_research"
 _EXACT = {
     "POST": {"/api/agent/session", "/api/agent/ask", "/api/agent/session/rotate", "/api/agent/session/logout"},
-    "GET": {"/api/agent/history", "/api/agent/claims", "/api/agent/prefs", "/api/agent/models"},
+    "GET": {"/api/agent/history", "/api/agent/claims", "/api/agent/prefs", "/api/agent/models",
+            "/api/agent/citations"},
     "PUT": {"/api/agent/prefs"},
 }
 
@@ -21,6 +22,7 @@ def research_path(method, path):
         return True
     return bool(
         re.fullmatch(r"/api/agent/(?:turn|stream)/[a-f0-9-]{36}", path)
+        or re.fullmatch(r"/api/agent/citations/cit_[a-f0-9]{24}", path)
         if method == "GET"
         else re.fullmatch(r"/api/agent/cancel/[a-f0-9-]{36}", path)
         if method == "POST"

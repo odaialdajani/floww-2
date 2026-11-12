@@ -76,7 +76,7 @@ async def _fetch_instruments() -> list[dict]:
         budget.release()
 
 
-async def get_catalog(refresh: bool = False) -> dict:
+async def _catalog_snapshot(refresh: bool = False) -> dict:
     global _cache, _loaded_at, _retry_at
     async with _lock:
         now = time.monotonic()
@@ -91,7 +91,9 @@ async def get_catalog(refresh: bool = False) -> dict:
             except Exception as exc:
                 log.warning("Stock directory refresh failed (%s)", type(exc).__name__)
                 _retry_at = now + RETRY_SECONDS
-        result = copy.deepcopy(_cache or {"instruments": [], "asof": None})
+        # Refresh replaces the generation. Page reads can slice its stable rows
+        # before copying, without exposing any of them to callers.
+        result = dict(_cache or {"instruments": [], "asof": None})
         result.update(
             source="public-instruments", stale=_cache is None or now - _loaded_at >= TTL_SECONDS or _retry_at > now,
             complete_provider_catalog=_cache is not None,
@@ -100,6 +102,27 @@ async def get_catalog(refresh: bool = False) -> dict:
             optionable_total=sum(r["options"] for r in result["instruments"]),
         )
         return result
+
+
+async def get_catalog(refresh: bool = False) -> dict:
+    return copy.deepcopy(await _catalog_snapshot(refresh=refresh))
+
+
+async def get_catalog_page(*, page: int, limit: int, q: str = "", options_only: bool = False,
+                           sector: str = "", refresh: bool = False) -> dict:
+    snapshot = await _catalog_snapshot(refresh=refresh)
+    records = snapshot["instruments"]
+    query = q.strip().upper().lstrip("$")
+    sector = sector.strip()
+    if query or options_only or sector:
+        records = [row for row in records
+                   if (not query or query in row["symbol"]) and (not options_only or row["options"])
+                   and (not sector or row.get("sector") == sector)]
+    start = (page - 1) * limit
+    return {**{key: value for key, value in snapshot.items() if key != "instruments"},
+            "instruments": copy.deepcopy(records[start:start + limit]),
+            "matches": len(records), "page": page, "limit": limit,
+            "has_more": start + limit < len(records)}
 
 
 def cached_scan_symbols() -> list[str]:

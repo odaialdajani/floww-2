@@ -3,6 +3,28 @@ import axios from "axios";
 import { API as BACKEND_API } from "../../config/api";
 import { replayToDisplay, stepReplay, replayIndexOf } from "../../lib/solsticeReplay";
 
+function volumeComparisonText(compare) {
+  const coverage = compare?.volume_coverage;
+  const counts = ["requested", "comparable", "missing", "invalid", "rebased", "increased", "unchanged"];
+  const expectedStatus = coverage?.requested > 0 && coverage.comparable === coverage.requested
+    ? "complete" : coverage?.comparable > 0 ? "partial" : "unavailable";
+  if (!coverage || coverage.units !== "contracts" || coverage.status !== expectedStatus
+      || !counts.every(key => Number.isSafeInteger(coverage[key]) && coverage[key] >= 0)
+      || coverage.comparable + coverage.missing + coverage.invalid + coverage.rebased !== coverage.requested
+      || coverage.increased + coverage.unchanged !== coverage.comparable) {
+    const shown = Array.isArray(compare?.volume_deltas) ? compare.volume_deltas.length : 0;
+    return shown ? `${shown} shown volume increase${shown === 1 ? "" : "s"} · volume coverage unknown`
+      : "volume coverage unknown";
+  }
+  if (!coverage.requested) return "volume unavailable · no recorded strike readings";
+  const parts = [`volume: ${coverage.comparable}/${coverage.requested} strikes comparable`];
+  if (coverage.comparable) parts.push(`${coverage.increased} increased`, `${coverage.unchanged} unchanged`);
+  for (const [key, label] of [["missing", "missing"], ["invalid", "invalid"], ["rebased", "decreased"]]) {
+    if (coverage[key]) parts.push(`${coverage[key]} ${label}`);
+  }
+  return parts.join(" · ");
+}
+
 /**
  * ReplayStrip — actual guided replay (P09/R4-15, R5-B isolation).
  * Loads the manifest, steps chronologically through RECORDED snapshots, and
@@ -307,8 +329,8 @@ function ReplayStrip({ ticker = "SPY", onReplay = null, openRequest = null }) {
       {compare && !["ok", "history_unavailable"].includes(compare.status) && <span role="status" title={compare.detail || "Comparable identity, source, scope, formula, session and ordering are required"}>Comparison unavailable · {compare.reason || compare.error || compare.status || "COMPARISON_UNAVAILABLE"}</span>}
       {compare && compare.status === "ok" && (
         <span data-testid="solstice-compare-result"
-          title={`Prior ${compare.from?.asof || "?"} → current ${compare.to?.asof || "?"}; coarse wall-level comparison; use the counterfactual for spot/IV/time/OI decomposition`}>
-          {(compare.from?.asof || "?").slice(11, 16)}→{(compare.to?.asof || "?").slice(11, 16)} · Δ {compare.strike_deltas?.length || 0} strikes · +{(compare.walls_added || []).length}/-{(compare.walls_removed || []).length} walls · vol Δ {compare.volume_deltas?.length || 0}{compare.volume_rebased?.length ? ` · rebased ${compare.volume_rebased.length}` : ""}
+          title={`Prior ${compare.from?.asof || "?"} → current ${compare.to?.asof || "?"}; coarse wall-level comparison; use the counterfactual for spot/IV/time/OI decomposition. Volume compares recorded cumulative contracts; missing, invalid and decreased readings are excluded.`}>
+          {(compare.from?.asof || "?").slice(11, 16)}→{(compare.to?.asof || "?").slice(11, 16)} · Δ {compare.strike_deltas?.length || 0} strikes · +{(compare.walls_added || []).length}/-{(compare.walls_removed || []).length} walls · {volumeComparisonText(compare)}
         </span>
       )}
       {compare && compare.status === "history_unavailable" && (

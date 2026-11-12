@@ -200,7 +200,9 @@ export default function AgentProvider({children,onNavigate}){
    return;
   }
   if(settingsGuard.current){setError("Confirm your AI choice in settings before asking. Reload choices if the save was not confirmed.");return;}
-  const market=isMarketQuestion(question);
+  const focusedChart=chartContext?.status==="bound" && chartContext.query==="focused-chart";
+  if(chartContext && !focusedChart){setError("The saved chart reading is unavailable. Choose a current chart reading.");return;}
+  const market=!focusedChart && isMarketQuestion(question);
   const rangeBlock=market?null:rangeResearchBlock(context);
   if(rangeBlock){setError(rangeBlock);return;}
   if(!market && !context.ticker){setError("Choose a ticker in Screener, Options map or Unusual flow before asking.");return;}
@@ -209,13 +211,13 @@ export default function AgentProvider({children,onNavigate}){
    ? 'Research only · raw population and full producer integrity qualification pending. Backend resolves stored facts; no crypto/production admission or native draft permission.'
    : null);setProgress("Starting research");
   submittedDraft.current=consumeDraft && draft.current.question===question?{...draft.current}:null;
-  frozen.current=market?{page:"flowseeker-pro",ticker:null,dte:"all",displayMode:"live",scope:"market"}:JSON.parse(JSON.stringify(context));
+  frozen.current=focusedChart ? {contextVersion:1,page:"heatseeker",ticker:chartContext.focus,dte:"all",displayMode:"price-history"}
+   : market ? {page:"flowseeker-pro",ticker:null,dte:"all",displayMode:"live",scope:"market"} : JSON.parse(JSON.stringify(context));
   submittedRequest.current={question,scope:market?"market":"selected",ticker:frozen.current.ticker,screen:frozen.current,created_at:new Date().toISOString()};
   const horizon=frozen.current.displayMode === 'range-replay'
    ? `range:${frozen.current.mapQuery.min_dte}:${frozen.current.mapQuery.max_dte}` : frozen.current.dte;
   try {await ask({question,ticker:frozen.current.ticker,horizon,screen:frozen.current,...(market?{scope:"market"}:{})
-  ,...(chartContext && typeof chartContext==="object" && !Array.isArray(chartContext)
-  ?{chart_context:JSON.parse(JSON.stringify(chartContext))} : {})
+  ,...(focusedChart ? {scope:"selected",chart_context:JSON.parse(JSON.stringify(chartContext))} : {})
   ,...(conversationParent.current?{parent_turn_id:conversationParent.current.turn_id}:{})});}
   finally{if(busy.current===requestOwner)busy.current=null;}
  },[ask,context,setError,onNavigate,pushTurn,setQuestion,loadHistory,stopSavedTurn]);

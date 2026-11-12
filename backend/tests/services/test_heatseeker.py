@@ -149,8 +149,14 @@ class TestFlipZones:
 class TestNodeLifecycle:
     def test_happy_path_mixed_states(self):
         """
-        Four strikes with distinct |GEX| ranks and a history that taps each a
-        different number of times.
+        Four strikes with distinct |GEX| ranks and a history whose VISIT
+        EPISODES tap each a different number of times.
+
+        Episodes, not samples: spot resting near a strike across several
+        consecutive snapshots is ONE sustained visit; only leaving the band
+        and returning adds another. So 105 is reached in two separate
+        episodes (with an exit between them) and 110 in three, while 100 is
+        one continuous dwell.
         """
         spot = 100.0
         # Same OI/gamma → magnitude differentiated only by call vs put? No —
@@ -161,21 +167,31 @@ class TestNodeLifecycle:
             _c(105.0, "C", 0.05, 600),
             _c(110.0, "C", 0.05, 400),  # smallest
         ]
-        # History: 95 tapped 0 times (fresh), 100 tapped once (tested),
-        # 105 tapped twice (delivered), 110 tapped three times (decaying).
+        # History: 95 visited 0 times (fresh), 100 once as a continuous dwell
+        # (tested), 105 in two separate episodes (delivered), 110 in three
+        # (decaying). 90.0 is outside every node's band, so it separates the
+        # episodes instead of extending one.
         history = [
-            {"timestamp": "2026-05-18T00:00:00Z", "spot": 100.05},  # within 0.1% of 100
-            {"timestamp": "2026-05-18T01:00:00Z", "spot": 105.0},   # tap 105
-            {"timestamp": "2026-05-18T02:00:00Z", "spot": 105.05},  # tap 105 again
-            {"timestamp": "2026-05-18T03:00:00Z", "spot": 110.0},   # tap 110
-            {"timestamp": "2026-05-18T04:00:00Z", "spot": 110.05},  # tap 110
-            {"timestamp": "2026-05-18T05:00:00Z", "spot": 109.95},  # tap 110 (within 0.1%)
+            {"timestamp": "2026-05-18T00:00:00Z", "spot": 100.05},  # dwell on 100
+            {"timestamp": "2026-05-18T01:00:00Z", "spot": 100.05},
+            {"timestamp": "2026-05-18T02:00:00Z", "spot": 100.05},
+            {"timestamp": "2026-05-18T03:00:00Z", "spot": 105.0},   # visit 105 #1
+            {"timestamp": "2026-05-18T04:00:00Z", "spot": 90.0},    # exit
+            {"timestamp": "2026-05-18T05:00:00Z", "spot": 105.05},  # visit 105 #2
+            {"timestamp": "2026-05-18T06:00:00Z", "spot": 90.0},    # exit
+            {"timestamp": "2026-05-18T07:00:00Z", "spot": 110.0},   # visit 110 #1
+            {"timestamp": "2026-05-18T08:00:00Z", "spot": 90.0},    # exit
+            {"timestamp": "2026-05-18T09:00:00Z", "spot": 110.05},  # visit 110 #2
+            {"timestamp": "2026-05-18T10:00:00Z", "spot": 90.0},    # exit
+            {"timestamp": "2026-05-18T11:00:00Z", "spot": 109.95},  # visit 110 #3
         ]
         result = calc_node_lifecycle(spot, contracts, history)
+        assert result["history_status"] == "ok"
+        assert result["history_samples"] == 12
         nodes_by_strike = {n["strike"]: n for n in result["nodes"]}
-        # F09/F10 (corrected): taps are observed; outcome probability is NOT
-        # calibrated here — tap_probability stays None with legacy schedule kept
-        # only as explicitly uncalibrated compat.
+        # F09/F10 (corrected): taps are observed episodes; outcome probability
+        # is NOT calibrated here — tap_probability stays None with legacy
+        # schedule kept only as explicitly uncalibrated compat.
         assert nodes_by_strike[95.0]["state"] == "fresh"
         assert nodes_by_strike[95.0]["taps"] == 0
         assert nodes_by_strike[95.0]["tap_probability"] is None
@@ -185,6 +201,24 @@ class TestNodeLifecycle:
         assert nodes_by_strike[105.0]["tap_probability"] is None
         assert nodes_by_strike[110.0]["state"] == "decaying"
         assert nodes_by_strike[110.0]["tap_probability"] is None
+
+    def test_duplicate_timestamps_are_one_sample(self):
+        """
+        Repeated identical timestamps are one observation: a replayed row
+        can never add a tap or push a node into 'decaying'.
+        """
+        contracts = [_c(100.0, "C", 0.05, 5000)]
+        history = [
+            {"timestamp": "2026-05-18T00:00:00Z", "spot": 100.0},
+            {"timestamp": "2026-05-18T00:00:00Z", "spot": 100.0},
+            {"timestamp": "2026-05-18T00:00:00Z", "spot": 100.0},
+        ]
+        result = calc_node_lifecycle(100.0, contracts, history)
+        node = result["nodes"][0]
+        assert result["history_samples"] == 1
+        assert result["duplicate_timestamps_dropped"] == 2
+        assert node["taps"] == 1
+        assert node["state"] == "tested"
 
     def test_empty_contracts(self):
         """Empty contracts must return empty nodes."""
@@ -305,8 +339,8 @@ class TestBeachBall:
     def test_happy_path_spot_stretched_above_king(self):
         """
         King node sits at 100 (largest |GEX|). Spot=103.0 → 3% above king.
-        Active=True, direction='above', confidence capped at 1.0 because
-        distance (0.03) > 0.02.
+        Active=True, direction='above'. Distance is reported as distance in
+        points and percent; no probability-like confidence label exists.
         """
         spot = 103.0
         contracts = [
@@ -319,8 +353,9 @@ class TestBeachBall:
         assert result["active"] is True
         assert result["king_node"] == pytest.approx(100.0)
         assert result["direction"] == "above"
+        assert result["spot_distance_points"] == pytest.approx(3.0)
         assert result["spot_distance_pct"] == pytest.approx(0.03)
-        assert result["confidence"] == pytest.approx(1.0)
+        assert "confidence" not in result
 
     def test_inactive_when_spot_at_king_node(self):
         """
@@ -334,8 +369,9 @@ class TestBeachBall:
         result = detect_beach_ball(spot, contracts)
         assert result["active"] is False
         assert result["direction"] == "at"
+        assert result["spot_distance_points"] == pytest.approx(0.0)
         assert result["spot_distance_pct"] == pytest.approx(0.0)
-        assert result["confidence"] == pytest.approx(0.0)
+        assert "confidence" not in result
 
     def test_empty_contracts_and_explicit_king(self):
         """
@@ -345,14 +381,14 @@ class TestBeachBall:
         """
         empty = detect_beach_ball(100.0, [])
         assert empty["active"] is False
+        assert "confidence" not in empty
 
         result = detect_beach_ball(99.0, [], king_node=100.0)
         assert result["active"] is True
         assert result["king_node"] == pytest.approx(100.0)
         assert result["direction"] == "below"
+        assert result["spot_distance_points"] == pytest.approx(-1.0)
         assert result["spot_distance_pct"] == pytest.approx(0.01)
-        # confidence = min(1.0, 0.01 / 0.02) = 0.5
-        assert result["confidence"] == pytest.approx(0.5)
 
 
 # ===========================================================================

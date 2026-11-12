@@ -271,6 +271,8 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
         if (!mountedRef.current || genRef.current !== myGen) return;
         const next = replayId ? replayToDisplay(r.data, ticker) : r.data;
         if (!next || (next.ticker && next.ticker !== ticker) || (replayId && next.snapshotId !== replayId)) { setError("Snapshot identity mismatch — no substitution made"); setLoading(false); return; }
+        // Classify an error-source payload as a failure instead of rendering it.
+        if (next.data_source === "error") { setError("Market data source reported an error — no data displayed."); setLoading(false); return; }
         setPayload(next);
         setLoading(false);
         // Owner live request 2026-10-24 (ancestor scroll jumps): loading all
@@ -568,11 +570,6 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
             </button>
             {replayId && !replayDisplay && <button type="button" onClick={() => onReplayDisplay(null)}>Leave recorded observation · Live</button>}
           </div>
-          {!inspectorOpen && !cell && !selectedWall && (
-            <span className="triad-selection-cue" data-testid="triad-selection-cue" role="status">
-              Select a strike or wall to open its inspector
-            </span>
-          )}
           <div className="triad-mobile-switch"><button onClick={() => setMobilePane("raw")}>Raw</button><button onClick={() => setMobilePane("adjusted")}>Adjusted</button></div>
         </div>
         <div className="tdk-head-sub">
@@ -591,6 +588,11 @@ function TrinityView({ onFocusTicker, ticker: sharedTicker = null }) {
             {loadedExpiries.invalid > 0 && ` · ${loadedExpiries.invalid} invalid expiry value${loadedExpiries.invalid === 1 ? "" : "s"} excluded — not complete`}
           </span>
           <MarketObservationLine replay={isReplay} data={payload} quality={quality} />
+          {!inspectorOpen && !cell && !selectedWall && (
+            <span className="triad-selection-cue" data-testid="triad-selection-cue" role="status">
+              Select a strike or wall to open its inspector
+            </span>
+          )}
         </div>
       </header>
       {payload?.scope_selection?.status === "unavailable" && <div role="status" data-testid="triad-empty-scope" className="triad-band-note">No listed expiry in the server's 30-day bound — no substitution made.</div>}

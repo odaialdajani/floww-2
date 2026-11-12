@@ -7,6 +7,8 @@ export function checkMarketCoverage(body){
  const directory=body.directory,options=body.options;
  if(typeof directory.available!=="boolean"||typeof directory.stale!=="boolean"||(directory.available&&(!count(directory.total)||!count(directory.optionable_total)||directory.optionable_total>directory.total)))throw Error("Invalid listed counts");
  if(options.received_recently!==null&&(!count(options.received_recently)||!Array.isArray(options.receipt_times)||options.receipt_times.length!==options.received_recently||!Number.isFinite(options.window_seconds)||options.window_seconds<=0||options.receipt_times.some(value=>!Number.isFinite(value)||value<0)))throw Error("Invalid option reads");
+ if(options.scan_scope!=null&&typeof options.scan_scope!=="string")throw Error("Invalid scan scope");
+ if(options.scope_size!==undefined&&options.scope_size!==null&&!count(options.scope_size))throw Error("Invalid scan scope size");
  if(body.provider.last_success_at!==null&&(!Number.isFinite(body.provider.last_success_at)||body.provider.last_success_at<0))throw Error("Invalid feed clock");
  return body;
 }

@@ -214,9 +214,25 @@ def test_beach_ball_route(client, patched_chain):
     assert d["ticker"] == "SPY"
     assert d["spot"] == 500.0
     assert d["pattern"] == "beach_ball"
-    for k in ("active", "king_node", "spot_distance_pct", "direction", "confidence"):
+    # Distance is the only supported reading: explicit points and percent.
+    for k in ("active", "king_node", "spot_distance_points", "spot_distance_pct", "direction"):
         assert k in d, f"missing beach-ball field {k}"
     assert d["direction"] in ("above", "below", "at")
+    # The retired probability-like label must not come back.
+    assert "confidence" not in d
+
+
+def test_air_pockets_route_reports_ladder_coverage(client, patched_chain):
+    """Air pockets disclose the loaded ladder they were computed over."""
+    r = client.get("/api/heatseeker/air-pockets?ticker=SPY")
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert d["basis"] == "gross_exposure"
+    assert d["strikes_observed"] > 0
+    assert d["coverage_status"] in ("ok", "unknown")
+    for p in d["air_pockets"]:
+        # A pocket never claims the gross-based magnitude under a net-only name.
+        assert p["max_gross_gex_in_run"] == p["max_abs_gex_in_run"]
 
 
 def test_reverse_rug_route(client, patched_chain):

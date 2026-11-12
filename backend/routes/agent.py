@@ -188,6 +188,59 @@ async def history_page(request: Request, limit: int = Query(30, ge=1, le=30), cu
     return {**page, "turns": [public_turn(doc) for doc in page["turns"]]}
 
 
+async def _citation_documents(request, identity, *, limit, turn_id=None):
+    """Resolve an exact owned answer before applying any recent-answer window."""
+    try:
+        repository = service(request).repository
+        if turn_id:
+            doc = await repository.read(identity, turn_id)
+            return [doc] if doc and doc.get("status") == "completed" else []
+        return await repository.citation_documents(identity, limit=limit)
+    except ValueError:
+        raise HTTPException(422, "Invalid saved-answer lookup") from None
+    except Exception:
+        raise HTTPException(503, "Saved research storage is unavailable") from None
+
+
+@router.get("/citations")
+async def citations(request: Request, limit: int = Query(30, ge=1, le=200),
+                    turn_id: str | None = None, metric: str | None = None):
+    """The owner's citation index over saved answers.
+
+    A citation points at one reading in one saved answer and keeps that
+    reading's own source, clocks, status and reason. Nothing is re-fetched
+    or recomputed here, and another owner's citations are never visible.
+    """
+    from services.agent.citations import build_index, filter_index
+
+    identity = await owner(request)
+    docs = await _citation_documents(request, identity, limit=limit, turn_id=turn_id)
+    index = build_index(docs)
+    if turn_id or metric:
+        index = filter_index(index, turn_id=turn_id, metric=metric)
+    return index
+
+
+@router.get("/citations/{citation_id}")
+async def citation(citation_id: str, request: Request, limit: int = Query(200, ge=1, le=200),
+                   turn_id: str | None = None):
+    """One citation from the owner's saved answers.
+
+    Use the returned detail_path for lookup through the exact saved answer,
+    independent of newer answers. ID-only lookups retain a bounded recent
+    window. Another owner's or an unfinished answer is never returned.
+    """
+    from services.agent.citations import build_index
+
+    identity = await owner(request)
+    docs = await _citation_documents(request, identity, limit=limit, turn_id=turn_id)
+    index = build_index(docs)
+    for row in index["citations"]:
+        if row["citation_id"] == citation_id:
+            return {"version": index["version"], "citation": row}
+    raise HTTPException(404, "Citation not found")
+
+
 @router.post("/cancel/{turn_id}")
 async def cancel(turn_id: str, request: Request):
     identity = await owner(request)

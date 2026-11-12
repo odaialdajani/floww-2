@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import copy
 import json
 import os
 import subprocess
@@ -13,12 +14,15 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
+from scripts.paper_synthetic_fixture import SyntheticPaperComposition
 from scripts.verify_paper_storage import check, client, refuses, test_database
-from services.agent.paper.execution import new_book, reserved_cash
-from services.agent.paper.repository import PaperConflict, PaperRepository, operation_id
+from services.agent.paper.execution import reserved_cash
+from services.agent.paper.guarded_repository import GuardedPaperRepository as PaperRepository
+from services.agent.paper.repository import PaperConflict, operation_id
 from services.agent.paper.service import PreparedPaperService
 
-NOW = datetime(2026, 9, 25, 14, tzinfo=UTC)
+NOW = datetime.now(UTC)
+_QUOTE_EVENTS = {}
 
 
 def parameters(**changes):
@@ -31,18 +35,24 @@ def parameters(**changes):
 
 
 def quote(key="first", **changes):
-    values = dict(source_id=key, contract_id="synthetic-option", size_unit="contracts", bid="1.90", ask="2.00",
-                  bid_size=10, ask_size=1, observed_at=NOW.isoformat(), received_at=NOW.isoformat())
-    return {**values, **changes}
+    cache_key = json.dumps([key, changes], sort_keys=True)
+    if cache_key not in _QUOTE_EVENTS:
+        at = datetime.now(UTC).isoformat()
+        values = dict(source_id=key, contract_id="synthetic-option", size_unit="contracts", bid="1.90", ask="2.00",
+                      bid_size=10, ask_size=1, observed_at=at, received_at=at)
+        _QUOTE_EVENTS[cache_key] = {**values, **changes}
+    return copy.deepcopy(_QUOTE_EVENTS[cache_key])
 
 
-async def synthetic_admission(*_):
-    # Test-only approval. Never imported into any application composition.
-    return True
+def latest_quote():
+    if not _QUOTE_EVENTS:
+        return quote()
+    return copy.deepcopy(max(_QUOTE_EVENTS.values(), key=lambda item: item["observed_at"]))
 
 
 async def execute(args):
     connection = client()
+    compositions = []
     try:
         await connection.admin.command("ping")
         if args.recover:
@@ -64,13 +74,15 @@ async def execute(args):
         repo = PaperRepository(connection[name])
         await repo.initialize()
         owner, account = str(uuid.uuid4()), str(uuid.uuid4())
-        await repo.create(owner, account, new_book("1000", currency="USD"))
-        service = PreparedPaperService(repo, admission_check=synthetic_admission, clock=lambda: NOW)
+        fixture = SyntheticPaperComposition(repo, clock=lambda: datetime.now(UTC), quote_reader=latest_quote)
+        compositions.append(fixture)
+        await fixture.create(owner, account)
+        service = fixture.service
         checks = []
 
-        async def key(selected=account, repository=repo):
-            current = await repository.read(owner, selected)
-            return operation_id(current["version"], epoch=current["epoch"])
+        async def key(selected=account, repository=repo, *, entry=False):
+            selected_fixture = next(item for item in compositions if item.repository is repository)
+            return await selected_fixture.operation(owner, selected, entry=entry)
 
         checks.append(await refuses(PreparedPaperService(repo).stage(owner, account, await key(), parameters(), {}),
                                      PaperConflict, "entry disabled without independent admission"))
@@ -83,7 +95,7 @@ async def execute(args):
         checks.append("same stage request returns original durable receipt")
         checks.append(await refuses(service.stage(owner, account, stage_key, parameters(quantity=1), {"test_only": True}),
                                      PaperConflict, "changed stage body refused"))
-        fill_key = await key()
+        fill_key = await key(entry=True)
         results = await asyncio.gather(*(service.quote(owner, account, fill_key, opening, quote()) for _ in range(12)))
         check(sum(created for _, created in results) == 1, "one concurrent fill")
         check(len({receipt["_id"] for receipt, _ in results}) == 1, "same concurrent receipt")
@@ -101,7 +113,7 @@ async def execute(args):
                                creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
         check(child.returncode == 0, "fresh process recovery: " + child.stderr)
         checks.append("fresh process recovers partial fill, reservation and cash")
-        await service.quote(owner, account, await key(), opening, quote("entry2"))
+        await service.quote(owner, account, await key(entry=True), opening, quote("entry2"))
         current = await repo.read(owner, account)
         check(Decimal(current["state"]["cash"]) == Decimal("588.70"), "second partial debit")
         staged, _ = await service.stage(owner, account, await key(),
@@ -120,7 +132,10 @@ async def execute(args):
         await service.archive(owner, account, await key(), closing)
         await service.archive(owner, account, await key(), opening)
         current = await repo.read(owner, account)
-        check(not current["state"]["orders"] and current["reserve_events"] == 0, "terminal capacity released")
+        await service.admission.replenish(owner, account)
+        current = await repo.read(owner, account)
+        check(not current["state"]["orders"] and current["reserve_events"] == 2,
+              "terminal capacity released; only the two replenished entry observation credits remain")
         checks.append(await refuses(service.quote(owner, account, await key(), opening, quote("late")),
                                      PaperConflict, "late fill cannot recreate archived order"))
         await repo.project(owner, account)
@@ -132,7 +147,7 @@ async def execute(args):
 
         # Mutation during an await must never replace the already frozen quote.
         selected = str(uuid.uuid4())
-        await repo.create(owner, selected, new_book("1000", currency="USD"))
+        await fixture.create(owner, selected)
         stage, _ = await service.stage(owner, selected, await key(selected), parameters(quantity=1), {})
         mutable = quote("frozen", ask_size=1)
         original_receipt = repo.receipt
@@ -142,23 +157,25 @@ async def execute(args):
             return await original_receipt(*arguments, **kwargs)
 
         repo.receipt = mutate_after_copy
-        frozen, _ = await service.quote(owner, selected, await key(selected), stage["body"]["order_id"], mutable)
+        frozen, _ = await service.quote(owner, selected, await key(selected, entry=True), stage["body"]["order_id"], mutable)
         repo.receipt = original_receipt
         check(frozen["body"]["accounting"]["fill_price"] == "2.05", "frozen quote price")
         checks.append("quote mutated during await cannot change frozen fill price")
 
         # Fill a valid outbox to its total pending+reserved cap; exits consume
         # the allowance prepaid by entry and require no added capacity.
-        bounded = PaperRepository(connection[name], pending_limit=30)
+        bounded = PaperRepository(connection[name], pending_limit=64)
         selected = str(uuid.uuid4())
-        await bounded.create(owner, selected, new_book("1000", currency="USD"))
-        bounded_service = PreparedPaperService(bounded, admission_check=synthetic_admission, clock=lambda: NOW)
+        bounded_fixture = SyntheticPaperComposition(bounded, clock=lambda: datetime.now(UTC), quote_reader=latest_quote)
+        compositions.append(bounded_fixture)
+        await bounded_fixture.create(owner, selected)
+        bounded_service = bounded_fixture.service
         stage, _ = await bounded_service.stage(owner, selected, await key(selected, bounded), parameters(quantity=1), {})
         opening = stage["body"]["order_id"]
-        await bounded_service.quote(owner, selected, await key(selected, bounded), opening, quote("bounded"))
+        await bounded_service.quote(owner, selected, await key(selected, bounded, entry=True), opening, quote("bounded"))
         while True:
             current = await bounded.read(owner, selected)
-            if len(current["pending_events"]) + current["reserve_events"] == 30:
+            if len(current["pending_events"]) + current["reserve_events"] == 64:
                 break
             await bounded.commit(owner, selected, await key(selected, bounded), {"kind": "test_audit"},
                                  current["state"], {"kind": "test_audit"})
@@ -167,7 +184,7 @@ async def execute(args):
                                                parameters(side="sell", quantity=1, structure_id=opening, limit="1.80"), {})
         await bounded_service.quote(owner, selected, await key(selected, bounded), close["body"]["order_id"], quote("bounded-close"))
         current = await bounded.read(owner, selected)
-        check(current["reserve_events"] == before - 2 and not current["state"]["positions"], "reserved exit completes")
+        check(current["reserve_events"] == before - 4 and not current["state"]["positions"], "reserved exit completes")
         checks.append("at full valid event capacity, close stage and fill consume reserved space")
         checks.append(await refuses(bounded_service.replenish(owner, selected, await key(selected, bounded)),
                                      PaperConflict, "replenishment refused while history pending"))
@@ -180,8 +197,9 @@ async def execute(args):
         checks.append("capacity replenishes only after history is durable and slot checks pass")
 
         selected = str(uuid.uuid4())
-        created = await repo.create(owner, selected, new_book("500", currency="USD"))
-        race = await asyncio.gather(*(service.stage(owner, selected, operation_id(0, epoch=created["epoch"]),
+        await fixture.create(owner, selected, "500")
+        created = await repo.read(owner, selected)
+        race = await asyncio.gather(*(service.stage(owner, selected, operation_id(created["version"], epoch=created["epoch"]),
                                                    parameters(), {}) for _ in range(2)), return_exceptions=True)
         check(sum(isinstance(item, PaperConflict) for item in race) == 1, "one competing entry refused")
         current = await repo.read(owner, selected)
@@ -190,12 +208,12 @@ async def execute(args):
         checks.append("different entry requests cannot both reserve the last buying power")
 
         selected = str(uuid.uuid4())
-        await repo.create(owner, selected, new_book("1000", currency="USD"))
-        first, _ = await service.stage(owner, selected, await key(selected), parameters(quantity=1), {})
-        second, _ = await service.stage(owner, selected, await key(selected), parameters(quantity=1), {})
-        await service.quote(owner, selected, await key(selected), first["body"]["order_id"], quote("retired"))
+        await fixture.create(owner, selected)
+        first, _ = await service.stage(owner, selected, await key(selected), parameters(quantity=2), {})
+        second = first  # Residual quantity shares one protected structure.
+        await service.quote(owner, selected, await key(selected, entry=True), first["body"]["order_id"], quote("retired"))
         await repo.project(owner, selected)
-        future = PreparedPaperService(repo, clock=lambda: NOW + timedelta(seconds=301))
+        future = PreparedPaperService(repo, clock=lambda: datetime.fromisoformat(quote("retired")["observed_at"]) + timedelta(seconds=301))
         await future.replenish(owner, selected, await key(selected))
         current = await repo.read(owner, selected)
         check(not current["state"]["quotes"], "old liquidity retired")
@@ -209,6 +227,8 @@ async def execute(args):
         report.write_text(json.dumps(result, indent=2), encoding="utf-8")
         return result
     finally:
+        for composition in compositions:
+            composition.close()
         connection.close()
 
 

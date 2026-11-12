@@ -16,6 +16,8 @@ from typing import Any
 
 from fastapi import APIRouter, Query
 
+from services.store_executor import StoreBusy, run_store
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/vpin", tags=["vpin"])
@@ -69,11 +71,17 @@ async def get_vpin_history(ticker: str, limit: int = Query(50, ge=1, le=500)):
     """Return VPIN bucket history from DuckDB."""
     try:
         from services.duckdb_engine import db as duck
-        rows = duck.query(
+        rows = await run_store(
+            duck.query,
             "SELECT * FROM vpin_buckets WHERE symbol = ? ORDER BY timestamp DESC LIMIT ?",
             [ticker.upper(), limit],
         )
         return {"ticker": ticker.upper(), "buckets": rows}
+    except StoreBusy:
+        # The bounded pool refused the read: that is backpressure, not an
+        # empty history. Let it reach the 503 handler instead of answering
+        # 200 with no buckets.
+        raise
     except Exception as e:
         logger.error(f"VPIN history error: {e}")
         return {"ticker": ticker.upper(), "buckets": []}

@@ -91,3 +91,27 @@ test.each([
   expect(cells()).toHaveLength(2);
   expect(cells().every(cell=>cell.getAttribute('aria-label').includes('101'))).toBe(true);
 });
+
+test("expanded inspector uses one scope identity across wall block, review context and exact contract", async () => {
+  const narrow = { ...map('SPY', ['2026-10-19'], [100]), snapshotId: 'narrow-snap' };
+  const wide = {
+    ...map('SPY', dates, [100]),
+    snapshotId: 'wide-snap',
+    metrics: { walls: [{ wall_id: 'w1', low: 90, high: 110, mid: 100, members: [100], gross: 1e6, net: 1e5, call: 6e5, put: 4e5, distance: 5, distance_pct: 0.5, rank: 1 }] },
+    scenarios: [
+      { wall_id: 'w1', wall_position: 'below', name: 'Wide-wall bounce watch', type: 'reversal_watch', confirmation: 'c', invalidation: 'i' },
+    ],
+    scout: { shortlist: { CALLS: [{ osi: 'SPY261019C00100000', type: 'call', strike: 100, expiry: '2026-10-19', bid: 1, ask: 1.1, delta: 0.5 }], PUTS: [] } },
+  };
+  axios.get.mockImplementation(url => Promise.resolve({ data: String(url).includes('expiries=8') ? wide : narrow }));
+  render(desk()); open();
+  await waitFor(() => expect(cells()).toHaveLength(1));
+  widen();
+  await waitFor(() => expect(cells()).toHaveLength(2));
+  await waitFor(() => expect(overlay().querySelector('.skylit-expanded-coverage')).toHaveTextContent('2 expiries'));
+  fireEvent.click(cells()[0]);
+  await waitFor(() => expect(screen.getByTestId('skylit-inspector-drawer')).toBeInTheDocument());
+  const drawer = screen.getByTestId('skylit-inspector-drawer');
+  await waitFor(() => expect(within(drawer).getByText('Wide-wall bounce watch')).toBeInTheDocument());
+  expect(screen.getByTestId('exact-contract')).toBeInTheDocument();
+});
