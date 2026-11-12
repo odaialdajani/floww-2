@@ -84,13 +84,20 @@ async def test_failed_refresh_clears_owner_and_keeps_original_observation(cache_
     key = "SPY:4:day:None:False:True:200"
     original = {"ticker": "SPY", "spot": 100.0, "strikes": [{"strike": 100}]}
     env["_BUILD_HEATMAP_CACHE"][key] = {"ts": time.time() - 120, "data": original}
+    entered, release = asyncio.Event(), asyncio.Event()
 
     async def failing_build(*args, **kwargs):
+        entered.set()
+        await release.wait()
         raise RuntimeError("provider unavailable")
 
     env["_build_heatmap_impl"] = failing_build
     await env["build_heatmap"]("SPY")
-    outcomes = await asyncio.gather(*list(env["_background_tasks"]), return_exceptions=True)
+    await asyncio.wait_for(entered.wait(), 1)
+    tasks = list(env["_background_tasks"])
+    assert len(tasks) == 1 and env["_BUILD_HEATMAP_PENDING"].get(key) is tasks[0]
+    release.set()
+    outcomes = await asyncio.gather(*tasks, return_exceptions=True)
     assert len(outcomes) == 1 and isinstance(outcomes[0], RuntimeError)
     assert key not in env["_BUILD_HEATMAP_INFLIGHT"]
     assert env["_BUILD_HEATMAP_CACHE"][key]["data"] == original
