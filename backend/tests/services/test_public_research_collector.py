@@ -5,6 +5,7 @@ import hashlib
 import importlib
 import json
 import subprocess
+import sys
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -784,7 +785,7 @@ def test_offline_cli_preview_has_no_capture_flag_or_store_side_effect(tmp_path):
     module()
     root = Path(__file__).resolve().parents[2]
     script = root / "scripts" / "collect_public_research.py"
-    command = ["/Users/nav/.local/share/floww-free-test312/bin/python", "-I", "-B", str(script), "--expiry", "2026-11-13"]
+    command = [sys.executable, "-I", "-B", str(script), "--expiry", "2026-11-13"]
     result = subprocess.run(command, capture_output=True, text=True, cwd=tmp_path, timeout=5)
     assert result.returncode == 0, result.stderr
     value = json.loads(result.stdout)
