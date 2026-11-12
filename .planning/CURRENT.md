@@ -1,5 +1,20 @@
 # FLOWW current work
 
+## Current consolidation — November 12, 2026
+
+Canonical product source is `5d5389908c89d9cd90cad50036dc7d3c3c3dddf0`. This documentation checkpoint preserves its frontend tree `081f1d358a6d4cc8107270fd2845a70a66240f5c` and backend tree `f92d3d321f12953879295b28f464221dabd992ac`. Later documentation commits do not constitute application delivery.
+
+The managed frontend on port 3000 and backend on port 8213 currently serve accepted release `213dcee64`. Candidate release attempts rolled back without an acceptance receipt. Current product source is integrated and reviewed, but its full seven-check native runtime acceptance remains open. Use the guarded release process with a fresh baseline, exact source pins, full closed-copy backup, continuity verification, and staged acceptance runner. Never infer the served release from the Git branch.
+
+Integrated source includes the R02 current-read scope binding and complete layout-symbol import (`777b68871`), backend replay bucket/pending parity (`e424c19bc`), W-2 analytical ETF expiry clock and lineage (`5c6aa5914`, `6783107ff`), and narrow-desktop pane stacking (`5d5389908`). Source evidence includes the complete frontend run of 302 suites / 2,970 tests and the affected backend tests and independent reviews retained in the continuation evidence. Those checks do not close runtime, account, or trading commissioning.
+
+See [consolidation status](../docs/operations/CONSOLIDATION-2026-11-12.md) for completed work and remaining gates. Preserve the four host-only dirty paths, existing service owners, active stores/WALs, rollback recovery, and all historical evidence. Current Hermes cron activity is independent of FLOWW source ownership; do not resume old queued native admissions or infer source-writing authority from a running agent count.
+
+## Retained November 8 and earlier checkpoints
+
+The sections below are dated history. This current checkpoint supersedes their source/runtime status where it differs.
+
+
 Updated November 8, 2026. Canonical source remains `/Users/nav/Documents/GitHub/floww-2`, local `main`. This terminal is the sole integration and deployment owner. Muse remains personal; older controller prompts and retired worktrees must not be resumed.
 
 The accepted product source includes chart visibility Settings Sync, readable narrow/high-zoom pane stacking, Stock header and utility placement, and retired service-worker registration. Product code is pinned at `1f96685759b109db9f17f28a2e809bf766d57e0f`; later documentation-only commits can be attested by the exact frontend/backend trees. Frontend tree: `96d91cc619bf478c4ceea64b30308691bb4dc002`. Backend tree: `3deaeb5d653f6024235544754e966ad8e2a26d51`. The latter includes response-completion receipt clocks and release of owned Public request slots without refunding spent tokens.
