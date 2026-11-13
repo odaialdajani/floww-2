@@ -144,7 +144,7 @@ def _collect_health() -> dict:
         checks["duckdb"] = (
             {"status": "healthy"}
             if available else
-            {"status": "unhealthy", "error": "database busy"}
+            {"status": "busy", "error": "database busy"}
         )
     except Exception as e:
         logger.warning(f"Health check: DuckDB unhealthy: {e}")
@@ -193,17 +193,17 @@ def _collect_health() -> dict:
     live_checks = {
         name: c for name, c in checks.items() if not c.get("deprecated")
     }
+    # A nonblocking probe can miss a transient shared-connection lock without
+    # proving the database is unhealthy. Keep that detail visible as "busy";
+    # only a confirmed unhealthy dependency degrades the endpoint verdict.
     overall = (
-        "healthy"
-        if all(c.get("status") == "healthy" for c in live_checks.values())
-        else "degraded"
+        "degraded"
+        if any(c.get("status") == "unhealthy" for c in live_checks.values())
+        else "healthy"
     )
     institutional = _institutional_section(
         str(checks.get("public_api", {}).get("status"))
     )
-    if institutional.get("alerts", {}).get("status") == "busy":
-        overall = "degraded"
-
     return {
         "status": overall,
         "timestamp": datetime.now(UTC).isoformat(),

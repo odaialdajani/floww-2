@@ -65,7 +65,7 @@ def held_by_writer(lock, begin=None):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("phase", ["first_probe", "institutional_alerts"])
-async def test_busy_store_preserves_liveness_and_returns_degraded(probe, monkeypatch, phase):
+async def test_busy_store_preserves_liveness_without_false_degradation(probe, monkeypatch, phase):
     """Both DB reads must refuse contention before the writer releases its lock."""
     begin = threading.Event() if phase == "institutional_alerts" else None
     original_section = probe.module._institutional_section
@@ -90,10 +90,11 @@ async def test_busy_store_preserves_liveness_and_returns_degraded(probe, monkeyp
                 response = await task
                 assert holding.is_set(), "health waited for the writer instead of reporting busy"
                 body = response.json()
-                assert body["status"] == "degraded"
+                assert body["status"] == "healthy"
                 assert body["institutional"]["alerts"]["stored"] is None
+                assert body["institutional"]["alerts"]["status"] == "busy"
                 if phase == "first_probe":
-                    assert body["checks"]["duckdb"]["status"] == "unhealthy"
+                    assert body["checks"]["duckdb"]["status"] == "busy"
                 else:
                     assert body["checks"]["duckdb"]["status"] == "healthy"
         finally:
