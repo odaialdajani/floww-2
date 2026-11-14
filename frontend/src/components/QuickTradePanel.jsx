@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { fmt } from "../lib/helpers";
 import { strategyRiskReward, effectiveOptionPrice, formatNotional, ticketToJournalEntries, JOURNAL_STORAGE_KEY, legQuote } from "./tradeMath";
+import { resolvePaperOptionOrder } from "./paperOptionOrder";
 import { API } from "../config/api";
 
 /**
@@ -29,6 +30,7 @@ export default function QuickTradePanel({ selection, onClose, onSubmit }) {
   const [backendSha, setBackendSha] = useState("");
 
   const [submitted, setSubmitted] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
   // Reset when selection changes
   useEffect(() => {
@@ -37,7 +39,8 @@ export default function QuickTradePanel({ selection, onClose, onSubmit }) {
     setLimitPrice("");
     setShowConfirm(false);
     setSubmitted(false);
-  }, [selection?.strike]);
+    setSubmitError("");
+  }, [selection?.ticker, selection?.strike, selection?.expiry, selection?.oi_symbol]);
 
   // Prefill condor wings around the clicked strike; fetch backend SHA once
   // for the freshness stamp.
@@ -59,18 +62,25 @@ export default function QuickTradePanel({ selection, onClose, onSubmit }) {
 
   const handleSubmit = useCallback(() => {
     if (!selection) return;
+    const parsedQuantity = Number(quantity);
+    if (!Number.isInteger(parsedQuantity) || parsedQuantity < 1 || parsedQuantity > 100) return;
+    const order = resolvePaperOptionOrder({ strategy, selection, limitPrice });
+    if (!order) return;
     const W = strategy === "iron_condor" ? wings : undefined;
-    const { price: effectivePrice, source: priceSource } = effectiveOptionPrice(selection, strategy, limitPrice, W);
     const trade = {
       ticker: selection.ticker,
       strike: selection.strike,
       spot: selection.spot,
       expiry: selection.expiry ?? null,
       strategy,
-      quantity,
-      limitPrice: limitPrice ? parseFloat(limitPrice) : null,
-      effectivePrice: Number.isFinite(effectivePrice) ? effectivePrice : null,
-      priceSource,
+      quantity: parsedQuantity,
+      limitPrice: order.priceSource === "limit" ? order.limitPrice : null,
+      effectivePrice: order.limitPrice,
+      orderLimitPrice: order.limitPrice,
+      orderSide: order.side,
+      optionType: order.optionType,
+      orderType: order.orderType,
+      priceSource: order.priceSource,
       wings: W,
       gex: selection.gex,
       iv: selection.iv,
@@ -91,7 +101,12 @@ export default function QuickTradePanel({ selection, onClose, onSubmit }) {
       }));
       const saved = JSON.parse(localStorage.getItem(JOURNAL_STORAGE_KEY) || "[]");
       localStorage.setItem(JOURNAL_STORAGE_KEY, JSON.stringify([...entries, ...saved]));
-    } catch (e) { console.error("[QuickTrade] journal write failed:", e); }
+    } catch (e) {
+      console.error("[QuickTrade] journal write failed:", e);
+      setSubmitError("Trade was not submitted because the journal could not be saved.");
+      return;
+    }
+    setSubmitError("");
     setSubmitted(true);
     if (onSubmit) onSubmit(trade);
     // Auto-close after showing success
@@ -115,6 +130,9 @@ export default function QuickTradePanel({ selection, onClose, onSubmit }) {
   const live = effectiveOptionPrice(selection, strategy, limitPrice, W);
   const effNum = live.price;
   const hasPrice = Number.isFinite(effNum);
+  const order = resolvePaperOptionOrder({ strategy, selection, limitPrice });
+  const validQuantity = Number.isInteger(Number(quantity)) && Number(quantity) >= 1 && Number(quantity) <= 100;
+  const canReview = order !== null && validQuantity;
   const srcLabel = { limit: "", ask: " (ask)", bid: " (bid)", "ask-sum": " (asks)", "ref-sum": " (ref)", mid: " (mid)", last: " (last)", iv: " (est)", credit: " (credit)", none: "" }[live.source] ?? "";
   // Risk follows the price the order will actually use (limit wins), so
   // typing a limit rescues risk/reward on quoteless strikes instead of "—".
@@ -200,7 +218,7 @@ export default function QuickTradePanel({ selection, onClose, onSubmit }) {
             <button
               key={s.id}
               className={`quick-trade-strategy-btn${strategy === s.id ? " quick-trade-strategy-active" : ""}`}
-              onClick={() => setStrategy(s.id)}
+              onClick={() => { setStrategy(s.id); setShowConfirm(false); }}
               style={{ "--strategy-color": s.color }}
             >
               <span className="quick-trade-strategy-icon">{s.icon}</span>
@@ -218,7 +236,7 @@ export default function QuickTradePanel({ selection, onClose, onSubmit }) {
               min={1}
               max={100}
               value={quantity}
-              onChange={e => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+              onChange={e => { setQuantity(Math.max(1, parseInt(e.target.value) || 1)); setShowConfirm(false); }}
               className="quick-trade-input"
             />
           </div>
@@ -229,7 +247,7 @@ export default function QuickTradePanel({ selection, onClose, onSubmit }) {
               step="0.01"
               placeholder={Number.isFinite(estNum) ? estPrice : "Enter limit — no quote"}
               value={limitPrice}
-              onChange={e => setLimitPrice(e.target.value)}
+              onChange={e => { setLimitPrice(e.target.value); setShowConfirm(false); }}
               className="quick-trade-input"
             />
           </div>
@@ -290,6 +308,12 @@ export default function QuickTradePanel({ selection, onClose, onSubmit }) {
         </div>
 
         {/* Submit */}
+        {submitError && <div role="alert" className="quick-trade-error">{submitError}</div>}
+        {(strategy === "straddle" || strategy === "iron_condor") && (
+          <div role="status" className="quick-trade-error">
+            Multi-leg paper orders are unavailable in this ticket. No order will be submitted.
+          </div>
+        )}
         {submitted ? (
           <div className="quick-trade-success">
             <div className="quick-trade-success-icon">✓</div>
@@ -298,32 +322,36 @@ export default function QuickTradePanel({ selection, onClose, onSubmit }) {
               {STRATEGIES.find(s => s.id === strategy)?.label} × {quantity} @ ${hasPrice ? effNum.toFixed(2) : "—"} · saved to journal
             </div>
           </div>
-        ) : !showConfirm ? (
+        ) : (!showConfirm || !canReview) ? (
           <button
             className="quick-trade-submit"
-            onClick={() => hasPrice && setShowConfirm(true)}
-            disabled={!hasPrice}
-            title={hasPrice ? "" : "No market quote or IV for this strike — enter a limit price"}
+            onClick={() => canReview && setShowConfirm(true)}
+            disabled={!canReview}
+            title={canReview ? "" : "Enter a positive limit or wait for the executable bid/ask quote"}
             style={{
-              background: !hasPrice
+              background: !canReview
                 ? "#334155"
                 : isBuy
                   ? "linear-gradient(135deg, #16a34a, #22c55e)"
                   : "linear-gradient(135deg, #dc2626, #ef4444)",
-              opacity: hasPrice ? 1 : 0.55,
-              cursor: hasPrice ? "pointer" : "not-allowed",
+              opacity: canReview ? 1 : 0.55,
+              cursor: canReview ? "pointer" : "not-allowed",
             }}
           >
-            {hasPrice
+            {canReview
               ? `Review ${STRATEGIES.find(s => s.id === strategy)?.label} × ${quantity}`
-              : "Enter limit price to review"}
+              : (strategy === "straddle" || strategy === "iron_condor")
+                ? "Multi-leg orders unavailable"
+                : !validQuantity
+                  ? "Quantity must be 1–100"
+                  : "Enter valid limit or wait for bid/ask"}
           </button>
         ) : (
           <div className="quick-trade-confirm">
             <p className="quick-trade-confirm-text">
               {isBuy ? "Buy" : "Sell"} {quantity} contract{quantity > 1 ? "s" : ""}{" "}
               {ticker.replace("^", "")} {fmt(strike, 0)} {strategy.includes("call") ? "Call" : strategy.includes("put") ? "Put" : ""}{" "}
-              @ ${hasPrice ? effNum.toFixed(2) : "—"}?
+              @ ${order.limitPrice.toFixed(2)} limit?
             </p>
             <div className="quick-trade-confirm-btns">
               <button className="quick-trade-cancel" onClick={() => setShowConfirm(false)}>Cancel</button>
