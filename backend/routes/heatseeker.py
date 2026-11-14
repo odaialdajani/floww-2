@@ -80,6 +80,8 @@ _CHAIN_CACHE: OrderedDict[str, tuple[float, dict[str, Any]]] = OrderedDict()
 _CHAIN_CACHE_TTL = 30  # seconds
 _CHAIN_CACHE_MAX = 128
 _CHAIN_TICKER_RE = re.compile(r"(?:[A-Z][A-Z0-9.^=-]{0,19}|\^[A-Z0-9][A-Z0-9.^=-]{0,18})\Z")
+_CHAIN_FETCH_GENERATIONS: OrderedDict[str, int] = OrderedDict()
+_CHAIN_FETCH_SEQUENCE = 0
 
 
 async def _fetch_chain(ticker: str, expiries: int) -> dict[str, Any]:
@@ -106,14 +108,28 @@ async def _fetch_chain(ticker: str, expiries: int) -> dict[str, Any]:
             _CHAIN_CACHE.move_to_end(cache_key)
             return cached[1]
 
-    raw = await fetch_spot_and_chains_merged(t, expiries)
-    raw = _ensure_gamma(raw)
+    generation = None
     if cacheable:
-        _CHAIN_CACHE[cache_key] = (now, raw)
-        _CHAIN_CACHE.move_to_end(cache_key)
-        while len(_CHAIN_CACHE) > _CHAIN_CACHE_MAX:
-            _CHAIN_CACHE.popitem(last=False)
-    return raw
+        global _CHAIN_FETCH_SEQUENCE
+        _CHAIN_FETCH_SEQUENCE += 1
+        generation = _CHAIN_FETCH_SEQUENCE
+        _CHAIN_FETCH_GENERATIONS[cache_key] = generation
+        _CHAIN_FETCH_GENERATIONS.move_to_end(cache_key)
+        while len(_CHAIN_FETCH_GENERATIONS) > _CHAIN_CACHE_MAX:
+            _CHAIN_FETCH_GENERATIONS.popitem(last=False)
+
+    try:
+        raw = await fetch_spot_and_chains_merged(t, expiries)
+        raw = _ensure_gamma(raw)
+        if cacheable and _CHAIN_FETCH_GENERATIONS.get(cache_key) == generation:
+            _CHAIN_CACHE[cache_key] = (time.time(), raw)
+            _CHAIN_CACHE.move_to_end(cache_key)
+            while len(_CHAIN_CACHE) > _CHAIN_CACHE_MAX:
+                _CHAIN_CACHE.popitem(last=False)
+        return raw
+    finally:
+        if cacheable and _CHAIN_FETCH_GENERATIONS.get(cache_key) == generation:
+            _CHAIN_FETCH_GENERATIONS.pop(cache_key, None)
 
 
 async def _fetch_history(ticker: str, lookback_mins: int = 1440) -> list[dict[str, Any]]:
