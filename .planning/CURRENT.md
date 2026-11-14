@@ -2,14 +2,14 @@
 
 ## Current source and accepted runtime — November 14, 2026
 
-Canonical source is `main` / `origin/main` at `20e006522e484d297805be38f9945de71a88759e`.
+Canonical source is `main` / `origin/main` at `8eb10b8922b8a3b0d6f5f18511d64315e4a2459e`.
 PR #153 added fail-closed paper option-order validation in the QuickTrade panel; PR #154
 made passive anomaly GETs model-free while preserving their cold response shape; PR #152
 bounded cvserver per-key cache, failure and lock state and stabilized two collector timing
 tests exposed by full-suite CI. Each merged through branch protection with required checks
-green. PR #155, a bounded Heatseeker chain cache with post-fetch TTL and same-key write
-generation protection, remains open at `4241fa1c`; its independent review is GO and current
-head CI is running.
+green. PR #155 added a bounded Heatseeker chain cache with post-fetch TTL and same-key write
+generation protection; it merged through protected checks at `8eb10b892`. Backend tests,
+frontend build, Ruff, and Docker build all passed. Independent review found no blocker.
 
 The managed frontend and backend still serve the separately accepted release
 `a6197f57d2629ad16f10c35d0791c6579c701204` on `:3000` and `:8213`; the rollback release is

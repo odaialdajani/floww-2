@@ -8,8 +8,8 @@ This file retains the live priority and historical phase tracker.
 ## Current priority — November 14 source and operations follow-up
 
 Follow [CURRENT.md](CURRENT.md) for the distinction between Git main and the accepted
-served release. Source main is `20e006522`; production remains on accepted `a6197f57d`.
-PRs #152–#154 are merged through protected checks; #155 remains in current-head CI.
+served release. Source main is `8eb10b892`; production remains on accepted `a6197f57d`.
+PRs #148–#155 are merged through protected checks.
 The DuckDB busy-state correction is source-only, and its exact long-lock owner is not
 proven. Paper-trader catch-up jobs do not establish on-time market-session coverage.
 Account and venue commissioning, prospective research outcomes, and historical acceptance

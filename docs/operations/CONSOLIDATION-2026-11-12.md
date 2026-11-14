@@ -3,12 +3,13 @@
 ## November 14 source and operations checkpoint
 
 Canonical GitHub `main` and local `main` are aligned at
-`20e006522e484d297805be38f9945de71a88759e`. PRs #148–#154 were merged through protected
+`8eb10b8922b8a3b0d6f5f18511d64315e4a2459e`. PRs #148–#155 were merged through protected
 branch checks, including the health busy-state correction, ticker-scoped data, bounded
 microstructure cold reads, fetch admission, fail-closed QuickTrade validation, passive
 anomaly GET compatibility, and bounded cvserver state with deterministic collector tests.
-PR #155 contains a separately reviewed Heatseeker chain-cache correction and is awaiting
-its current-head backend CI at this checkpoint.
+PR #155 added a separately reviewed bounded Heatseeker chain cache with post-fetch TTL and
+same-key generation protection. Its current-head backend tests, frontend build, Ruff, and
+Docker build all passed before the protected merge.
 
 Production remains on the accepted `a6197f57d2629ad16f10c35d0791c6579c701204` release;
 `213dcee64` remains the rollback release. The QuickTrade source change rejects market or
