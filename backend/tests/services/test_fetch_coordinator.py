@@ -265,3 +265,40 @@ class TestFetchCoordinatorErrors:
         assert len(coordinator._coalesced_count) <= 256
         assert coordinator.get_coalesced_count(f"T{key_count - 1}", 4) == 1
         assert coordinator.get_coalesced_count("T0", 4) == 0
+
+    @pytest.mark.asyncio
+    async def test_active_fetch_log_survives_history_eviction(self, coordinator, monkeypatch, caplog):
+        """Recent-history eviction must not undercount a still-running fetch."""
+        import logging
+
+        import services.fetch_coordinator as fetch_coordinator_module
+
+        monkeypatch.setattr(fetch_coordinator_module, "MAX_COALESCED_KEYS", 2)
+        caplog.set_level(logging.INFO, logger="services.fetch_coordinator")
+        release_fetches = asyncio.Event()
+        started = {f"T{index}": asyncio.Event() for index in range(3)}
+
+        async def held_fetcher(ticker, expiries):
+            started[ticker].set()
+            await release_fetches.wait()
+            return {"status": "ok", "ticker": ticker, "contracts": []}
+
+        tasks = [asyncio.create_task(coordinator.fetch("T0", 4, held_fetcher, source_owns_budget=True))]
+        await asyncio.wait_for(started["T0"].wait(), timeout=2)
+        tasks.append(asyncio.create_task(coordinator.fetch("T0", 4, held_fetcher, source_owns_budget=True)))
+        await asyncio.sleep(0)
+
+        for ticker in ("T1", "T2"):
+            tasks.append(asyncio.create_task(coordinator.fetch(ticker, 4, held_fetcher, source_owns_budget=True)))
+            await asyncio.wait_for(started[ticker].wait(), timeout=2)
+            tasks.append(asyncio.create_task(coordinator.fetch(ticker, 4, held_fetcher, source_owns_budget=True)))
+            await asyncio.sleep(0)
+
+        assert coordinator.get_coalesced_count("T0", 4) == 0
+        release_fetches.set()
+        await asyncio.gather(*tasks)
+
+        assert any(
+            "Fetch complete for T0:4" in record.message and "(coalesced: 1)" in record.message
+            for record in caplog.records
+        )

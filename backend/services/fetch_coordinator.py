@@ -41,6 +41,7 @@ class FetchCoordinator:
 
     def __init__(self) -> None:
         self._inflight: dict[str, asyncio.Task] = {}
+        self._inflight_coalesced_count: dict[str, int] = {}
         # Diagnostic-only per-key history. Keep a recent bounded window so
         # caller-controlled keys cannot grow this map for the process lifetime.
         self._coalesced_count: OrderedDict[str, int] = OrderedDict()
@@ -50,6 +51,7 @@ class FetchCoordinator:
         self._coalesced_count.move_to_end(key)
         if len(self._coalesced_count) > MAX_COALESCED_KEYS:
             self._coalesced_count.popitem(last=False)
+        self._inflight_coalesced_count[key] = self._inflight_coalesced_count.get(key, 0) + 1
 
     async def fetch(
         self,
@@ -94,6 +96,7 @@ class FetchCoordinator:
             )
         )
         self._inflight[key] = task
+        self._inflight_coalesced_count[key] = 0
         try:
             return await task
         except Exception as e:
@@ -103,6 +106,7 @@ class FetchCoordinator:
             # Clean up
             if self._inflight.get(key) is task:
                 self._inflight.pop(key, None)
+                self._inflight_coalesced_count.pop(key, None)
 
     async def _fetch_with_budget(
         self,
@@ -158,7 +162,7 @@ class FetchCoordinator:
         try:
             result = await fetcher(ticker, expiries)
             elapsed = time.monotonic() - t0
-            coalesced = self._coalesced_count.get(key, 0)
+            coalesced = self._inflight_coalesced_count.get(key, 0)
             logger.info(
                 "Fetch complete for %s in %.2fs (coalesced: %d)",
                 key, elapsed, coalesced,
