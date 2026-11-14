@@ -23,7 +23,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/microstructure", tags=["microstructure"])
 
 # Module-level service instances (lazy initialization)
-_vpin_engines: dict[str, Any] = {}
 _gex_aggregator = None
 _hawkes_processes: dict[str, Any] = {}
 _vol_constructor = None
@@ -38,10 +37,10 @@ _fragility_index = None
 
 
 def _get_vpin_engine(ticker: str):
-    if ticker not in _vpin_engines:
-        from services.vpin_engine import VpinEngine
-        _vpin_engines[ticker] = VpinEngine()
-    return _vpin_engines[ticker]
+    """Read the same VPIN engine that ingestion and the autofeed update."""
+    from routes.vpin import _get_engine
+
+    return _get_engine(ticker.strip().upper())
 
 
 def _get_gex_aggregator():
@@ -78,10 +77,8 @@ def _get_liquidity(ticker: str):
 
 
 def _get_anomaly_detector(ticker: str):
-    if ticker not in _anomaly_detectors:
-        from services.anomaly_detector import FlowAnomalyDetector
-        _anomaly_detectors[ticker] = FlowAnomalyDetector()
-    return _anomaly_detectors[ticker]
+    """Return an existing detector without allocating a cold model on read."""
+    return _anomaly_detectors.get(ticker.strip().upper())
 
 
 def _get_trinity_index():
@@ -292,11 +289,18 @@ async def liquidity_endpoint(ticker: str):
 @router.get("/anomaly/{ticker}")
 async def anomaly_endpoint(ticker: str):
     """Get flow toxicity anomaly detection status."""
+    symbol = ticker.strip().upper()
     try:
-        detector = _get_anomaly_detector(ticker.upper())
+        detector = _get_anomaly_detector(symbol)
+        if detector is None:
+            return {
+                "ticker": symbol,
+                "status": "no_data",
+                "reason": "detector_not_initialized",
+            }
         state = detector.get_state()
-        state["ticker"] = ticker.upper()
-        state["status"] = "ok"
+        state["ticker"] = symbol
+        state["status"] = "ok" if state.get("buffer_fill", 0) > 0 else "no_data"
         return state
     except Exception as e:
         logger.error(f"Anomaly error for {ticker}: {e}")
@@ -400,7 +404,11 @@ async def toxicity_dashboard():
             "qi_zscore": toxicity.get("qi_zscore", 0),
             "is_toxic": toxicity.get("is_toxic", False),
             "fragility": frag_result,
-            "anomaly": anomaly.get_state(),
+            "anomaly": (
+                anomaly.get_state() if anomaly is not None else
+                {"ticker": "SPY", "status": "no_data",
+                 "reason": "detector_not_initialized"}
+            ),
         }
     except Exception as e:
         logger.error(f"Toxicity dashboard error: {e}")
