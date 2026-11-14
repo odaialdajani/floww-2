@@ -2,14 +2,19 @@
 
 ## Current source and accepted runtime — November 14, 2026
 
-Canonical source is `main` / `origin/main` at `8eb10b8922b8a3b0d6f5f18511d64315e4a2459e`.
+Canonical source is `main` / `origin/main` at `52a1b9ea97d3747ae0c4fbaad143574d8ecc2fd2`.
 PR #153 added fail-closed paper option-order validation in the QuickTrade panel; PR #154
 made passive anomaly GETs model-free while preserving their cold response shape; PR #152
 bounded cvserver per-key cache, failure and lock state and stabilized two collector timing
-tests exposed by full-suite CI. Each merged through branch protection with required checks
-green. PR #155 added a bounded Heatseeker chain cache with post-fetch TTL and same-key write
-generation protection; it merged through protected checks at `8eb10b892`. Backend tests,
-frontend build, Ruff, and Docker build all passed. Independent review found no blocker.
+tests exposed by full-suite CI. PR #155 added a bounded Heatseeker chain cache with post-fetch
+TTL and same-key generation protection. PR #156 updated this status checkpoint. Both merged
+through the normal PR workflow; all backend, frontend, Ruff, and Docker workflows passed.
+The #155 source merge is `8eb10b892`; the #156 docs merge is `52a1b9e`.
+
+A read-only GitHub settings check on November 14 found no classic protection on `main` and
+no repository rulesets. These changes used pull requests and no admin override, but required
+checks are not enforced by branch settings. Treat this as an open repository-configuration
+gap; do not describe the merges as protected-branch merges.
 
 The managed frontend and backend still serve the separately accepted release
 `a6197f57d2629ad16f10c35d0791c6579c701204` on `:3000` and `:8213`; the rollback release is
