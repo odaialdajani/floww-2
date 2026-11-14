@@ -60,8 +60,10 @@ export default function RecordedPriceChart({ticker,frames,revision='',onInteract
   const raf=requestAnimationFrame(measure);
   return()=>{cancelAnimationFrame(raf);observer?.disconnect();window.removeEventListener('resize',measure);};
  });
- useEffect(()=>{setView({start:Math.max(0,data.length-80),count:80});setManualPrice(null);setHover(null);pointers.current.clear();gesture.current=null;},[revision]); // scope owns the view
- useEffect(()=>{const old=previousLength.current;setView(current=>{const count=current.count||80;const next=clampWindow(!old||current.start+Math.min(count,old)>=old?{start:Math.max(0,data.length-count),count}:current,data.length);return {...next,count};});previousLength.current=data.length;setHover(null);},[data.length]);
+ useEffect(()=>{previousLength.current=0;setView({start:Math.max(0,data.length-80),count:80});setManualPrice(null);setHover(null);pointers.current.clear();gesture.current=null;},[revision]); // scope owns the view
+ // Empty loading/error views draw no candles but must not erase a panned
+ // range. The next same-scope result uses the last loaded edge position.
+ useEffect(()=>{if(!data.length)return;const old=previousLength.current;setView(current=>{const count=current.count||80;const next=clampWindow(!old||current.start+Math.min(count,old)>=old?{start:Math.max(0,data.length-count),count}:current,data.length);return {...next,count};});previousLength.current=data.length;setHover(null);},[data.length]);
  const windowView=clampWindow(view,data.length),visible=data.slice(windowView.start,windowView.start+windowView.count);
  const allLevels=useMemo(()=>visible.flatMap(frame=>savedLevels(frame,metrics,allNodes)),[visible,metrics,allNodes]);
  const range=manualPrice||priceRange(fitData&&fitData.length?fitData:visible,fitData&&fitData.length?fitLevels:allLevels),selected=visible[hover??Math.max(0,visible.length-1)];
