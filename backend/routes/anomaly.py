@@ -36,6 +36,22 @@ MODEL_BASE_PATH = Path(__file__).resolve().parents[2] / "project_oracle" / "mode
 MODEL_SUFFIXES = frozenset({".pt", ".pth", ".bin", ".ckpt"})
 
 
+def _empty_detector_state(ticker: str) -> dict[str, Any]:
+    """Return the detector state shape without importing or allocating a model."""
+    return {
+        "model_type": None,
+        "seq_len": 50,
+        "latent_dim": 8,
+        "buffer_fill": 0.0,
+        "n_errors": 0,
+        "trained": False,
+        "ticker": ticker,
+        "threshold_sigma": 2.5,
+        "status": "no_data",
+        "reason": "detector_not_initialized",
+    }
+
+
 def _resolve_checkpoint(model_path: str) -> Path:
     """Resolve a /load model_path inside MODEL_BASE_PATH (fail-closed).
 
@@ -88,10 +104,14 @@ def _empty_ensemble_state(ticker: str) -> dict[str, Any]:
     return {
         "ticker": ticker,
         "type": "toxicity_ensemble",
+        "seq_len": 50,
+        "device": "cpu",
+        "forecaster_loaded": False,
+        "horizons": [1, 5, 15, 60],
+        "n_score_history": 0,
         "initialized": False,
         "status": "uninitialized",
         "reason": "NO_OBSERVATIONS_IN_THIS_PROCESS",
-        "n_score_history": 0,
         "ensemble_probabilities": {},
         "component_scores": {},
     }
@@ -149,11 +169,7 @@ async def get_anomaly_state(ticker: str):
     t = ticker.upper()
     detector = _detectors.get(t)
     if detector is None:
-        return {
-            "ticker": t,
-            "status": "no_data",
-            "reason": "detector_not_initialized",
-        }
+        return _empty_detector_state(t)
     return detector.get_state()
 
 
@@ -172,11 +188,7 @@ async def get_detector_status(ticker: str):
     t = ticker.upper()
     detector = _detectors.get(t)
     if detector is None:
-        return {
-            "ticker": t,
-            "status": "no_data",
-            "reason": "detector_not_initialized",
-        }
+        return _empty_detector_state(t)
     return detector.get_state()
 
 
