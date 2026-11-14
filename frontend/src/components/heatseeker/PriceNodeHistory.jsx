@@ -243,6 +243,18 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
   // pane renders data exactly when the hook commits it — no intermediate
   // ready-without-payload frame, no extra commit for consumers to await.
   const payload = status === "ready" && readData ? readData : null;
+  // A new request attempt does not change the chart's view. Keep the last
+  // resolved recorded scope while loading hides the candles; a real request
+  // dimension or returned-scope change still resets the viewport and scale.
+  const chartViewIdentity = JSON.stringify([ticker, days, minutes, sessions, activeScope, contract]);
+  const [lastChartScope, setLastChartScope] = useState({ identity: null, scope: "" });
+  const resolvedChartScope = payload?.query_key ??
+    (lastChartScope.identity === chartViewIdentity ? lastChartScope.scope : "");
+  useEffect(() => {
+    if (payload) setLastChartScope(current => current.identity === chartViewIdentity && current.scope === resolvedChartScope
+      ? current : { identity: chartViewIdentity, scope: resolvedChartScope });
+  }, [payload, chartViewIdentity, resolvedChartScope]);
+  const chartRevision = JSON.stringify([chartViewIdentity, resolvedChartScope]);
   // Generation-gated corrector: re-apply the replay cursor and the retry
   // gate from the ACTIVE read (heals any superseded arming), and stop replay
   // plus clear the retry clock the moment a new request starts loading.
@@ -841,7 +853,7 @@ export default function PriceNodeHistory({ ticker = "SPY", open: controlledOpen,
     {!primary&&<button type="button" className="skylit-trade-mode-btn" aria-expanded={open} onClick={()=>{setOpen(!open);setPlaying(false);}}>Price chart + historical nodes</button>}
     {open&&<div className="stock-pane-row" data-testid="stock-pane-row">
     <div className="stock-pane-main">
-    {open&&<RecordedPriceChart renderDrawingLayer={renderDrawingLayer} ticker={ticker} frames={frames.slice(0,position+1)} fitAllFrames={fitMode==="fit-all"?frames:null} revision={ticker+":"+days+":"+minutes+":"+payload?.query_key+":"+reload} onInteract={pauseInteraction} metricCoverage={payload?.metric_line_coverage} toolbarControls={controls} toolbarActions={null} historyPeriodControls={historyPeriodControls} historyControls={null} replayControls={replayControls} dataDetails={details} readingStatus={readingStatus} emptyContent={empty} showAtlas={showAtlas} exposureLine={exposureLine??payload?.exposure_line??null} darkLevels={darkLevels} alertLines={alertLines??null} cvdLine={cvdLine??payload?.cvd_line??null} contractBars={payload?.contract_bars??null} contractSymbol={payload?.contract_symbol??(contract||null)} contractStatus={payload?.contract_status??null} flowBars={Array.isArray(flowBars)&&flowBars.length===frames.length?flowBars.slice(0,position+1):flowBars} syncSeq={sync?.seq||0} syncView={sync?.time||null} syncPrice={sync?.price||null} syncCrosshair={sync?.crosshair!=null?sync.crosshair:null} onSync={onSyncEvent} studyLines={studyLineSpecs} mappedShapes={mapped?.status === 'available' ? mapped.shapes : null} volumeInstanceActive={studyInstances.some(i=>i&&i.kind==="volume")} overlays={chartOverlays} onOverlaysChange={setChartOverlays} paneCfg={paneCfg} onPaneCfg={onPaneCfg} cvdStudy={cvdStudy && cvdStudy.status === "ok" ? cvdStudy : null} cvdStudyRefusal={cvdStudy && cvdStudy.status === "refused" ? cvdStudy.reason : null}/>}
+    {open&&<RecordedPriceChart renderDrawingLayer={renderDrawingLayer} ticker={ticker} frames={frames.slice(0,position+1)} fitAllFrames={fitMode==="fit-all"?frames:null} revision={chartRevision} onInteract={pauseInteraction} metricCoverage={payload?.metric_line_coverage} toolbarControls={controls} toolbarActions={null} historyPeriodControls={historyPeriodControls} historyControls={null} replayControls={replayControls} dataDetails={details} readingStatus={readingStatus} emptyContent={empty} showAtlas={showAtlas} exposureLine={exposureLine??payload?.exposure_line??null} darkLevels={darkLevels} alertLines={alertLines??null} cvdLine={cvdLine??payload?.cvd_line??null} contractBars={payload?.contract_bars??null} contractSymbol={payload?.contract_symbol??(contract||null)} contractStatus={payload?.contract_status??null} flowBars={Array.isArray(flowBars)&&flowBars.length===frames.length?flowBars.slice(0,position+1):flowBars} syncSeq={sync?.seq||0} syncView={sync?.time||null} syncPrice={sync?.price||null} syncCrosshair={sync?.crosshair!=null?sync.crosshair:null} onSync={onSyncEvent} studyLines={studyLineSpecs} mappedShapes={mapped?.status === 'available' ? mapped.shapes : null} volumeInstanceActive={studyInstances.some(i=>i&&i.kind==="volume")} overlays={chartOverlays} onOverlaysChange={setChartOverlays} paneCfg={paneCfg} onPaneCfg={onPaneCfg} cvdStudy={cvdStudy && cvdStudy.status === "ok" ? cvdStudy : null} cvdStudyRefusal={cvdStudy && cvdStudy.status === "refused" ? cvdStudy.reason : null}/>}
     {open&&forcedScope!=null&&!followMap&&<p role="note">Saved-view review — these recorded expiry dates are not the current map scope.</p>}
     {/* B10 (C044): interval future whitespace + typed scenario zone. The
         slots are EMPTY CANVAS markers — no forecasts; the zone is recorded
