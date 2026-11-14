@@ -83,6 +83,20 @@ def _get_detector(ticker: str, seq_len: int = 50, latent_dim: int = 8, device: s
     return _detectors[ticker]
 
 
+def _empty_ensemble_state(ticker: str) -> dict[str, Any]:
+    """Return the established cold-state contract without creating a model."""
+    return {
+        "ticker": ticker,
+        "type": "toxicity_ensemble",
+        "initialized": False,
+        "status": "uninitialized",
+        "reason": "NO_OBSERVATIONS_IN_THIS_PROCESS",
+        "n_score_history": 0,
+        "ensemble_probabilities": {},
+        "component_scores": {},
+    }
+
+
 @router.get("/ensemble")
 async def get_ensemble_prediction(
     ticker: str,
@@ -92,11 +106,8 @@ async def get_ensemble_prediction(
     Returns P(toxic flow in next N minutes) from the calibrated ensemble.
     """
     t = ticker.upper()
-    from services.ml_ensemble import ToxicityEnsemble
-    if t not in _ensembles:
-        _ensembles[t] = ToxicityEnsemble()
-    ensemble = _ensembles[t]
-    state = ensemble.get_state()
+    ensemble = _ensembles.get(t)
+    state = ensemble.get_state() if ensemble is not None else _empty_ensemble_state(t)
     return {"ticker": t, "horizon_minutes": horizon_minutes, **state}
 
 
@@ -126,17 +137,23 @@ async def update_ensemble(
 async def get_ensemble_state(ticker: str):
     """Get full ensemble state including calibration and history."""
     t = ticker.upper()
-    from services.ml_ensemble import ToxicityEnsemble
-    if t not in _ensembles:
-        _ensembles[t] = ToxicityEnsemble()
-    return {"ticker": t, **_ensembles[t].get_state()}
+    ensemble = _ensembles.get(t)
+    if ensemble is None:
+        return _empty_ensemble_state(t)
+    return {"ticker": t, "initialized": True, **ensemble.get_state()}
 
 
 @router.get("/{ticker}")
 async def get_anomaly_state(ticker: str):
     """Return the current anomaly detection state."""
     t = ticker.upper()
-    detector = _get_detector(t)
+    detector = _detectors.get(t)
+    if detector is None:
+        return {
+            "ticker": t,
+            "status": "no_data",
+            "reason": "detector_not_initialized",
+        }
     return detector.get_state()
 
 
@@ -153,7 +170,13 @@ async def update_anomaly(ticker: str, vpin: float, qi: float):
 async def get_detector_status(ticker: str):
     """Return model configuration and buffer status."""
     t = ticker.upper()
-    detector = _get_detector(t)
+    detector = _detectors.get(t)
+    if detector is None:
+        return {
+            "ticker": t,
+            "status": "no_data",
+            "reason": "detector_not_initialized",
+        }
     return detector.get_state()
 
 
