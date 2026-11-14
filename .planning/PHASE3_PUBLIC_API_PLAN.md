@@ -1,7 +1,9 @@
 # Phase 3 — Public API Data Layer Integration Plan
 
 > Deep-dive findings + engineering plan for wiring PublicBroker into floww as the primary data source.
-> Status: 2026-08-30 — Assessment Complete, Plan Finalized.
+> Status: COMPLETE — delivered 2026-08-31. This plan is retained as historical design
+> context; the old ticket checklist below is not current execution status. See
+> `.planning/CURRENT.md` for current source and runtime identity.
 
 ---
 

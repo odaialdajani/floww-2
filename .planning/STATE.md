@@ -1,7 +1,9 @@
 # STATE.md — Confluence Decoder
 
-**Current entry point, updated 2026-11-07:** [Current source and autonomous operations](CURRENT.md).
-The user now requests parallel scoped workers, durable coordination and verified Liquid Paper integration. One integrator owns source changes. The operations specification/plan linked there supersedes earlier source locations and no-worker assignments. All snapshots below remain historical; their test totals and launch instructions are not current proof.
+**Current entry point, updated 2026-11-14:** [Current source and autonomous operations](CURRENT.md).
+Current source/runtime identity, merged PRs, open PRs, health evidence, Hermes/OpenBot status,
+and remaining gates are summarized there. All snapshots below remain historical; their test
+totals and launch instructions are not current proof.
 
 **Historical snapshot last updated:** 2026-10-16
 
