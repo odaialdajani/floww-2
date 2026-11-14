@@ -151,6 +151,27 @@ describe("useHeatseeker", () => {
     expect(global.fetch).toHaveBeenCalledTimes(2);
   });
 
+  test("does not expose the previous ticker while the next ticker is loading", async () => {
+    let resolveQqq;
+    global.fetch = jest.fn((url) => String(url).includes("ticker=SPY")
+      ? Promise.resolve(mockJsonResponse({ ticker: "SPY", spot: 500 }))
+      : new Promise((resolve) => { resolveQqq = resolve; }));
+
+    const { result, rerender } = renderHook(
+      ({ ticker }) => useHeatseeker("flip-zones", { ticker, refreshMs: 0 }),
+      { initialProps: { ticker: "SPY" } }
+    );
+    await waitFor(() => expect(result.current.data).toEqual({ ticker: "SPY", spot: 500 }));
+
+    rerender({ ticker: "QQQ" });
+    expect(result.current.data).toBeNull();
+
+    await act(async () => {
+      resolveQqq(mockJsonResponse({ ticker: "QQQ", spot: 450 }));
+    });
+    await waitFor(() => expect(result.current.data).toEqual({ ticker: "QQQ", spot: 450 }));
+  });
+
   test("a slow read survives polling ticks instead of being repeatedly aborted", async () => {
     jest.useFakeTimers();
     let resolveRead;
