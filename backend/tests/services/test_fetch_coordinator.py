@@ -232,3 +232,36 @@ class TestFetchCoordinatorErrors:
 
     def test_coalesced_count_zero_initially(self, coordinator):
         assert coordinator.get_coalesced_count("SPY", 4) == 0
+
+    @pytest.mark.asyncio
+    async def test_coalesced_count_cache_is_bounded(self, coordinator):
+        """Arbitrary completed keys must not grow diagnostic state forever."""
+        key_count = 300
+        all_started = asyncio.Event()
+        release_fetches = asyncio.Event()
+        started = 0
+
+        async def held_fetcher(ticker, expiries):
+            nonlocal started
+            started += 1
+            if started == key_count:
+                all_started.set()
+            await release_fetches.wait()
+            return {"status": "ok", "ticker": ticker, "contracts": []}
+
+        winners = [
+            asyncio.create_task(coordinator.fetch(f"T{index}", 4, held_fetcher, source_owns_budget=True))
+            for index in range(key_count)
+        ]
+        await asyncio.wait_for(all_started.wait(), timeout=2)
+        waiters = [
+            asyncio.create_task(coordinator.fetch(f"T{index}", 4, held_fetcher, source_owns_budget=True))
+            for index in range(key_count)
+        ]
+        await asyncio.sleep(0)
+        release_fetches.set()
+        await asyncio.gather(*winners, *waiters)
+
+        assert len(coordinator._coalesced_count) <= 256
+        assert coordinator.get_coalesced_count(f"T{key_count - 1}", 4) == 1
+        assert coordinator.get_coalesced_count("T0", 4) == 0

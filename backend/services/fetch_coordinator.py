@@ -19,6 +19,7 @@ import copy
 import logging
 import os
 import time
+from collections import OrderedDict
 from collections.abc import Callable
 from typing import Any
 
@@ -26,6 +27,7 @@ logger = logging.getLogger(__name__)
 
 # In-flight wait timeout — let coalesced callers fall back if a fetch stalls.
 LOCK_TIMEOUT_SECONDS = 5.0
+MAX_COALESCED_KEYS = 256
 
 
 class FetchCoordinator:
@@ -39,7 +41,15 @@ class FetchCoordinator:
 
     def __init__(self) -> None:
         self._inflight: dict[str, asyncio.Task] = {}
-        self._coalesced_count: dict[str, int] = {}
+        # Diagnostic-only per-key history. Keep a recent bounded window so
+        # caller-controlled keys cannot grow this map for the process lifetime.
+        self._coalesced_count: OrderedDict[str, int] = OrderedDict()
+
+    def _record_coalesced(self, key: str) -> None:
+        self._coalesced_count[key] = self._coalesced_count.get(key, 0) + 1
+        self._coalesced_count.move_to_end(key)
+        if len(self._coalesced_count) > MAX_COALESCED_KEYS:
+            self._coalesced_count.popitem(last=False)
 
     async def fetch(
         self,
@@ -67,7 +77,7 @@ class FetchCoordinator:
         existing = self._inflight.get(key)
         if existing and not existing.done():
             logger.debug("Coalescing fetch for %s (already inflight)", key)
-            self._coalesced_count[key] = self._coalesced_count.get(key, 0) + 1
+            self._record_coalesced(key)
             try:
                 return await asyncio.wait_for(asyncio.shield(existing), timeout=LOCK_TIMEOUT_SECONDS)
             except TimeoutError:
@@ -160,7 +170,7 @@ class FetchCoordinator:
             raise
 
     def get_coalesced_count(self, ticker: str, expiries: int) -> int:
-        """Return number of coalesced requests for a key (for observability)."""
+        """Return the retained recent coalesced count, or zero after eviction."""
         key = ticker.upper() + ":" + str(expiries)
         return self._coalesced_count.get(key, 0)
 
