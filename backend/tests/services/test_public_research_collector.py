@@ -415,12 +415,15 @@ async def test_sensitive_field_spellings_are_withheld_before_any_raw_commit(tmp_
 @pytest.mark.asyncio
 async def test_cycle_deadline_includes_waiting_for_shared_pacer(tmp_path):
     m, clock, budget = module(), Clock(), Budget()
+    pacer_started = asyncio.Event()
     class WaitingPacer:
         async def wait(self):
+            pacer_started.set()
             await asyncio.Event().wait()
-    with ResearchStore(tmp_path / "research", m.build_plan(["2026-11-13"], m.Limits(cycle_timeout_s=0.03))) as store:
+    with ResearchStore(tmp_path / "research", m.build_plan(["2026-11-13"], m.Limits(cycle_timeout_s=1.0))) as store:
         transport = Transport(m, store, clock)
-        result = await asyncio.wait_for(make(m, store, transport, clock, budget, pacer=WaitingPacer()).capture_cycle("cycle-1"), 0.3)
+        result = await asyncio.wait_for(make(m, store, transport, clock, budget, pacer=WaitingPacer()).capture_cycle("cycle-1"), 2.0)
+        assert pacer_started.is_set(), "cycle expired before the pacer wait began"
         assert result["status"] == "stopped" and result["reason"] == "cycle_deadline"
         assert transport.calls == [] and budget.releases == 0
 
@@ -447,8 +450,10 @@ async def test_cancellation_at_budget_admission_return_still_owns_exactly_one_sl
 async def test_response_close_must_settle_before_slot_release_and_late_body_is_discarded(tmp_path):
     m, clock, budget = module(), Clock(), Budget()
     release, closing = asyncio.Event(), asyncio.Event()
+    transport_started = asyncio.Event()
     @asynccontextmanager
     async def opening(request, attempt_id):
+        transport_started.set()
         async def chunks():
             yield body_for(request)
         try:
@@ -459,10 +464,11 @@ async def test_response_close_must_settle_before_slot_release_and_late_body_is_d
                 await release.wait()
             except asyncio.CancelledError:
                 await release.wait()
-    with ResearchStore(tmp_path / "research", m.build_plan(["2026-11-13"], m.Limits(request_timeout_s=0.03))) as store:
+    with ResearchStore(tmp_path / "research", m.build_plan(["2026-11-13"], m.Limits(request_timeout_s=1.0))) as store:
         collector = make(m, store, type("T", (), {"open": staticmethod(opening)})(), clock, budget)
         try:
-            result = await asyncio.wait_for(collector.capture_cycle("cycle-1"), 0.3)
+            result = await asyncio.wait_for(collector.capture_cycle("cycle-1"), 2.0)
+            assert transport_started.is_set(), "request expired before the mock transport opened"
             assert closing.is_set() and result["reason"] == "request_timeout"
             assert budget.releases == 0 and budget.status(now=clock.mono)["inflight"] == 1
             assert store.attempts("cycle-1")[0]["body"] is None
