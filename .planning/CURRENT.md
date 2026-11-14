@@ -8,8 +8,10 @@ made passive anomaly GETs model-free while preserving their cold response shape;
 bounded cvserver per-key cache, failure and lock state and stabilized two collector timing
 tests exposed by full-suite CI. PR #155 added a bounded Heatseeker chain cache with post-fetch
 TTL and same-key generation protection. PR #156 updated this status checkpoint. Both merged
-through the normal PR workflow; all backend, frontend, Ruff, and Docker workflows passed.
-The #155 source merge is `8eb10b892`; the #156 docs merge is `52a1b9e`.
+through the normal PR workflow. For #155, backend, frontend, and Ruff passed on the PR head,
+then Docker passed on the merge commit. For #156, frontend and Ruff passed before merge,
+backend passed nine seconds after merge, and Docker passed on the merge commit. The #155
+source merge is `8eb10b892`; the #156 docs merge is `52a1b9e`.
 
 A read-only GitHub settings check on November 14 found no classic protection on `main` and
 no repository rulesets. These changes used pull requests and no admin override, but required

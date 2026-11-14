@@ -9,8 +9,9 @@ microstructure cold reads, fetch admission, fail-closed QuickTrade validation, p
 anomaly GET compatibility, and bounded cvserver state with deterministic collector tests.
 PR #155 added a separately reviewed bounded Heatseeker chain cache with post-fetch TTL and
 same-key generation protection. Its backend, frontend, and Ruff checks passed on the PR head;
-Docker passed on the merge commit. PR #156 is a docs-only checkpoint update; its backend,
-frontend, Ruff, and Docker workflows all passed.
+Docker passed on the merge commit. PR #156 is a docs-only checkpoint update: frontend and
+Ruff passed before merge, backend passed nine seconds after merge, and Docker passed on the
+merge commit.
 
 The November 14 GitHub settings probe returned 404 for classic `main` branch protection and
 no configured repository rulesets. These changes used the pull request flow with no admin
