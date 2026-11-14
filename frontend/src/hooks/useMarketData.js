@@ -90,12 +90,10 @@ async function cachePut(key, data) {
 export function useMarketData(endpoint, options = {}) {
   const { refreshMs = 30000, skip = false, query = {} } = options;
 
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [dataAge, setDataAge] = useState(null);         // ms since data was cached
-  const [isStale, setIsStale] = useState(false);         // > STALE_THRESHOLD_MS
-  const [showBadge, setShowBadge] = useState(false);     // > BADGE_THRESHOLD_MS
+  const [dataEntry, setDataEntry] = useState(null);
+  const [loadingEntry, setLoadingEntry] = useState(null);
+  const [errorEntry, setErrorEntry] = useState(null);
+  const [dataAgeEntry, setDataAgeEntry] = useState(null); // ms since data was cached
 
   const mountedRef = useRef(true);
   const abortRef = useRef(null);
@@ -104,15 +102,26 @@ export function useMarketData(endpoint, options = {}) {
   // ticker changed (same hook instance, no key={ticker} on the chart), the
   // stale key made fetches read/write the wrong ticker's IndexedDB entry.
   const cacheKey = `${endpoint}?${JSON.stringify(query)}`;
-  // Mirror `data` in a ref so the error-fallback closure sees the CURRENT value
-  // (fetchFromNetwork's deps exclude `data`, so `data` inside it is stale).
+  // Keep the last keyed entry available to the fetch error-fallback closure.
+  // The callback intentionally does not depend on this state value.
   const dataRef = useRef(null);
-  useEffect(() => { dataRef.current = data; }, [data]);
+  dataRef.current = dataEntry;
+  // Data belongs to a specific endpoint/query. Never expose observations from
+  // the previous ticker during the render before its next cache/network read.
+  const data = dataEntry?.key === cacheKey ? dataEntry.value : null;
+  const loading = !endpoint || skip
+    ? false
+    : loadingEntry?.key === cacheKey ? loadingEntry.value : data == null;
+  const error = errorEntry?.key === cacheKey ? errorEntry.value : null;
+  const dataAge = dataAgeEntry?.key === cacheKey ? dataAgeEntry.value : null;
+  const isStale = dataAge != null && dataAge > STALE_THRESHOLD_MS;
+  const showBadge = dataAge != null && dataAge > BADGE_THRESHOLD_MS;
 
   // ── Fetch from network ────────────────────────────────────────────
 
   const fetchFromNetwork = useCallback(async (opts = {}) => {
     if (!endpoint) return;
+    const requestKey = cacheKey;
 
     // Cancel previous in-flight request
     if (abortRef.current) {
@@ -121,7 +130,7 @@ export function useMarketData(endpoint, options = {}) {
     const controller = new AbortController();
     abortRef.current = controller;
 
-    if (!opts.silent) setLoading(true);
+    if (!opts.silent) setLoadingEntry({ key: requestKey, value: true });
 
     try {
       const qs = new URLSearchParams();
@@ -142,12 +151,9 @@ export function useMarketData(endpoint, options = {}) {
       if (!mountedRef.current || abortRef.current !== controller) return;
 
       // Update state
-      const now = Date.now();
-      setData(json);
-      setDataAge(0);
-      setIsStale(false);
-      setShowBadge(false);
-      setError(null);
+      setDataEntry({ key: requestKey, value: json });
+      setDataAgeEntry({ key: requestKey, value: 0 });
+      setErrorEntry({ key: requestKey, value: null });
 
       // Write to IndexedDB cache (async, non-blocking)
       cachePut(cacheKey, json).catch(() => {});
@@ -158,20 +164,20 @@ export function useMarketData(endpoint, options = {}) {
 
       // On network error: fall back to whatever cache we have
       const cached = await cacheGet(cacheKey);
-      if (cached && !dataRef.current) {
+      if (!mountedRef.current || abortRef.current !== controller) return;
+      const currentDataBelongsToRequest = dataRef.current?.key === requestKey;
+      if (cached && !currentDataBelongsToRequest) {
         // Only use cache if we don't already have data displayed
-        setData(cached.data);
+        setDataEntry({ key: requestKey, value: cached.data });
         const age = Date.now() - cached.ts;
-        setDataAge(age);
-        setIsStale(age > STALE_THRESHOLD_MS);
-        setShowBadge(age > BADGE_THRESHOLD_MS);
-        setError(null);  // suppress error since we have cached data
+        setDataAgeEntry({ key: requestKey, value: age });
+        setErrorEntry({ key: requestKey, value: null });  // suppress error since we have cached data
       } else {
-        setError(e.message || "Fetch failed");
+        setErrorEntry({ key: requestKey, value: e.message || "Fetch failed" });
       }
     } finally {
       if (mountedRef.current && abortRef.current === controller) {
-        setLoading(false);
+        setLoadingEntry({ key: requestKey, value: false });
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -193,10 +199,9 @@ export function useMarketData(endpoint, options = {}) {
 
       if (cached) {
         const age = Date.now() - cached.ts;
-        setData(cached.data);
-        setDataAge(age);
-        setIsStale(age > STALE_THRESHOLD_MS);
-        setShowBadge(age > BADGE_THRESHOLD_MS);
+        setDataEntry({ key: cacheKey, value: cached.data });
+        setDataAgeEntry({ key: cacheKey, value: age });
+        setErrorEntry({ key: cacheKey, value: null });
 
         // 2. If stale (>5 min), trigger background fetch
         if (age > STALE_THRESHOLD_MS) {
@@ -204,7 +209,7 @@ export function useMarketData(endpoint, options = {}) {
         }
       } else {
         // 3. No cache — show loading and fetch
-        setLoading(true);
+        setLoadingEntry({ key: cacheKey, value: true });
         await fetchFromNetwork();
       }
     })();
@@ -230,13 +235,6 @@ export function useMarketData(endpoint, options = {}) {
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchFromNetwork, refreshMs, skip]);
-
-  // Recalculate staleness on each render
-  useEffect(() => {
-    if (dataAge == null) return;
-    setIsStale(dataAge > STALE_THRESHOLD_MS);
-    setShowBadge(dataAge > BADGE_THRESHOLD_MS);
-  }, [dataAge]);
 
   const refresh = useCallback(() => fetchFromNetwork(), [fetchFromNetwork]);
 

@@ -21,14 +21,15 @@ const API = `${BACKEND_URL}/api/heatseeker`;
  */
 export function useHeatseeker(endpoint, params = {}) {
   const { refreshMs = 10000, skip = false, ...query } = params;
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [dataEntry, setDataEntry] = useState(null);
+  const [loadingEntry, setLoadingEntry] = useState(null);
+  const [errorEntry, setErrorEntry] = useState(null);
   const abortRef = useRef(null);
   const mountedRef = useRef(true);
 
   // Stable key for query params so the effect doesn't re-fire on identical objects
   const queryKey = JSON.stringify(query);
+  const requestKey = `${endpoint}?${queryKey}`;
 
   const fetcher = useCallback(async () => {
     if (skip || !endpoint) return;
@@ -40,7 +41,7 @@ export function useHeatseeker(endpoint, params = {}) {
     let timedOut = false;
     const deadline = setTimeout(() => { timedOut = true; controller.abort(); }, 45000);
     controller.signal.addEventListener("abort", () => clearTimeout(deadline), { once: true });
-    setLoading(true);
+    setLoadingEntry({ key: requestKey, value: true });
     try {
       const qs = new URLSearchParams();
       Object.entries(query).forEach(([k, v]) => {
@@ -54,23 +55,26 @@ export function useHeatseeker(endpoint, params = {}) {
       }
       const json = await res.json();
       if (mountedRef.current && abortRef.current === controller) {
-        setData(json);
-        setError(null);
+        setDataEntry({ key: requestKey, value: json });
+        setErrorEntry({ key: requestKey, value: null });
       }
     } catch (e) {
       if (e.name === "AbortError" && !timedOut) return;
       if (mountedRef.current && abortRef.current === controller) {
-        setError(timedOut ? "Request timed out. The server may be busy." : e.message || "Fetch failed");
+        setErrorEntry({
+          key: requestKey,
+          value: timedOut ? "Request timed out. The server may be busy." : e.message || "Fetch failed",
+        });
       }
     } finally {
       clearTimeout(deadline);
       if (mountedRef.current && abortRef.current === controller) {
         abortRef.current = null;
-        setLoading(false);
+        setLoadingEntry({ key: requestKey, value: false });
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [endpoint, queryKey, skip]);
+  }, [endpoint, queryKey, requestKey, skip]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -91,6 +95,11 @@ export function useHeatseeker(endpoint, params = {}) {
     };
   }, [fetcher, refreshMs, skip]);
 
+  const data = dataEntry?.key === requestKey ? dataEntry.value : null;
+  const loading = skip || !endpoint
+    ? false
+    : loadingEntry?.key === requestKey ? loadingEntry.value : true;
+  const error = errorEntry?.key === requestKey ? errorEntry.value : null;
   return { data, loading, error, refresh: fetcher };
 }
 
