@@ -13,6 +13,9 @@ input on failure — the pure functions tolerate that.
 
 import asyncio
 import logging
+import re
+import time
+from collections import OrderedDict
 from datetime import UTC, datetime
 from typing import Any
 
@@ -72,9 +75,11 @@ def _ensure_gamma(raw: dict[str, Any]) -> dict[str, Any]:
     return raw
 
 
-# Module-level chain cache: {ticker:upper:expiries: (ts, raw_data)}
-_CHAIN_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
+# Module-level chain cache, ordered least-recently-used to most-recently-used.
+_CHAIN_CACHE: OrderedDict[str, tuple[float, dict[str, Any]]] = OrderedDict()
 _CHAIN_CACHE_TTL = 30  # seconds
+_CHAIN_CACHE_MAX = 128
+_CHAIN_TICKER_RE = re.compile(r"(?:[A-Z][A-Z0-9.^=-]{0,19}|\^[A-Z0-9][A-Z0-9.^=-]{0,18})\Z")
 
 
 async def _fetch_chain(ticker: str, expiries: int) -> dict[str, Any]:
@@ -83,8 +88,6 @@ async def _fetch_chain(ticker: str, expiries: int) -> dict[str, Any]:
     Caches raw chain data for 30s to prevent redundant yfinance calls
     when multiple heatseeker panels request the same ticker simultaneously.
     """
-    import time
-
     from server import fetch_spot_and_chains_merged  # noqa: F401
 
     t = ticker.strip().upper()
@@ -92,13 +95,24 @@ async def _fetch_chain(ticker: str, expiries: int) -> dict[str, Any]:
         t = "^SPX"
 
     cache_key = f"{t}:{expiries}"
-    cached = _CHAIN_CACHE.get(cache_key)
-    if cached and (time.time() - cached[0]) < _CHAIN_CACHE_TTL:
-        return cached[1]
+    cacheable = bool(_CHAIN_TICKER_RE.fullmatch(t))
+    now = time.time()
+    for key, (cached_at, _) in list(_CHAIN_CACHE.items()):
+        if now - cached_at >= _CHAIN_CACHE_TTL:
+            del _CHAIN_CACHE[key]
+    if cacheable:
+        cached = _CHAIN_CACHE.get(cache_key)
+        if cached is not None:
+            _CHAIN_CACHE.move_to_end(cache_key)
+            return cached[1]
 
     raw = await fetch_spot_and_chains_merged(t, expiries)
     raw = _ensure_gamma(raw)
-    _CHAIN_CACHE[cache_key] = (time.time(), raw)
+    if cacheable:
+        _CHAIN_CACHE[cache_key] = (now, raw)
+        _CHAIN_CACHE.move_to_end(cache_key)
+        while len(_CHAIN_CACHE) > _CHAIN_CACHE_MAX:
+            _CHAIN_CACHE.popitem(last=False)
     return raw
 
 
