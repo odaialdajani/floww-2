@@ -16,6 +16,7 @@ def cvserver(monkeypatch):
 
     monkeypatch.setattr(module, "_cache", OrderedDict())
     monkeypatch.setattr(module, "_locks", {})
+    monkeypatch.setattr(module, "_lock_users", {})
     monkeypatch.setattr(module, "_fails", OrderedDict())
     monkeypatch.setattr(module, "_req_log", [])
     monkeypatch.setattr(module, "_rl_until", 0.0)
