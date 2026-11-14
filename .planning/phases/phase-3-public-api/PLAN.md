@@ -4,7 +4,9 @@
 
 **Goal:** Wire PublicBroker (from `/Users/nav/backend/`) into floww as the PRIMARY data source for options chains + spot prices. Replace cvserver as primary chain source. Fallback chain: Public API → cvserver → yfinance + Databento. Tidehunter Pro is Phase 4 only.
 
-**Status:** PLANNING → EXECUTION
+**Status:** COMPLETE — delivered 2026-08-31. This checklist's TODO labels below are retained
+as the original plan and are not current execution status; see `.planning/CURRENT.md` and
+`.planning/ROADMAP.md` for the current product and runtime state.
 
 **Source of truth:** `.planning/PHASE3_PUBLIC_API_PLAN.md`, `.planning/DATA_SOURCES.md`, `.planning/AGENT_CONTRACT.md`
 
@@ -13,14 +15,14 @@
 | Ticket | Requirement | Owner | Status |
 |---|---|---|---|
 | 3.1 | Public API key confirmed | — | DONE |
-| 3.2 | Copy PublicBroker → floww backend | Agent 2 | TODO |
-| 3.3 | Add PUBLIC_API_KEY to .env + .env.example | Agent 2 | TODO |
-| 3.4 | Modify fetch_spot_and_chains_merged() priority | Agent 2 | TODO |
-| 3.5 | Create /api/public/chain/{ticker} + /api/public/quotes/{ticker} | Agent 2 | TODO |
-| 3.6 | Tests: chain + fallback routing | Agent 2 | TODO |
-| 3.7 | Update INTEGRATIONS.md docs | Agent 3 | TODO |
-| 3.8 | Frontend wiring (Solstice/Triad) | Agent 4 | TODO |
-| 3.9 | Phase tracking | Agent 5 | IN PROGRESS |
+| 3.2 | Copy PublicBroker → floww backend | Historical | DONE |
+| 3.3 | Add PUBLIC_API_KEY to .env + .env.example | Historical | DONE |
+| 3.4 | Modify fetch_spot_and_chains_merged() priority | Historical | DONE |
+| 3.5 | Create /api/public/chain/{ticker} + /api/public/quotes/{ticker} | Historical | DONE |
+| 3.6 | Tests: chain + fallback routing | Historical | DONE |
+| 3.7 | Update INTEGRATIONS.md docs | Historical | DONE |
+| 3.8 | Frontend wiring (Solstice/Triad) | Historical | DONE |
+| 3.9 | Phase tracking | Historical | DONE |
 
 ## Verification Loop
 

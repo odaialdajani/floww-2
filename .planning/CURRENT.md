@@ -1,6 +1,41 @@
 # FLOWW current work
 
-## Current product and runtime — November 13, 2026
+## Current source and accepted runtime — November 14, 2026
+
+Canonical source is `main` / `origin/main` at `8eb10b8922b8a3b0d6f5f18511d64315e4a2459e`.
+PR #153 added fail-closed paper option-order validation in the QuickTrade panel; PR #154
+made passive anomaly GETs model-free while preserving their cold response shape; PR #152
+bounded cvserver per-key cache, failure and lock state and stabilized two collector timing
+tests exposed by full-suite CI. Each merged through branch protection with required checks
+green. PR #155 added a bounded Heatseeker chain cache with post-fetch TTL and same-key write
+generation protection; it merged through protected checks at `8eb10b892`. Backend tests,
+frontend build, Ruff, and Docker build all passed. Independent review found no blocker.
+
+The managed frontend and backend still serve the separately accepted release
+`a6197f57d2629ad16f10c35d0791c6579c701204` on `:3000` and `:8213`; the rollback release is
+`213dcee64`. A fresh probe at 2026-11-14T01:48:43Z returned version `a6197f57d` and health
+`healthy`. Source merges did not reload production. The QuickTrade fix is source-only; no
+order attempt was made. Do not infer the served release from Git main.
+
+Disk was about 22 GiB free at the latest inventory. The Mac cleanup was read-only because
+remaining candidates were active, recovery material, credentials, or otherwise uncertain.
+Hermes cron remains up with 23 active jobs; the repeated doctor report shows 23 issues across
+19 jobs, including 17 late/catch-up fires and interrupted model responses. No jobs were
+manually retriggered or edited. OpenBot local main is 5 ahead / 187 behind upstream; its
+private launcher depends on a `server/` tree absent upstream, so no merge/push occurred.
+
+The `/api/health` correction classifies lock contention as `busy`, but the exact live lock
+holder remains unproven. The strongest source-level candidate is
+`heatmap_history.record_snapshot`, which holds the shared connection lock across payload
+serialization and up to 2,000 individual inserts; this has not been tied to a historic live
+sample. The private continuation record contains the probe evidence and follow-up plan.
+
+Four host-only dirty paths remain untouched and unstaged. Runtime receipts, raw backup
+archives, credentials, active stores/WALs, release checkouts, and historical evidence remain
+outside this public repository. Keep `a6197f57d` running; any later release needs a fresh
+capacity manifest and the full safety and native acceptance gates.
+
+## Retained checkpoint — November 13, 2026
 
 At the start of this Nov 13 follow-up, Git `main` was `f35db23c21f9d6e007cc3a0fdda68dc64147e0e6`, merged through PR 147. The product source checkpoint is `a6197f57d2629ad16f10c35d0791c6579c701204`, merged through PR 146; PR 147 changed documentation only. The product frontend tree is `081f1d358a6d4cc8107270fd2845a70a66240f5c` and backend tree is `00020c379d6a0bb72f2d7b6f8dc1a0a5cb24c997`. The PR 146 merge changed tests only; the product code checkpoint remains `5d5389908c89d9cd90cad50036dc7d3c3c3dddf0`. The backend tree hash moved because the corrected tests live under `backend/`.
 

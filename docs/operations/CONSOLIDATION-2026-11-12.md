@@ -1,5 +1,34 @@
 # FLOWW consolidation — November 12, 2026
 
+## November 14 source and operations checkpoint
+
+Canonical GitHub `main` and local `main` are aligned at
+`8eb10b8922b8a3b0d6f5f18511d64315e4a2459e`. PRs #148–#155 were merged through protected
+branch checks, including the health busy-state correction, ticker-scoped data, bounded
+microstructure cold reads, fetch admission, fail-closed QuickTrade validation, passive
+anomaly GET compatibility, and bounded cvserver state with deterministic collector tests.
+PR #155 added a separately reviewed bounded Heatseeker chain cache with post-fetch TTL and
+same-key generation protection. Its current-head backend tests, frontend build, Ruff, and
+Docker build all passed before the protected merge.
+
+Production remains on the accepted `a6197f57d2629ad16f10c35d0791c6579c701204` release;
+`213dcee64` remains the rollback release. The QuickTrade source change rejects market or
+zero-price fallbacks, selects ask for buys and bid for sells, and refuses unsupported
+single-symbol straddle/iron-condor requests. It has source and regression-test coverage;
+no order was attempted and the source merge did not update the running app.
+
+The exact writer behind recurring DuckDB busy intervals is not confirmed. Source review
+identified `heatmap_history.record_snapshot` as a candidate because it holds the shared
+connection lock through serialization and many inserts, but no live sample tied that
+function to the observed lock. Hermes remains running with late and failed jobs; no manual
+catch-up runs were used as evidence of on-time coverage. The local OpenBot tree remains
+separate because its private launcher depends on a `server/` tree absent from upstream.
+
+The machine sweep found about 22 GiB free and no high-confidence safe deletion target.
+Credential-shaped Trash contents, active caches, live stores, backups, and unmerged work
+remain preserved. Runtime receipts and raw recovery evidence remain local. Any later
+release requires a fresh manifest, the unchanged capacity gate, and full native acceptance.
+
 > Follow-up updated November 13: at the start of this follow-up, Git `main` was `f35db23c2` after docs-only PR 147; product source and the accepted served runtime remain independently pinned to `a6197f57d`.
 
 ## Source and publication

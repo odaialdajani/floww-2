@@ -5,14 +5,16 @@ Derived from: deploy runbook (`deploy/free/README.md`), `docs/ROUND10_PLAN.md`
 Historical sequencing started with Oracle go-live. The current user priority is recorded first below; deployment is not active authorization.
 This file retains the live priority and historical phase tracker.
 
-## Current priority — November 13 health and operations follow-up
+## Current priority — November 14 source and operations follow-up
 
-Follow [CURRENT.md](CURRENT.md) for the current distinction between Git main,
-product source, and the accepted served release. The busy-health correction is
-source/test work only until it is independently reviewed and separately released.
-The premium desktop remains on the accepted runtime; paper-trader catch-up jobs
-do not prove timely market-session coverage. Account and venue commissioning,
-prospective research outcomes, and historical acceptance remain separate gates.
+Follow [CURRENT.md](CURRENT.md) for the distinction between Git main and the accepted
+served release. Source main is `8eb10b892`; production remains on accepted `a6197f57d`.
+PRs #148–#155 are merged through protected checks.
+The DuckDB busy-state correction is source-only, and its exact long-lock owner is not
+proven. Paper-trader catch-up jobs do not establish on-time market-session coverage.
+Account and venue commissioning, prospective research outcomes, and historical acceptance
+remain separate gates. Do not release source changes without a fresh capacity manifest and
+full native acceptance.
 
 ## Historical priority — 28 October direct cleanup
 
@@ -66,15 +68,12 @@ P0.1 conftest waiver is applied.
 
 ## Phase 3 — Public API Data Layer [CLOSED 2026-08-31]
 
-> **Status conflict (2026-09-04):** `.planning/phases/phase-3-public-api/PLAN.md` still
-> says `**Status:** PLANNING → EXECUTION` and lists tickets 3.2–3.8 as TODO. That plan
-> file is stale, not this header: `backend/services/public_api.py`,
-> `backend/services/public_api_adapter.py`, `backend/routes/public_api.py` and
-> `backend/tests/services/test_public_api_integration.py` all exist on disk, the router
-> is mounted in `backend/server.py` as `public_api_router`, and commit 94c3c89
-> ("feat(public-api): Phase 3 integration — PublicBroker wired as primary data source")
-> is in `git log`. Phase 3 stays CLOSED; the phase PLAN.md needs the same edit and was
-> out of lane for this pass.
+> **Status check (2026-11-14):** The phase-specific plan and detailed design now both
+> label Phase 3 complete and mark the original tickets done. The implementation evidence
+> remains `backend/services/public_api.py`, `backend/services/public_api_adapter.py`,
+> `backend/routes/public_api.py`, the integration tests, and commit 94c3c89 ("feat(public-api):
+> Phase 3 integration — PublicBroker wired as primary data source"). This phase remains
+> closed; its original execution checklist is historical context.
 
 **Goal:** Wire PublicBroker (from `/Users/nav/backend/`) into floww as the PRIMARY data source for chains + spot. Public API first, cvserver/yfinance as fallback. Tidehunter Pro is a documented fallback-only (Phase 4, not built unless Public API is actually limited).
 
