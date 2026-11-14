@@ -3,9 +3,8 @@ backend/services/fetch_coordinator.py
 
 Request coalescing / deduplication for external API calls.
 
-Uses asyncio.Lock per (ticker, expiries) key so that concurrent UI requests
-for the same data trigger at most one external fetch. Subsequent requests
-either wait on the lock (if no cache yet) or return stale cache immediately.
+Publishes one shared in-flight task per (ticker, expiries) key so concurrent UI
+requests for the same data share one budget admission and external fetch.
 
 Usage:
     coordinator = FetchCoordinator()
@@ -16,34 +15,43 @@ Usage:
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import copy
 import logging
 import os
 import time
+from collections import OrderedDict
 from collections.abc import Callable
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# Lock timeout — if a fetch takes longer than this, let callers fall back
+# In-flight wait timeout — let coalesced callers fall back if a fetch stalls.
 LOCK_TIMEOUT_SECONDS = 5.0
+MAX_COALESCED_KEYS = 256
 
 
 class FetchCoordinator:
     """Deduplicates concurrent external API fetches per ticker+expiries.
 
     Strategy:
-      - First caller acquires the lock and performs the fetch.
-      - Subsequent callers for the same key wait on the lock.
-      - After the first fetch completes, all waiters get the same result.
-      - If the lock times out, callers fall back to cache or degraded response.
+      - The first caller publishes one shared task before yielding.
+      - Subsequent callers for the same key await that task.
+      - Different keys retain independent tasks and budget admission.
     """
 
     def __init__(self) -> None:
-        self._locks: dict[str, asyncio.Lock] = {}
         self._inflight: dict[str, asyncio.Task] = {}
-        self._coalesced_count: dict[str, int] = {}
+        self._inflight_coalesced_count: dict[str, int] = {}
+        # Diagnostic-only per-key history. Keep a recent bounded window so
+        # caller-controlled keys cannot grow this map for the process lifetime.
+        self._coalesced_count: OrderedDict[str, int] = OrderedDict()
+
+    def _record_coalesced(self, key: str) -> None:
+        self._coalesced_count[key] = self._coalesced_count.get(key, 0) + 1
+        self._coalesced_count.move_to_end(key)
+        if len(self._coalesced_count) > MAX_COALESCED_KEYS:
+            self._coalesced_count.popitem(last=False)
+        self._inflight_coalesced_count[key] = self._inflight_coalesced_count.get(key, 0) + 1
 
     async def fetch(
         self,
@@ -71,81 +79,80 @@ class FetchCoordinator:
         existing = self._inflight.get(key)
         if existing and not existing.done():
             logger.debug("Coalescing fetch for %s (already inflight)", key)
-            self._coalesced_count[key] = self._coalesced_count.get(key, 0) + 1
+            self._record_coalesced(key)
             try:
                 return await asyncio.wait_for(asyncio.shield(existing), timeout=LOCK_TIMEOUT_SECONDS)
             except TimeoutError:
                 logger.warning("Inflight fetch timed out for %s, returning degraded", key)
                 return _error_response("fetch_timeout", "External API call timed out")
 
-        # Acquire lock for this key
-        lock = self._locks.setdefault(key, asyncio.Lock())
-        if lock.locked():
-            # Another coroutine is fetching — wait for it
-            logger.debug("Waiting on lock for %s", key)
-            self._coalesced_count[key] = self._coalesced_count.get(key, 0) + 1
-            try:
-                # asyncio.timeout() is 3.11+ only; use wait_for on lock.acquire() for compat
-                await asyncio.wait_for(lock.acquire(), timeout=LOCK_TIMEOUT_SECONDS)
-            except TimeoutError:
-                logger.warning("Lock wait timed out for %s", key)
-                return _error_response("lock_timeout", "Timed out waiting for fetch")
-            try:
-                # The fetch already completed while we waited
-                existing = self._inflight.get(key)
-                if existing and existing.done():
-                    return existing.result()
-            finally:
-                lock.release()
+        # Publish the task before yielding to budget admission. This makes the
+        # check-and-publish sequence atomic within the event loop: concurrent
+        # same-key callers see this task and cannot debit budget twice.
+        task = asyncio.create_task(
+            self._fetch_with_budget(
+                key, ticker, expiries, fetcher,
+                source_owns_budget=source_owns_budget,
+            )
+        )
+        self._inflight[key] = task
+        self._inflight_coalesced_count[key] = 0
+        try:
+            return await task
+        except Exception as e:
+            logger.warning("Fetch failed for %s: %s", key, e)
+            return _error_response("fetch_error", str(e))
+        finally:
+            # Clean up
+            if self._inflight.get(key) is task:
+                self._inflight.pop(key, None)
+                self._inflight_coalesced_count.pop(key, None)
 
-        # We have the lock — perform the fetch. Budget-gated: refuse BEFORE
-        # creating the upstream task so a burst degrades to a structured
-        # payload instead of burning the retail Public.com key. Coalesced
-        # waiters above share the winner and never touch the budget; the slot
-        # releases via done-callback when the upstream call settles.
-        pub_budget = None
+    async def _fetch_with_budget(
+        self,
+        key: str,
+        ticker: str,
+        expiries: int,
+        fetcher: Callable,
+        *,
+        source_owns_budget: bool,
+    ) -> dict[str, Any]:
+        """Admit one shared fetch, preserving the fail-closed budget gate."""
         try:
             from services.public_budget import BudgetExhausted
-            from services.public_budget import budget as _pub_budget
+            from services.public_budget import budget as public_budget
         except ImportError:
-            # silent by design: the budget shield is optional, a missing
-            # module must not stop a fetch that used to work.
-            BudgetExhausted = _pub_budget = None
-        if _pub_budget is not None and not source_owns_budget:
+            # The budget shield is optional; a missing module retains the
+            # coordinator's historical unbudgeted behavior.
+            BudgetExhausted = public_budget = None
+
+        admitted_budget = None
+        if public_budget is not None and not source_owns_budget:
             try:
-                await _pub_budget.acquire()
-                pub_budget = _pub_budget
+                await public_budget.acquire()
+                admitted_budget = public_budget
             except BudgetExhausted as exc:
                 logger.warning("Budget refused fetch for %s: %s", key, exc)
                 return degraded_response(
                     "budget_exhausted", str(exc), retry_after=exc.retry_after
                 )
             except Exception as exc:
-                # Fail CLOSED. This used to log and fall through into the
-                # fetch, so an unreachable governor (as opposed to an
-                # exhausted one) let external spend proceed uncapped --
-                # removing the budget exactly when it could not be read.
+                # Fail closed: an unavailable governor must not permit spend.
                 logger.warning("Budget acquire failed for %s: %s", key, exc)
-                return degraded_response(
-                    "budget_unavailable", str(exc),
-                )
-        logger.info("Initiating external fetch for %s", key)
-        task = asyncio.create_task(self._do_fetch(key, ticker, expiries, fetcher))
-        if pub_budget is not None:
-            with contextlib.suppress(Exception):
-                task.add_done_callback(lambda _: pub_budget.release())
-        self._inflight[key] = task
+                return degraded_response("budget_unavailable", str(exc))
+
         try:
-            async with lock:
-                result = await task
-                return result
-        except Exception as e:
-            logger.warning("Fetch failed for %s: %s", key, e)
-            return _error_response("fetch_error", str(e))
+            logger.info("Initiating external fetch for %s", key)
+            return await self._do_fetch(key, ticker, expiries, fetcher)
+        except Exception as exc:
+            logger.warning("Fetch failed for %s: %s", key, exc)
+            return _error_response("fetch_error", str(exc))
         finally:
-            # Clean up
-            self._inflight.pop(key, None)
-            self._locks.pop(key, None)
+            if admitted_budget is not None:
+                try:
+                    admitted_budget.release()
+                except Exception as exc:
+                    logger.warning("Budget release failed for %s: %s", key, exc)
 
     async def _do_fetch(
         self, key: str, ticker: str, expiries: int, fetcher: Callable,
@@ -155,7 +162,7 @@ class FetchCoordinator:
         try:
             result = await fetcher(ticker, expiries)
             elapsed = time.monotonic() - t0
-            coalesced = self._coalesced_count.get(key, 0)
+            coalesced = self._inflight_coalesced_count.get(key, 0)
             logger.info(
                 "Fetch complete for %s in %.2fs (coalesced: %d)",
                 key, elapsed, coalesced,
@@ -167,7 +174,7 @@ class FetchCoordinator:
             raise
 
     def get_coalesced_count(self, ticker: str, expiries: int) -> int:
-        """Return number of coalesced requests for a key (for observability)."""
+        """Return the retained recent coalesced count, or zero after eviction."""
         key = ticker.upper() + ":" + str(expiries)
         return self._coalesced_count.get(key, 0)
 

@@ -61,6 +61,44 @@ class TestFetchDeduplication:
         assert coordinator.get_coalesced_count("SPY", 4) == 4
 
     @pytest.mark.asyncio
+    async def test_same_key_requests_share_pending_budget_admission(self, coordinator, monkeypatch):
+        import services.public_budget as pb
+
+        class DelayedBudget:
+            def __init__(self):
+                self.calls = 0
+                self.started = asyncio.Event()
+                self.release_admission = asyncio.Event()
+
+            async def acquire(self):
+                self.calls += 1
+                self.started.set()
+                await self.release_admission.wait()
+
+            def release(self):
+                pass
+
+        budget = DelayedBudget()
+        monkeypatch.setattr(pb, "budget", budget)
+        fetch_calls = []
+
+        async def fetcher(ticker, expiries):
+            fetch_calls.append((ticker, expiries))
+            return {"status": "ok", "spot": 500, "contracts": []}
+
+        first = asyncio.create_task(coordinator.fetch("SPY", 4, fetcher))
+        await budget.started.wait()
+        second = asyncio.create_task(coordinator.fetch("SPY", 4, fetcher))
+        await asyncio.sleep(0)  # Let the second caller reach admission or coalescing.
+        budget.release_admission.set()
+
+        first_result, second_result = await asyncio.gather(first, second)
+        assert budget.calls == 1
+        assert fetch_calls == [("SPY", 4)]
+        assert first_result == second_result
+        assert coordinator.get_coalesced_count("SPY", 4) == 1
+
+    @pytest.mark.asyncio
     async def test_different_keys_fetch_independently(self, coordinator):
         """Different ticker keys should each trigger a fetch."""
         results = await asyncio.gather(
@@ -169,5 +207,98 @@ class TestFetchCoordinatorErrors:
         assert unavailable["error_type"] == "budget_unavailable", unavailable
         assert exhausted["error_type"] == "budget_exhausted", exhausted
 
+    @pytest.mark.asyncio
+    async def test_budget_refusals_do_not_retain_per_key_locks(self, coordinator, monkeypatch):
+        import services.public_budget as pb
+        from services.public_budget import BudgetExhausted
+
+        class ExhaustedBudget:
+            async def acquire(self):
+                raise BudgetExhausted(retry_after=1, reason="test_refusal")
+
+            def release(self):
+                pass
+
+        monkeypatch.setattr(pb, "budget", ExhaustedBudget())
+
+        async def fetcher(ticker, expiries):
+            raise AssertionError("a refused request must not fetch")
+
+        for index in range(100):
+            result = await coordinator.fetch(f"T{index}", 4, fetcher)
+            assert result["error_type"] == "budget_exhausted"
+
+        assert getattr(coordinator, "_locks", {}) == {}
+
     def test_coalesced_count_zero_initially(self, coordinator):
         assert coordinator.get_coalesced_count("SPY", 4) == 0
+
+    @pytest.mark.asyncio
+    async def test_coalesced_count_cache_is_bounded(self, coordinator):
+        """Arbitrary completed keys must not grow diagnostic state forever."""
+        key_count = 300
+        all_started = asyncio.Event()
+        release_fetches = asyncio.Event()
+        started = 0
+
+        async def held_fetcher(ticker, expiries):
+            nonlocal started
+            started += 1
+            if started == key_count:
+                all_started.set()
+            await release_fetches.wait()
+            return {"status": "ok", "ticker": ticker, "contracts": []}
+
+        winners = [
+            asyncio.create_task(coordinator.fetch(f"T{index}", 4, held_fetcher, source_owns_budget=True))
+            for index in range(key_count)
+        ]
+        await asyncio.wait_for(all_started.wait(), timeout=2)
+        waiters = [
+            asyncio.create_task(coordinator.fetch(f"T{index}", 4, held_fetcher, source_owns_budget=True))
+            for index in range(key_count)
+        ]
+        await asyncio.sleep(0)
+        release_fetches.set()
+        await asyncio.gather(*winners, *waiters)
+
+        assert len(coordinator._coalesced_count) <= 256
+        assert coordinator.get_coalesced_count(f"T{key_count - 1}", 4) == 1
+        assert coordinator.get_coalesced_count("T0", 4) == 0
+
+    @pytest.mark.asyncio
+    async def test_active_fetch_log_survives_history_eviction(self, coordinator, monkeypatch, caplog):
+        """Recent-history eviction must not undercount a still-running fetch."""
+        import logging
+
+        import services.fetch_coordinator as fetch_coordinator_module
+
+        monkeypatch.setattr(fetch_coordinator_module, "MAX_COALESCED_KEYS", 2)
+        caplog.set_level(logging.INFO, logger="services.fetch_coordinator")
+        release_fetches = asyncio.Event()
+        started = {f"T{index}": asyncio.Event() for index in range(3)}
+
+        async def held_fetcher(ticker, expiries):
+            started[ticker].set()
+            await release_fetches.wait()
+            return {"status": "ok", "ticker": ticker, "contracts": []}
+
+        tasks = [asyncio.create_task(coordinator.fetch("T0", 4, held_fetcher, source_owns_budget=True))]
+        await asyncio.wait_for(started["T0"].wait(), timeout=2)
+        tasks.append(asyncio.create_task(coordinator.fetch("T0", 4, held_fetcher, source_owns_budget=True)))
+        await asyncio.sleep(0)
+
+        for ticker in ("T1", "T2"):
+            tasks.append(asyncio.create_task(coordinator.fetch(ticker, 4, held_fetcher, source_owns_budget=True)))
+            await asyncio.wait_for(started[ticker].wait(), timeout=2)
+            tasks.append(asyncio.create_task(coordinator.fetch(ticker, 4, held_fetcher, source_owns_budget=True)))
+            await asyncio.sleep(0)
+
+        assert coordinator.get_coalesced_count("T0", 4) == 0
+        release_fetches.set()
+        await asyncio.gather(*tasks)
+
+        assert any(
+            "Fetch complete for T0:4" in record.message and "(coalesced: 1)" in record.message
+            for record in caplog.records
+        )
