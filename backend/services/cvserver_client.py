@@ -42,6 +42,7 @@ import logging
 import math
 import os
 import time
+from collections import OrderedDict
 from datetime import UTC, datetime
 
 import httpx
@@ -95,7 +96,9 @@ DEFAULT_FIELDS = [
 ]
 
 # In-memory cache: cache_key -> (timestamp, data)
-_cache: dict[str, tuple[float, dict]] = {}
+MAX_CACHE_ENTRIES = 64
+MAX_FAILURE_ENTRIES = 64
+_cache: OrderedDict[str, tuple[float, dict]] = OrderedDict()
 CACHE_TTL = 60  # seconds — per-symbol chain
 
 # ---- Upstream request budget ---------------------------------------------
@@ -121,7 +124,8 @@ FAIL_BACKOFF = float(os.environ.get("CVSERVER_FAIL_BACKOFF", "90"))  # per-key, 
 HOURLY_CAP = int(float(os.environ.get("CVSERVER_HOURLY_CAP", "20")))  # plan quota: Public is primary, cvserver is scarce failover
 
 _locks: dict[str, asyncio.Lock] = {}
-_fails: dict[str, tuple[float, int]] = {}   # key -> (retry_after_ts, consecutive_failures)
+_lock_users: dict[str, int] = {}
+_fails: OrderedDict[str, tuple[float, int]] = OrderedDict()  # key -> (retry_after_ts, consecutive_failures)
 _rl_until: float = 0.0                      # wall-clock; > now means rate-limited
 _req_log: list[float] = []                  # upstream call timestamps (rolling hour)
 
@@ -169,6 +173,20 @@ def _is_rate_limit(exc: BaseException) -> bool:
     return "429" in msg or "limit reached" in msg or "rate limit" in msg
 
 
+def _cache_put(key: str, value: tuple[float, dict]) -> None:
+    _cache[key] = value
+    _cache.move_to_end(key)
+    while len(_cache) > MAX_CACHE_ENTRIES:
+        _cache.popitem(last=False)
+
+
+def _record_failure(key: str, retry_after: float, consecutive_failures: int) -> None:
+    _fails[key] = (retry_after, consecutive_failures)
+    _fails.move_to_end(key)
+    while len(_fails) > MAX_FAILURE_ENTRIES:
+        _fails.popitem(last=False)
+
+
 async def _cached_call(key: str, ttl: float, fetch) -> dict | None:
     """Run `fetch` at most once per `ttl` per key, coalescing concurrent callers.
 
@@ -189,6 +207,7 @@ async def _cached_call(key: str, ttl: float, fetch) -> dict | None:
         hit = _cache.get(key)
         if not hit:
             return None
+        _cache.move_to_end(key)
         ts, data = hit
         if not isinstance(data, dict):
             return data
@@ -197,6 +216,7 @@ async def _cached_call(key: str, ttl: float, fetch) -> dict | None:
     now = time.time()
     hit = _cache.get(key)
     if hit and now - hit[0] < ttl:
+        _cache.move_to_end(key)
         return hit[1]
     if now < _rl_until:
         return _stale()                       # rate-limited: stale beats hammering
@@ -205,50 +225,61 @@ async def _cached_call(key: str, ttl: float, fetch) -> dict | None:
         return _stale()                       # backing off this key
 
     lock = _locks.setdefault(key, asyncio.Lock())
-    async with lock:
-        # A concurrent caller may have filled the cache while we waited — this
-        # re-check is what turns N simultaneous requests into 1 upstream call.
-        now = time.time()
-        hit = _cache.get(key)
-        if hit and now - hit[0] < ttl:
-            return hit[1]
-        if now < _rl_until:
-            return _stale()
+    _lock_users[key] = _lock_users.get(key, 0) + 1
+    try:
+        async with lock:
+            # A concurrent caller may have filled the cache while we waited — this
+            # re-check is what turns N simultaneous requests into 1 upstream call.
+            now = time.time()
+            hit = _cache.get(key)
+            if hit and now - hit[0] < ttl:
+                _cache.move_to_end(key)
+                return hit[1]
+            if now < _rl_until:
+                return _stale()
 
-        if upstream_requests_last_hour() >= HOURLY_CAP:
-            logger.warning(
-                "cvserver: hourly cap reached (%d/hr) — serving stale, Public stays primary",
-                HOURLY_CAP,
-            )
-            return _stale()
-
-        _note_req()
-        try:
-            data = await fetch()
-        except Exception as e:
-            if _is_rate_limit(e):
-                _rl_until = time.time() + RL_PAUSE
-                logger.error(
-                    "cvserver: RATE LIMITED (429) — pausing upstream calls for %ds. "
-                    "%d upstream requests in the last hour.",
-                    int(RL_PAUSE), upstream_requests_last_hour(),
+            if upstream_requests_last_hour() >= HOURLY_CAP:
+                logger.warning(
+                    "cvserver: hourly cap reached (%d/hr) — serving stale, Public stays primary",
+                    HOURLY_CAP,
                 )
-            else:
+                return _stale()
+
+            _note_req()
+            try:
+                data = await fetch()
+            except Exception as e:
+                if _is_rate_limit(e):
+                    _rl_until = time.time() + RL_PAUSE
+                    logger.error(
+                        "cvserver: RATE LIMITED (429) — pausing upstream calls for %ds. "
+                        "%d upstream requests in the last hour.",
+                        int(RL_PAUSE), upstream_requests_last_hour(),
+                    )
+                else:
+                    n = _fails.get(key, (0.0, 0))[1] + 1
+                    _record_failure(key, time.time() + min(FAIL_BACKOFF * n, 600), n)
+                    logger.warning("cvserver: %s failed (%s); backing off", key, e)
+                return _stale()
+
+            if data is None:
+                # Empty-but-successful response: don't cache it, but do back off so a
+                # dead symbol can't be re-requested on every poll.
                 n = _fails.get(key, (0.0, 0))[1] + 1
-                _fails[key] = (time.time() + min(FAIL_BACKOFF * n, 600), n)
-                logger.warning("cvserver: %s failed (%s); backing off", key, e)
-            return _stale()
+                _record_failure(key, time.time() + min(FAIL_BACKOFF * n, 600), n)
+                return _stale()
 
-        if data is None:
-            # Empty-but-successful response: don't cache it, but do back off so a
-            # dead symbol can't be re-requested on every poll.
-            n = _fails.get(key, (0.0, 0))[1] + 1
-            _fails[key] = (time.time() + min(FAIL_BACKOFF * n, 600), n)
-            return _stale()
-
-        _cache[key] = (time.time(), data)
-        _fails.pop(key, None)
-        return data
+            _cache_put(key, (time.time(), data))
+            _fails.pop(key, None)
+            return data
+    finally:
+        remaining = _lock_users.get(key, 1) - 1
+        if remaining > 0:
+            _lock_users[key] = remaining
+        else:
+            _lock_users.pop(key, None)
+            if _locks.get(key) is lock and not lock.locked():
+                _locks.pop(key, None)
 
 # Module-level shared HTTP client — avoids creating a new TCP connection per call.
 # Initialised lazily on first use; replaced on timeout/error if needed.
