@@ -1,8 +1,8 @@
 # FLOWW current work
 
-## Current release — November 12, 2026
+## Current product and runtime — November 13, 2026
 
-Canonical product source is `a6197f57d2629ad16f10c35d0791c6579c701204`, the merge of pull request 146. Its frontend tree is `081f1d358a6d4cc8107270fd2845a70a66240f5c` and its backend tree is `00020c379d6a0bb72f2d7b6f8dc1a0a5cb24c997`. That merge changed tests only; the product code checkpoint stays `5d5389908c89d9cd90cad50036dc7d3c3c3dddf0`. The backend tree hash moved because the corrected tests live under `backend/`. Later documentation commits do not constitute application delivery.
+At the start of this Nov 13 follow-up, Git `main` was `f35db23c21f9d6e007cc3a0fdda68dc64147e0e6`, merged through PR 147. The product source checkpoint is `a6197f57d2629ad16f10c35d0791c6579c701204`, merged through PR 146; PR 147 changed documentation only. The product frontend tree is `081f1d358a6d4cc8107270fd2845a70a66240f5c` and backend tree is `00020c379d6a0bb72f2d7b6f8dc1a0a5cb24c997`. The PR 146 merge changed tests only; the product code checkpoint remains `5d5389908c89d9cd90cad50036dc7d3c3c3dddf0`. The backend tree hash moved because the corrected tests live under `backend/`.
 
 The managed frontend on port 3000 and backend on port 8213 now serve release `a6197f57d`. The release finished with a native acceptance receipt at 2026-11-12T18:56:45Z after all seven required UI checks passed against the live candidate. The first acceptance attempt in the same window failed two checks because a cold-restarted backend held the first chart load on a provider slot for longer than the settle wait; no receipt was written for that attempt, and the same checks passed on the immediate rerun with the backend warm. Release `213dcee64` stays on disk as the rollback target. Never infer the served release from the Git branch.
 
@@ -13,6 +13,14 @@ The release required free disk capacity before it would start, because the helpe
 Integrated source includes the R02 current-read scope binding and complete layout-symbol import (`777b68871`), backend replay bucket/pending parity (`e424c19bc`), W-2 analytical ETF expiry clock and lineage (`5c6aa5914`, `6783107ff`), and narrow-desktop pane stacking (`5d5389908`). Source evidence includes the complete frontend run of 302 suites / 2,970 tests and the affected backend tests and independent reviews retained in the continuation evidence. Those checks do not close runtime, account, or trading commissioning.
 
 See [consolidation status](../docs/operations/CONSOLIDATION-2026-11-12.md) for completed work and remaining gates. Preserve the four host-only dirty paths, existing service owners, active stores/WALs, rollback recovery, and all historical evidence. Current Hermes cron activity is independent of FLOWW source ownership; do not resume old queued native admissions or infer source-writing authority from a running agent count.
+
+## November 13 operations follow-up
+
+The release remains `a6197f57d` on `:3000` and `:8213`; repository `main` moving forward does not reload it. Current free disk space is about 24 GiB, versus a fresh release requirement of about 11.7 GiB for the current 3.49 GB data directory plus the 2 GiB reserve. Recompute both values immediately before any future release.
+
+The `/api/health` false-degradation issue is isolated to nonblocking DuckDB lock misses: they were labeled `unhealthy`, and the institutional alert probe separately forced the aggregate to `degraded`. The source correction reports these observations as `busy` and reserves `degraded` for confirmed unhealthy checks; focused regression tests cover both probe locations. This source change is not loaded into the running `a6197f57d` release. The exact live lock-owning thread/query remains unproven; the recurring alert scan is only a candidate workload. Production was not restarted or changed. One short macOS process sample did not expose the Python owner thread.
+
+The Nov 13 Mac and Hermes sweep is retained in the private continuation records. It found stale/delayed scheduler runs, several valuable dirty worktrees, credential-shaped Trash contents, and an old listener on `0.0.0.0:8000`; none were removed or stopped during the read-only audit. Treat paper-trader catch-up runs as late runs, not on-time market coverage. Older scheduler descriptions below are dated scope, not current Hermes Desktop inventory.
 
 ## Retained November 8 and earlier checkpoints
 

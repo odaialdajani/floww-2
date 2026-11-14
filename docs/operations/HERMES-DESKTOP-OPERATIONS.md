@@ -1,10 +1,12 @@
 # FLOWW native Hermes operations
 
+> Historical scope: this document records the FLOWW-native Hermes/Desktop investigation as reviewed on November 7, 2026. Hermes Desktop's separate cron scheduler and later workspaces are not inventoried here; consult the current private continuation state and live scheduler before making present-day claims.
+
 Canonical FLOWW source is `/Users/nav/Documents/GitHub/floww-2`. Muse remains personal. The current evidence root is `/Users/nav/floww-heatmap-agents-20261107`; its final receipt distinguishes source checks, Desktop activity, runtime delivery and trading admission.
 
 ## What is actually connected
 
-Hermes Desktop is working with the local canonical `hermes-gateway-v1` authority and NVIDIA `minimaxai/minimax-m3.1-flash`. Its installed native source is `2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19`. The gateway serves the default profile. The separately prepared research/audit/paper profiles are standalone and stopped; neither their presence in the sidebar nor a model HTTP response proves they are commissioned.
+At the November 7 snapshot, Hermes Desktop was working with the local canonical `hermes-gateway-v1` authority and NVIDIA `minimaxai/minimax-m3.1-flash`. Its installed native source was `2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19`. The gateway served the default profile. The separately prepared research/audit/paper profiles were standalone and stopped at that time; neither their presence in the sidebar nor a model HTTP response proves they are commissioned.
 
 The user-authorized Desktop investigator inspected the actual FLOWW browser, read the retained SPY packet, compared the different displayed snapshot and wrote `desktop-investigator/REPORT.md`. Preserve its actual final status and artifact digest. A report body, a completed native turn and a successful guarded one-POST trial are different evidence. The earlier SDK helper failed and remains parked with its consumed admission IDs; do not rewrite that failure as a Desktop failure or silently retry it.
 
