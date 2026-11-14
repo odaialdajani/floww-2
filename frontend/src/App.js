@@ -21,6 +21,7 @@ import TrinityView from "./components/TrinityView";
 import TrinityVolatility from "./components/TrinityVolatility";
 import TriadDesk from "./components/triad/TriadDesk";
 import QuickTradePanel from "./components/QuickTradePanel";
+import { buildPaperOptionOrderRequest } from "./components/paperOptionOrder";
 import {
   FlipZonesPanel, StackedNodesPanel, TugOfWarPanel, ScenarioPanel,
   RiskDashboardPanel, OpportunitiesPanel, ImpliedMovePanel, VolAnalyticsPanel,
@@ -776,23 +777,16 @@ export default function App() {
                   return;
                 }
                 if (trade.oi_symbol) {
+                  const orderRequest = buildPaperOptionOrderRequest(trade);
+                  if (!orderRequest) {
+                    console.error("[Triad] Refusing invalid or unsupported paper option order.");
+                    return;
+                  }
                   try {
-                    const isCall = trade.strategy.includes("call") || trade.strategy === "straddle" || trade.strategy === "iron_condor";
-                    const side = trade.strategy.startsWith("buy") ? "BUY" : "SELL";
-                    const price = isCall
-                      ? (trade.limitPrice ?? trade.call_ask ?? trade.call_last ?? NaN)
-                      : (trade.limitPrice ?? trade.put_bid ?? trade.put_last ?? NaN);
-                    const limitPriceVal = Number.isFinite(price) ? price : null;
                     // PAPER VENUE (2026-09-06, Nav directive): option clicks
                     // route to Alpaca paper, never the live Public brokerage.
                     // UI journaling happens server-side (source api-alpaca-option).
-                    const q = new URLSearchParams({
-                      symbol: trade.oi_symbol,
-                      qty: String(trade.quantity ?? 1),
-                      side: side.toLowerCase(),
-                      order_type: limitPriceVal != null ? "limit" : "market",
-                      limit_price: String(limitPriceVal ?? 0),
-                    });
+                    const q = new URLSearchParams(orderRequest);
                     const resp = await fetch(`${API}/alpaca/order/option?${q}`, {
                       method: "POST",
                       // App key header: auth middleware 401s every mutating
@@ -1108,29 +1102,22 @@ export default function App() {
             selection={tradeSelection}
             onClose={() => setTradeSelection(null)}
             onSubmit={(trade) => {
-              // Direct Public order when the selection carries live contract
-              // data (cell clicks via /api/contract). Mirrors the Triad
-              // submit path; falls through to paper logging regardless.
+              // Paper option order when the selection carries an OSI symbol.
+              // The request builder rejects unsupported or unsafe tickets;
+              // this path does not call the live Public brokerage.
               // (2026-09-03, Nav-approved App.js surgical edit.)
               if (trade.oi_symbol && !trade.order_id) {
+                const orderRequest = buildPaperOptionOrderRequest(trade);
+                if (!orderRequest) {
+                  console.error("[Solstice] Refusing invalid or unsupported paper option order.");
+                  return;
+                }
                 (async () => {
                   try {
-                    const isCall = trade.strategy.includes("call") || trade.strategy === "straddle" || trade.strategy === "iron_condor";
-                    const side = trade.strategy.startsWith("buy") ? "BUY" : "SELL";
-                    const price = isCall
-                      ? (trade.limitPrice ?? trade.call_ask ?? trade.call_last ?? NaN)
-                      : (trade.limitPrice ?? trade.put_bid ?? trade.put_last ?? NaN);
-                    const limitPriceVal = Number.isFinite(price) ? price : null;
                     // PAPER VENUE (2026-09-06, Nav directive): option clicks
                     // route to Alpaca paper, never the live Public brokerage.
                     // UI journaling happens server-side (source api-alpaca-option).
-                    const q = new URLSearchParams({
-                      symbol: trade.oi_symbol,
-                      qty: String(trade.quantity ?? 1),
-                      side: side.toLowerCase(),
-                      order_type: limitPriceVal != null ? "limit" : "market",
-                      limit_price: String(limitPriceVal ?? 0),
-                    });
+                    const q = new URLSearchParams(orderRequest);
                     const resp = await fetch(`${API}/alpaca/order/option?${q}`, {
                       method: "POST",
                       // App key header: auth middleware 401s every mutating
