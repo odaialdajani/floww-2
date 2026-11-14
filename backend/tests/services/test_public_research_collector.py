@@ -415,12 +415,15 @@ async def test_sensitive_field_spellings_are_withheld_before_any_raw_commit(tmp_
 @pytest.mark.asyncio
 async def test_cycle_deadline_includes_waiting_for_shared_pacer(tmp_path):
     m, clock, budget = module(), Clock(), Budget()
+    pacer_started = asyncio.Event()
     class WaitingPacer:
         async def wait(self):
+            pacer_started.set()
             await asyncio.Event().wait()
-    with ResearchStore(tmp_path / "research", m.build_plan(["2026-11-13"], m.Limits(cycle_timeout_s=0.03))) as store:
+    with ResearchStore(tmp_path / "research", m.build_plan(["2026-11-13"], m.Limits(cycle_timeout_s=1.0))) as store:
         transport = Transport(m, store, clock)
-        result = await asyncio.wait_for(make(m, store, transport, clock, budget, pacer=WaitingPacer()).capture_cycle("cycle-1"), 0.3)
+        result = await asyncio.wait_for(make(m, store, transport, clock, budget, pacer=WaitingPacer()).capture_cycle("cycle-1"), 2.0)
+        assert pacer_started.is_set(), "cycle expired before the pacer wait began"
         assert result["status"] == "stopped" and result["reason"] == "cycle_deadline"
         assert transport.calls == [] and budget.releases == 0
 
